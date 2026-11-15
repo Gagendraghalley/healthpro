@@ -1,5 +1,5 @@
-// SportsHub's assistant, for anyone (no account needed): questions about
-// SportsHub, answered by Cloudflare Workers AI from a guide written into
+// Health Pro's assistant, for anyone (no account needed): questions about
+// Health Pro, answered by Cloudflare Workers AI from a guide written into
 // reply.ts, or "find gyms (in a dzongkhag)", which the app lists itself:
 //
 //   { question, history?: [{ question, reply }] }
@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
 
   const ai = workersAi();
   if (!ai) {
-    return reply({ error: "SportsHub's assistant isn't set up yet. The suggestions still work.", code: 'not_set_up' }, 503);
+    return reply({ error: "Health Pro's assistant isn't set up yet. The suggestions still work.", code: 'not_set_up' }, 503);
   }
 
   let body: Record<string, unknown>;

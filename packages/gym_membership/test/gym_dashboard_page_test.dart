@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_membership/gym_membership.dart';
 import 'package:gym_membership/src/dashboard/gym_dashboard_page.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 /// A gym with a few members, a week of check-ins and payments, as the
 /// database would give them: no Supabase needed.

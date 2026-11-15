@@ -3,10 +3,11 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/gym_models.dart';
 import '../data/gym_repository.dart';
+import '../data/joining.dart';
 import '../data/registered_member.dart';
 import '../gym_permissions.dart';
 import '../gym_routes.dart';
@@ -14,6 +15,8 @@ import '../widgets/gym_widgets.dart';
 import '../widgets/member_card.dart';
 import '../widgets/member_photo.dart';
 import '../widgets/package_fields.dart';
+import '../widgets/trainer_widgets.dart';
+import 'payment_screens.dart';
 
 /// [member]'s memberships at the gym, newest first.
 List<GymSubscription> membershipsOf(Iterable<GymSubscription> all, String gymMemberId) =>
@@ -591,16 +594,43 @@ class RegisterMemberScreen extends ConsumerWidget {
   final String venueId;
   final String? memberId;
 
-  const RegisterMemberScreen({super.key, required this.venueId, this.memberId});
+  /// Someone already on Health Pro: the QR code they showed at the desk...
+  final String? personQr;
+
+  /// ...or their request to join, which saving approves. Their details fill
+  /// the form, from their last gym (or their account).
+  final String? requestId;
+
+  const RegisterMemberScreen({super.key, required this.venueId, this.memberId, this.personQr, this.requestId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final editing = memberId != null;
+    final existing = !editing && (personQr != null || requestId != null);
     return GymStaffPage(
       venueId: venueId,
       title: editing ? 'Edit member' : 'Register member',
       permission: GymPermission.register,
       builder: (context, access) {
+        if (existing) {
+          final query = (venueId: venueId, qrToken: personQr, requestId: requestId);
+          return AsyncValueView<PersonDetails>(
+            value: ref.watch(gymPersonDetailsProvider(query)),
+            onRetry: () => ref.invalidate(gymPersonDetailsProvider(query)),
+            data: (person) => person.gymMemberIdHere != null
+                ? AppPage(
+                    title: 'Register member',
+                    body: EmptyState(
+                      icon: Icons.how_to_reg_rounded,
+                      title: '${person.name} is a member here already',
+                      message: 'Open their page to renew their package.',
+                      actionLabel: 'Open their page',
+                      onAction: () => context.go(GymRoutes.memberFor(venueId, person.gymMemberIdHere!)),
+                    ),
+                  )
+                : _MemberForm(venueId: venueId, access: access, person: person, personQr: personQr, requestId: requestId),
+          );
+        }
         if (!editing) return _MemberForm(venueId: venueId, access: access);
         return AsyncValueView<GymMember?>(
           value: ref.watch(gymMemberProvider(memberId!)),
@@ -619,7 +649,13 @@ class _MemberForm extends ConsumerStatefulWidget {
   final VenueAccess access;
   final GymMember? member;
 
-  const _MemberForm({required this.venueId, required this.access, this.member});
+  /// Someone already on Health Pro, being added here: their details so far,
+  /// and how they came (their QR code, or their request to join).
+  final PersonDetails? person;
+  final String? personQr;
+  final String? requestId;
+
+  const _MemberForm({required this.venueId, required this.access, this.member, this.person, this.personQr, this.requestId});
 
   @override
   ConsumerState<_MemberForm> createState() => _MemberFormState();
@@ -630,7 +666,7 @@ class _MemberFormState extends ConsumerState<_MemberForm> {
 
   /// Each section of the form, to scroll to it from the summary.
   final _sectionKeys = List.generate(5, (_) => GlobalKey());
-  late final MemberDetails? _old = widget.member?.details;
+  late final MemberDetails? _old = widget.member?.details ?? widget.person?.details;
   late final _name = TextEditingController(text: _old?.fullName ?? '');
   late final _phone = TextEditingController(text: _old?.phone ?? '');
   late final _email = TextEditingController(text: _old?.email ?? '');
@@ -701,7 +737,8 @@ class _MemberFormState extends ConsumerState<_MemberForm> {
         await repo.updateMember(widget.member!.id, _details);
         id = widget.member!.id;
       } else {
-        id = await repo.registerMember(widget.venueId, _details, sale: _sell ? _sale : null);
+        id = await repo.registerMember(widget.venueId, _details,
+            sale: _sell ? _sale : null, personQr: widget.personQr, joinRequestId: widget.requestId);
       }
       if (_photo != null) {
         try {
@@ -852,7 +889,12 @@ class _MemberFormState extends ConsumerState<_MemberForm> {
           child: _sell
               ? Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: PackageFields(venueId: widget.venueId, start: _joined, onChanged: (s) => setState(() => _sale = s)),
+                  child: PackageFields(
+                    venueId: widget.venueId,
+                    start: _joined,
+                    initialPlanId: widget.person?.planId,
+                    onChanged: (s) => setState(() => _sale = s),
+                  ),
                 )
               : const SizedBox(width: double.infinity),
         ),
@@ -921,6 +963,7 @@ class _MemberFormState extends ConsumerState<_MemberForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (widget.person != null) _AddingPerson(person: widget.person!, fromRequest: widget.requestId != null),
           for (final (i, (icon, title, subtitle, child)) in sections.indexed)
             FadeSlideIn(
               key: _sectionKeys[i],
@@ -940,7 +983,11 @@ class _MemberFormState extends ConsumerState<_MemberForm> {
     );
 
     return AppPage(
-      title: _editing ? 'Edit ${widget.member!.fullName}' : 'Register a member',
+      title: _editing
+          ? 'Edit ${widget.member!.fullName}'
+          : widget.person != null
+              ? 'Add ${widget.person!.name}'
+              : 'Register a member',
       bottomBar: wide
           ? null
           : Padding(
@@ -999,6 +1046,60 @@ class _MemberFormState extends ConsumerState<_MemberForm> {
                 ],
               )
             : form,
+      ),
+    );
+  }
+}
+
+/// Over the form when adding someone already on Health Pro: who, that their
+/// details came from before, and what they asked for.
+class _AddingPerson extends StatelessWidget {
+  final PersonDetails person;
+  final bool fromRequest;
+
+  const _AddingPerson({required this.person, required this.fromRequest});
+
+  @override
+  Widget build(BuildContext context) {
+    const color = BrandColors.blue;
+    final brand = context.brand;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.verified_user_outlined, color: color),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    fromRequest ? '${person.name} asked to join' : '${person.name} is on Health Pro',
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Their details are filled in from before: check them with them, take their photo and choose '
+                    'their package. Their Health Pro QR code works here once you save.',
+                    style: TextStyle(color: brand.body, height: 1.4),
+                  ),
+                  if (person.message != null) ...[
+                    const SizedBox(height: 8),
+                    Text('"${person.message}"', style: TextStyle(color: brand.body, fontStyle: FontStyle.italic)),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1358,6 +1459,9 @@ class _MemberPageState extends ConsumerState<_MemberPage> {
               first: [
                 header,
                 if (medical != null) ...[const SizedBox(height: 12), medical],
+                MemberPaymentsWaiting(gymMemberId: m.id, canConfirm: a.can(GymPermission.payments)),
+                const SizedBox(height: 12),
+                MemberTrainerPicker(venueId: _venueId, gymMemberId: m.id, canChange: a.can(GymPermission.checkIn)),
                 const SectionTitle('Package'),
                 package,
                 const SectionTitle('Details'),

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/gym_repository.dart';
+import '../data/trainers.dart';
 import '../gym_permissions.dart';
 import '../gym_routes.dart';
 import 'current_gym.dart';
@@ -44,6 +45,16 @@ ServiceNav gymNavigation(WidgetRef ref, String location,
   final id = gym.venue.id;
   final a = gym.access;
   final register = GymRoutes.registerMemberFor(id);
+  // Requests to join: whoever registers members, unless the gym leaves them
+  // to its owner and managers.
+  final settings = ref.watch(gymSettingsProvider(id)).valueOrNull;
+  final answersJoins = a.can(GymPermission.register) &&
+      (settings == null || !settings.managersAnswerJoins || VenueRole.hasEverything(a.role) || a.role == VenueRole.manager);
+  final waiting = answersJoins ? ref.watch(gymWaitingRequestsProvider(id)).valueOrNull ?? 0 : 0;
+  final toConfirm = a.can(GymPermission.payments) ? ref.watch(gymWaitingPaymentsProvider(id)).valueOrNull ?? 0 : 0;
+  final trainersWaiting = a.can(GymPermission.trainers)
+      ? (ref.watch(gymTrainersProvider(id)).valueOrNull ?? const []).where((t) => t.status == TrainerStatus.pending).length
+      : 0;
   final sections = [
     NavSection(items: [
       NavDestination(label: 'Dashboard', icon: Icons.space_dashboard_outlined, route: GymRoutes.dashboardFor(id), exact: true),
@@ -55,6 +66,15 @@ ServiceNav gymNavigation(WidgetRef ref, String location,
         NavDestination(label: 'Members', icon: Icons.groups_outlined, route: GymRoutes.membersFor(id), notUnder: [register]),
       if (a.can(GymPermission.register))
         NavDestination(label: 'Register member', icon: Icons.person_add_alt_1_outlined, route: register),
+      if (a.can(GymPermission.payments))
+        NavDestination(
+            label: 'Payments to confirm', icon: Icons.fact_check_outlined, route: GymRoutes.paymentsFor(id), badge: toConfirm),
+      if (answersJoins)
+        NavDestination(label: 'Join requests', icon: Icons.how_to_reg_outlined, route: GymRoutes.requestsFor(id), badge: waiting),
+      if (a.can(GymPermission.trainers))
+        NavDestination(label: 'Trainers', icon: Icons.sports_outlined, route: GymRoutes.gymTrainersFor(id), badge: trainersWaiting),
+      if (a.can(GymPermission.register))
+        NavDestination(label: 'Gym QR code', icon: Icons.qr_code_2_rounded, route: GymRoutes.gymQrFor(id)),
     ]),
     NavSection(title: 'Business', items: [
       if (a.can(GymPermission.plans))
@@ -71,6 +91,8 @@ ServiceNav gymNavigation(WidgetRef ref, String location,
         NavDestination(label: 'Roles & permissions', icon: Icons.verified_user_outlined, route: CoreRoutes.venueRolesFor(id)),
       if (a.can(VenuePermission.edit))
         NavDestination(label: 'Gym settings', icon: Icons.tune_rounded, route: CoreRoutes.editVenueFor(id)),
+      if (a.can(VenuePermission.edit))
+        NavDestination(label: 'Membership settings', icon: Icons.card_membership_rounded, route: GymRoutes.settingsFor(id)),
     ]),
   ];
   return ServiceNav(
@@ -208,7 +230,7 @@ class GymOverviewCard extends ConsumerWidget {
       icon: icon,
       color: color,
       name: name,
-      subtitle: 'Run your gym on SportsHub',
+      subtitle: 'Run your gym on Health Pro',
       status: StatusChip(label: 'Not set up', color: context.colors.tertiary),
       onOpen: () => context.go(CoreRoutes.registerVenueFor(gymVenueType)),
       actions: [

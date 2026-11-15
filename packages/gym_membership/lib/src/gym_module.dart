@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 import 'dashboard/gym_dashboard_page.dart';
 import 'data/gym_repository.dart';
@@ -9,11 +9,16 @@ import 'gym_permissions.dart';
 import 'gym_routes.dart';
 import 'screens/ask_screen.dart';
 import 'screens/check_in_screen.dart';
+import 'screens/gym_trainer_screens.dart';
+import 'screens/join_screens.dart';
 import 'screens/member_registered_screen.dart';
 import 'screens/members_screens.dart';
+import 'screens/my_gyms_screen.dart';
+import 'screens/payment_screens.dart';
 import 'screens/public_screens.dart';
 import 'screens/reports_screen.dart';
 import 'screens/staff_screens.dart';
+import 'screens/trainer_screens.dart';
 import 'shell/gym_navigation.dart';
 import 'welcome/gym_welcome_page.dart';
 
@@ -23,7 +28,7 @@ import 'welcome/gym_welcome_page.dart';
 /// it; owners set packages and prices, see income and reports, and choose
 /// their staff's roles. Visitors see the public Welcome page and the gyms'
 /// public pages.
-class GymModule extends SportsHubModule {
+class GymModule extends HealthProModule {
   const GymModule();
 
   @override
@@ -42,10 +47,10 @@ class GymModule extends SportsHubModule {
   Color get color => BrandColors.orange;
 
   @override
-  List<String> get basePaths => const [GymRoutes.gyms];
+  List<String> get basePaths => const [GymRoutes.gyms, GymRoutes.trainers];
 
   @override
-  List<String> get publicPaths => const [GymRoutes.gyms, GymRoutes.gym];
+  List<String> get publicPaths => const [GymRoutes.gyms, GymRoutes.gym, GymRoutes.trainer];
 
   @override
   List<VenueKind> get venueKinds => const [
@@ -54,6 +59,7 @@ class GymModule extends SportsHubModule {
           label: 'Gym',
           description: 'A gym or fitness centre with membership packages',
           icon: Icons.fitness_center_rounded,
+          facilities: gymFacilities,
         ),
       ];
 
@@ -61,12 +67,31 @@ class GymModule extends SportsHubModule {
   /// ':memberId', so it isn't taken for a member.
   @override
   List<RouteBase> get routes => [
-        GoRoute(path: GymRoutes.gyms, builder: (_, __) => const GymListScreen()),
-        GoRoute(path: GymRoutes.gym, builder: (_, s) => GymDetailsScreen(venueId: s.pathParameters['id']!)),
+        GoRoute(path: GymRoutes.gyms, builder: (_, s) => GymListScreen(nearMe: s.uri.queryParameters['near'] == '1')),
+        GoRoute(path: GymRoutes.my, builder: (_, __) => const MyGymsScreen()),
+        GoRoute(path: GymRoutes.trainerHome, builder: (_, __) => const TrainerHomeScreen()),
+        GoRoute(path: GymRoutes.trainerProfile, builder: (_, __) => const TrainerProfileScreen()),
+        GoRoute(path: GymRoutes.chooseTrainer, builder: (_, s) => ChooseTrainerScreen(venueId: s.pathParameters['id']!)),
+        GoRoute(
+          path: GymRoutes.trainer,
+          builder: (_, s) => TrainerPublicScreen(trainerId: s.pathParameters['id']!, venueId: s.uri.queryParameters['gym']),
+        ),
+        GoRoute(path: GymRoutes.pay, builder: (_, s) => PayOnlineScreen(venueId: s.pathParameters['id']!)),
+        GoRoute(
+          path: GymRoutes.gym,
+          builder: (_, s) => GymDetailsScreen(venueId: s.pathParameters['id']!, join: s.uri.queryParameters['join'] == '1'),
+        ),
         GoRoute(path: GymRoutes.dashboard, builder: (_, s) => GymDashboardPage(venueId: s.pathParameters['id']!)),
         GoRoute(path: GymRoutes.checkIn, builder: (_, s) => CheckInScreen(venueId: s.pathParameters['id']!)),
         GoRoute(path: GymRoutes.members, builder: (_, s) => MembersScreen(venueId: s.pathParameters['id']!)),
-        GoRoute(path: GymRoutes.registerMember, builder: (_, s) => RegisterMemberScreen(venueId: s.pathParameters['id']!)),
+        GoRoute(
+          path: GymRoutes.registerMember,
+          builder: (_, s) => RegisterMemberScreen(
+            venueId: s.pathParameters['id']!,
+            personQr: s.uri.queryParameters['person'],
+            requestId: s.uri.queryParameters['request'],
+          ),
+        ),
         GoRoute(
           path: GymRoutes.editMember,
           builder: (_, s) => RegisterMemberScreen(venueId: s.pathParameters['id']!, memberId: s.pathParameters['memberId']),
@@ -86,7 +111,28 @@ class GymModule extends SportsHubModule {
         GoRoute(path: GymRoutes.income, builder: (_, s) => IncomeScreen(venueId: s.pathParameters['id']!)),
         GoRoute(path: GymRoutes.reports, builder: (_, s) => ReportsScreen(venueId: s.pathParameters['id']!)),
         GoRoute(path: GymRoutes.ask, builder: (_, s) => AskScreen(venueId: s.pathParameters['id']!)),
-        GoRoute(path: GymRoutes.requests, redirect: (_, s) => GymRoutes.membersFor(s.pathParameters['id']!)),
+        GoRoute(path: GymRoutes.requests, builder: (_, s) => JoinRequestsScreen(venueId: s.pathParameters['id']!)),
+        GoRoute(path: GymRoutes.gymQr, builder: (_, s) => GymQrScreen(venueId: s.pathParameters['id']!)),
+        GoRoute(path: GymRoutes.payments, builder: (_, s) => PaymentsToConfirmScreen(venueId: s.pathParameters['id']!)),
+        GoRoute(path: GymRoutes.gymTrainers, builder: (_, s) => GymTrainersScreen(venueId: s.pathParameters['id']!)),
+        GoRoute(path: GymRoutes.settings, builder: (_, s) => MembershipSettingsScreen(venueId: s.pathParameters['id']!)),
+      ];
+
+  /// A member's own pages, under Me in the side menu (with My QR code).
+  @override
+  List<ModuleMenuItem> playerMenuItems() => const [
+        ModuleMenuItem(
+          title: 'My gyms',
+          subtitle: 'Your gyms, packages and visits',
+          icon: Icons.fitness_center_rounded,
+          route: GymRoutes.my,
+        ),
+        ModuleMenuItem(
+          title: 'Trainer profile',
+          subtitle: 'For trainers: your gyms, times, attendance and members',
+          icon: Icons.sports_rounded,
+          route: GymRoutes.trainerHome,
+        ),
       ];
 
   @override
@@ -126,6 +172,34 @@ class GymModule extends SportsHubModule {
             icon: Icons.person_add_alt_1_rounded,
             route: GymRoutes.registerMemberFor(venue.id),
           ),
+        if (access.can(GymPermission.payments))
+          ModuleMenuItem(
+            title: 'Payments to confirm',
+            subtitle: 'Members who paid online: check the journal number, then confirm',
+            icon: Icons.fact_check_outlined,
+            route: GymRoutes.paymentsFor(venue.id),
+          ),
+        if (access.can(VenuePermission.edit))
+          ModuleMenuItem(
+            title: 'Membership settings',
+            subtitle: 'Payment QR code, reminders, who answers requests to join',
+            icon: Icons.tune_rounded,
+            route: GymRoutes.settingsFor(venue.id),
+          ),
+        if (access.can(GymPermission.trainers))
+          ModuleMenuItem(
+            title: 'Trainers',
+            subtitle: 'Verify trainers, their times and attendance',
+            icon: Icons.sports_rounded,
+            route: GymRoutes.gymTrainersFor(venue.id),
+          ),
+        if (access.can(GymPermission.register))
+          ModuleMenuItem(
+            title: 'Join requests',
+            subtitle: 'People who scanned the gym QR code and asked to join',
+            icon: Icons.how_to_reg_rounded,
+            route: GymRoutes.requestsFor(venue.id),
+          ),
         if (access.can(GymPermission.plans))
           ModuleMenuItem(
             title: 'Memberships & packages',
@@ -164,7 +238,7 @@ class GymModule extends SportsHubModule {
 
   @override
   Map<String, ModuleMenuItem> get assistantLinks => const {
-        'gyms': ModuleMenuItem(title: 'Gyms on SportsHub', icon: Icons.fitness_center_rounded, route: GymRoutes.gyms),
+        'gyms': ModuleMenuItem(title: 'Gyms on Health Pro', icon: Icons.fitness_center_rounded, route: GymRoutes.gyms),
       };
 
   @override

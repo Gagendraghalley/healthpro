@@ -1,4 +1,4 @@
-/// SportsHub's gym membership management module.
+/// Health Pro's gym membership management module.
 library;
 
 export 'src/data/gym_models.dart';

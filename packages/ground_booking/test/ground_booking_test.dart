@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ground_booking/ground_booking.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 void main() {
   const module = GroundBookingModule();
@@ -15,10 +15,10 @@ void main() {
   test('grounds are registered on the booking website', () {
     final kind = module.venueKinds.single;
     expect(kind.externalRegisterUrl.toString(), endsWith('/#/register-ground'));
-    expect(module.servesVenueType('ground'), isFalse, reason: 'SportsHub runs no grounds itself yet');
+    expect(module.servesVenueType('ground'), isFalse, reason: 'Health Pro runs no grounds itself yet');
   });
 
-  test('keeps its paths in SportsHub for when it moves in (one domain)', () {
+  test('keeps its paths in Health Pro for when it moves in (one domain)', () {
     expect(module.ownsPath('/grounds/venue/1'), isTrue);
     expect(module.ownsPath('/tournaments/7'), isTrue);
     expect(module.ownsPath('/register-ground'), isTrue);

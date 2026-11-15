@@ -3,28 +3,28 @@
   "configurations": [
     
     {
-      "name": "SportsHub (website)",
+      "name": "Health Pro (website)",
       "request": "launch",
       "type": "dart",
-      "cwd": "apps/sportshub_app",
+      "cwd": "apps/health_pro_app",
       "program": "lib/main.dart",
       "deviceId": "chrome",
       "toolArgs": ["--dart-define-from-file=env.json", "--web-hostname", "localhost", "--web-port", "3000"]
     },
     {
-      "name": "SportsHub (website, port 3001)",
+      "name": "Health Pro (website, port 3001)",
       "request": "launch",
       "type": "dart",
-      "cwd": "apps/sportshub_app",
+      "cwd": "apps/health_pro_app",
       "program": "lib/main.dart",
       "deviceId": "chrome",
       "toolArgs": ["--dart-define-from-file=env.json", "--web-hostname", "localhost", "--web-port", "3001"]
     },
     {
-      "name": "SportsHub (phone)",
+      "name": "Health Pro (phone)",
       "request": "launch",
       "type": "dart",
-      "cwd": "apps/sportshub_app",
+      "cwd": "apps/health_pro_app",
       "program": "lib/main.dart",
       "toolArgs": ["--dart-define-from-file=env.json"]
     }

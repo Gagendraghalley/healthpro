@@ -2,7 +2,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/gym_repository.dart';
 
@@ -201,7 +201,7 @@ class _WebcamDialogState extends State<WebcamDialog> {
                                 child: CameraPreview(controller),
                               ),
                             )
-                          : const Center(child: SportsHubLoader(size: 48, semanticsLabel: 'Starting the camera')),
+                          : const Center(child: HealthProLoader(size: 48, semanticsLabel: 'Starting the camera')),
             ),
           ),
         ),

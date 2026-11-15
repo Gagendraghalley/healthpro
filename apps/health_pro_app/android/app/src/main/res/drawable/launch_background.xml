@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launch screen before Android 12: Health Pro's navy, the logo in the
+     middle at 240dp wide. The Flutter splash (HealthProSplash) draws the same,
+     so the handover doesn't jump. Android 12+ uses values*-v31/styles.xml. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#071229"
+                android:startColor="#0C2152"
+                android:type="linear" />
+        </shape>
+    </item>
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/splash_logo" />
+    </item>
+</layer-list>

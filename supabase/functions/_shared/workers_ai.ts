@@ -1,6 +1,6 @@
 // Cloudflare Workers AI, in JSON mode: where ask-ai (a gym's staff) and
 // ask-sportshub (anyone) send questions. Its free daily allowance is shared
-// by both, and by every gym on SportsHub.
+// by both, and by every gym on Health Pro.
 //
 // Secrets: CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AI_TOKEN (an API token with
 // Workers AI permissions); CLOUDFLARE_AI_MODEL optionally, for another model
@@ -72,7 +72,7 @@ export async function askWorkersAi(ai: WorkersAi, messages: Message[], schema: u
     ) {
       throw new AskError(
         "Ask AI isn't set up properly: Cloudflare didn't accept its account ID, token or model. " +
-          "The SportsHub team can see why in the function's logs.",
+          "The Health Pro team can see why in the function's logs.",
       );
     }
     throw new AskError("The AI couldn't answer just now. Please try again, or tap a suggestion.");

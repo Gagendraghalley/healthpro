@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:clipboard/clipboard.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/gym_repository.dart';
 import '../data/member_qr.dart';
@@ -223,7 +223,7 @@ class RegisteredMemberCard extends StatelessWidget {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(color: white, borderRadius: BorderRadius.circular(18)),
                 child: QrImageView(
-                  data: MemberQr.encodeCard(member.qrToken),
+                  data: MemberQr.encodePerson(member.qrToken),
                   size: 190,
                   backgroundColor: white,
                   padding: EdgeInsets.zero,

@@ -180,7 +180,8 @@ enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
-minimum_password_length = 8
+# People sign in with a 6-digit code of their own, kept as the password: 6 it is.
+minimum_password_length = 6
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
 password_requirements = ""
@@ -261,11 +262,11 @@ otp_expiry = 3600
 # website and in the apps alike, so the emails show {{ .Token }}.
 # New accounts get 'confirmation'; existing ones 'magic_link'.
 [auth.email.template.confirmation]
-subject = "Your SportsHub code"
+subject = "Your Health Pro code"
 content_path = "./supabase/templates/code.html"
 
 [auth.email.template.magic_link]
-subject = "Your SportsHub code"
+subject = "Your Health Pro code"
 content_path = "./supabase/templates/code.html"
 
 [auth.sms]
@@ -447,8 +448,14 @@ verify_jwt = true
 [functions.ask-ai]
 verify_jwt = true
 
-# SportsHub's assistant (the floating Ask AI button, for anyone): visitors
+# Health Pro's assistant (the floating Ask AI button, for anyone): visitors
 # have no account, so no token is needed; the database counts questions by
 # a hash of their address instead.
 [functions.ask-sportshub]
+verify_jwt = false
+
+# Push notifications: the database calls it for each new notification
+# (pg_net), with no token. It only ever sends a notification once, to its own
+# person, so a stranger calling it can't send anything.
+[functions.send-push]
 verify_jwt = false

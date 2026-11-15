@@ -1,4 +1,4 @@
--- End-to-end check of the SportsHub migrations: admin A, gym owner O,
+-- End-to-end check of the Health Pro migrations: admin A, gym owner O,
 -- front-desk staff S, members M and M2, outsider X.
 \set ON_ERROR_STOP 1
 \set QUIET 1
@@ -58,7 +58,7 @@ select t.fails($$select public.notify('00000000-0000-0000-0000-00000000000d', nu
 -- ---- Registering a gym: closed until the module is on -------------------
 select t.as_user('00000000-0000-0000-0000-00000000000b');
 select t.fails($$select public.register_venue('{"type":"gym","name":"Peak Fitness","dzongkhag":"Thimphu","phone":"+97517000001"}')$$, 'can''t be registered yet');
-select t.fails($$select public.set_module_enabled('gym_membership', true)$$, 'Only the SportsHub team');
+select t.fails($$select public.set_module_enabled('gym_membership', true)$$, 'Only the Health Pro team');
 select t.as_user('00000000-0000-0000-0000-00000000000a');
 select public.set_module_enabled('gym_membership', true);
 select t.as_user('00000000-0000-0000-0000-00000000000b');
@@ -80,7 +80,7 @@ select t.eq((select count(*) from public.venues)::int, 1, 'the owner sees their 
 select public.gym_save_plan(:'venue_id', null, 'Monthly', 'All equipment', 30, 1500, true) as plan_id \gset
 select public.gym_save_plan(:'venue_id', null, 'Old plan', null, 7, 400, false) as hidden_plan_id \gset
 select public.add_venue_staff(:'venue_id', 'STAFF@gym.bt', 'staff');
-select t.fails(format($$select public.add_venue_staff(%L, 'nobody@x.bt', 'staff')$$, :'venue_id'), 'No SportsHub account');
+select t.fails(format($$select public.add_venue_staff(%L, 'nobody@x.bt', 'staff')$$, :'venue_id'), 'No Health Pro account');
 select t.fails(format($$select public.add_venue_staff(%L, 'member@x.bt', 'owner')$$, :'venue_id'), 'make someone an owner');
 select t.fails(format($$select public.remove_venue_staff(%L, '00000000-0000-0000-0000-00000000000b')$$, :'venue_id'), 'owner can''t be removed');
 select t.as_user('00000000-0000-0000-0000-00000000000c');
@@ -99,7 +99,7 @@ select t.eq((select count(*) from public.notifications where title = 'New venue 
 select t.fails(format($$select public.review_venue(%L, false, '  ')$$, :'venue_id'), 'Say why');
 select public.review_venue(:'venue_id', true);
 select t.as_user('00000000-0000-0000-0000-00000000000b');
-select t.eq((select count(*) from public.notifications where title like '%is live on SportsHub')::int, 1, 'the owner hears it is live');
+select t.eq((select count(*) from public.notifications where title like '%is live on Health Pro')::int, 1, 'the owner hears it is live');
 
 reset role; set role anon;
 select t.eq((select count(*) from public.venues)::int, 1, 'visitors see the verified gym');
@@ -202,7 +202,7 @@ select t.fails(format($$select public.gym_dashboard(%L)$$, :'venue_id'), 'Only t
 select t.as_user('00000000-0000-0000-0000-00000000000b');
 select public.update_venue(:'venue_id', '{"photos":["https://example.supabase.co/storage/v1/object/public/venue-photos/a.jpg"]}');
 select t.eq((select cardinality(photos) from public.venues where id = :'venue_id'), 1, 'the owner sets photos');
-select t.fails(format($$select public.update_venue(%L, '{"photos":["javascript:alert(1)"]}')$$, :'venue_id'), 'uploaded to SportsHub');
+select t.fails(format($$select public.update_venue(%L, '{"photos":["javascript:alert(1)"]}')$$, :'venue_id'), 'uploaded to Health Pro');
 insert into storage.objects (bucket_id, name) values ('venue-photos', :'venue_id' || '/a.jpg');
 select t.as_user('00000000-0000-0000-0000-00000000000c');
 select t.fails(format($$insert into storage.objects (bucket_id, name) values ('venue-photos', %L)$$, :'venue_id' || '/b.jpg'), 'row-level security');
@@ -230,10 +230,10 @@ values (:'venue_id', '00000000-0000-0000-0000-00000000000e', 'Monthly', 30, 1500
 insert into public.gym_subscriptions (venue_id, member_id, plan_name, duration_days, price, status, requested_at)
 values (:'venue_id', '00000000-0000-0000-0000-00000000000f', 'Monthly', 30, 1500, 'pending', now() - interval '31 days');
 select public.gym_daily_maintenance() as daily \gset
-select t.eq(:'daily'::jsonb, '{"expired": 1, "reminded": 1, "cancelled": 1}'::jsonb, 'daily: 1 expired, 1 reminded, 1 old request closed');
+select t.eq(:'daily'::jsonb, '{"expired": 1, "reminded": 1, "ending_today": 0, "cancelled": 1}'::jsonb, 'daily: 1 expired, 1 reminded, 1 old request closed');
 select t.eq((select count(*) from public.notifications where user_id = '00000000-0000-0000-0000-00000000000d' and title like '%has ended')::int, 0, 'no "ended" notice when they have renewed');
-select t.eq((select count(*) from public.notifications where user_id = '00000000-0000-0000-0000-00000000000e' and title = 'Your membership ends in 3 days')::int, 1, 'reminder 3 days before the end');
-select t.eq(public.gym_daily_maintenance(), '{"expired": 0, "reminded": 0, "cancelled": 0}'::jsonb, 'daily: running again changes nothing');
+select t.eq((select count(*) from public.notifications where user_id = '00000000-0000-0000-0000-00000000000e' and title = 'Your package ends in 3 days')::int, 1, 'reminder 3 days before the end');
+select t.eq(public.gym_daily_maintenance(), '{"expired": 0, "reminded": 0, "ending_today": 0, "cancelled": 0}'::jsonb, 'daily: running again changes nothing');
 
 -- ---- Notifications are private ------------------------------------------
 set role authenticated;

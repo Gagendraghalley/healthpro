@@ -4,10 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_membership/gym_membership.dart';
 import 'package:gym_membership/src/data/ask_data.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 // The floating Ask AI button: a gym's own Ask AI on its staff pages,
-// SportsHub's assistant everywhere else, for visitors too.
+// Health Pro's assistant everywhere else, for visitors too.
 
 const gymId = '0f8e3a1c-2b4d-4e5f-8a9b-0c1d2e3f4a5b';
 
@@ -110,14 +110,14 @@ void main() {
     expect(find.byTooltip('Ask AI'), findsNothing);
   });
 
-  testWidgets('visitors get SportsHub\'s assistant: suggestions, gyms near them, and questions', (tester) async {
+  testWidgets('visitors get Health Pro\'s assistant: suggestions, gyms near them, and questions', (tester) async {
     final ai = FakePublic();
     final router = await showApp(tester, at: GymRoutes.gyms, ai: ai);
     await openAssistant(tester);
-    expect(find.text('SportsHub assistant'), findsOneWidget);
-    expect(find.text('Hi! Ask me about SportsHub'), findsOneWidget);
+    expect(find.text('Health Pro assistant'), findsOneWidget);
+    expect(find.text('Hi! Ask me about Health Pro'), findsOneWidget);
 
-    await tester.tap(find.text('What is SportsHub?'));
+    await tester.tap(find.text('What is Health Pro?'));
     await tester.pumpAndSettle();
     expect(find.textContaining('brings gyms, grounds and games across Bhutan'), findsOneWidget);
     expect(ai.asked, isEmpty, reason: 'a suggestion is answered here');
@@ -127,10 +127,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(ai.asked, ['How do I become a member?']);
     expect(find.text('Go to the gym: the front desk registers you.'), findsOneWidget);
-    expect(find.text("Written by AI from SportsHub's guide."), findsOneWidget);
+    expect(find.text("Written by AI from Health Pro's guide."), findsOneWidget);
     expect(find.textContaining('14 questions left today'), findsOneWidget);
 
-    // Gyms in Thimphu: from SportsHub's own list, and a tap opens one. The
+    // Gyms in Thimphu: from Health Pro's own list, and a tap opens one. The
     // suggestions are now in a row over the box that scrolls sideways.
     final chips = find
         .descendant(
@@ -146,7 +146,7 @@ void main() {
     await tester.tap(find.text('Peak Fitness'));
     await tester.pumpAndSettle();
     expect(router.routerDelegate.currentConfiguration.uri.path, GymRoutes.gymFor('g-a'));
-    expect(find.text('SportsHub assistant'), findsNothing, reason: 'the panel closed');
+    expect(find.text('Health Pro assistant'), findsNothing, reason: 'the panel closed');
   });
 
   testWidgets('it remembers the conversation, and fills the screen on a phone', (tester) async {
@@ -155,13 +155,13 @@ void main() {
     await openAssistant(tester);
     await tester.tap(find.text('How do I check in?'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Show your QR card at the counter'), findsOneWidget);
+    expect(find.textContaining('Show your Health Pro QR code at the counter'), findsOneWidget);
     await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Show your QR card at the counter'), findsNothing);
+    expect(find.textContaining('Show your Health Pro QR code at the counter'), findsNothing);
 
     await openAssistant(tester);
-    expect(find.textContaining('Show your QR card at the counter'), findsOneWidget);
+    expect(find.textContaining('Show your Health Pro QR code at the counter'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

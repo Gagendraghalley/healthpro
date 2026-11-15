@@ -2,7 +2,7 @@
 -- t.* helpers, super admin A2 and the trainer T at Zhemgang Gym). Chain
 -- Fitness has two gyms: B owns both, D is front desk at one, C trains at
 -- the other, R manages a branch. S owns a gym of their own; G is on the
--- SportsHub team for organisations only.
+-- Health Pro team for organisations only.
 \set ON_ERROR_STOP 1
 \set QUIET 1
 \pset tuples_only on
@@ -58,22 +58,22 @@ select public.add_venue_staff(:'b1', 'desk@chain.bt', 'staff');
 select public.add_venue_staff(:'b2', 'coach@chain.bt', 'trainer');
 select public.add_venue_staff(:'b1', 'branch@chain.bt', 'manager');
 
--- ---- Changing a SportsHub-wide role for one organisation -------------------
+-- ---- Changing a Health Pro-wide role for one organisation -------------------
 select t.eq((public.organisation_roles(:'chain') ->> 'can_manage')::boolean, true,
             'an owner of every branch manages the organisation''s roles');
 select t.eq((public.organisation_roles(:'chain') -> 'organisation' ->> 'name'), 'Chain Fitness', 'organisation_roles: whose');
 select public.set_organisation_role(:'chain', :'trainer', true, array['gym.members', 'gym.check_in', 'gym.plans']);
 
 select t.as_user('00000000-0000-0000-0000-000000000402');
-select t.eq(public.has_venue_permission(:'b2', 'gym.plans'), true, 'an organisation''s change to a SportsHub-wide role applies at its venues');
+select t.eq(public.has_venue_permission(:'b2', 'gym.plans'), true, 'an organisation''s change to a Health Pro-wide role applies at its venues');
 select t.eq(public.my_venues() -> 0 -> 'permissions', '["gym.check_in", "gym.members", "gym.plans"]'::jsonb,
             'my_venues: what the role allows there');
 select t.eq(public.my_venues() -> 0 -> 'organisation' ->> 'name', 'Chain Fitness', 'my_venues: and the organisation');
 select t.as_user('00000000-0000-0000-0000-0000000001e0');
-select t.eq(public.has_venue_permission(:'zhemgang', 'gym.plans'), false, '...other organisations keep SportsHub''s default');
+select t.eq(public.has_venue_permission(:'zhemgang', 'gym.plans'), false, '...other organisations keep Health Pro''s default');
 select t.eq(public.has_venue_permission(:'zhemgang', 'gym.check_in'), true, '...and all of it');
 select t.as_user('00000000-0000-0000-0000-000000000401');
-select t.eq(public.has_venue_permission(:'b1', 'gym.payments'), true, 'roles the organisation didn''t change are SportsHub''s');
+select t.eq(public.has_venue_permission(:'b1', 'gym.payments'), true, 'roles the organisation didn''t change are Health Pro''s');
 
 select t.as_user('00000000-0000-0000-0000-000000000400');
 select t.fails(format($$select public.set_organisation_role(%L, %L, true, '{}')$$, :'chain', :'owner_role'), 'Owner role always');
@@ -81,7 +81,7 @@ select t.fails(format($$select public.set_organisation_role(%L, %L, true, array[
                'aren''t for venue roles');
 select public.set_organisation_role(:'chain', :'trainer', false, null);
 select t.as_user('00000000-0000-0000-0000-000000000402');
-select t.eq(public.is_venue_staff(:'b2'), false, 'a SportsHub-wide role turned off for an organisation gives nothing there');
+select t.eq(public.is_venue_staff(:'b2'), false, 'a Health Pro-wide role turned off for an organisation gives nothing there');
 select t.eq(jsonb_array_length(public.my_venues()), 0, '...and its venue leaves their list');
 select t.as_user('00000000-0000-0000-0000-0000000001e0');
 select t.eq(public.has_venue_permission(:'zhemgang', 'gym.check_in'), true, '...but works everywhere else');
@@ -90,14 +90,14 @@ select t.fails(format($$select public.set_venue_staff_role(%L, %L, 'trainer')$$,
                'turned off');
 select public.set_organisation_role(:'chain', :'trainer', true, null);
 select t.eq((select count(*) from public.organisation_role_settings where organisation_id = :'chain')::int, 0,
-            'on, with SportsHub''s default, is no change at all');
+            'on, with Health Pro''s default, is no change at all');
 select t.as_user('00000000-0000-0000-0000-000000000402');
-select t.eq(public.has_venue_permission(:'b2', 'gym.plans'), false, '...and the role is SportsHub''s again');
+select t.eq(public.has_venue_permission(:'b2', 'gym.plans'), false, '...and the role is Health Pro''s again');
 
 -- ---- An organisation's own roles ------------------------------------------
 select t.as_user('00000000-0000-0000-0000-000000000400');
 select t.fails(format($$select public.save_role(null, 'venue', 'manager', null, true, '{}', %L)$$, :'chain'),
-               'SportsHub already has a manager role');
+               'Health Pro already has a manager role');
 select t.fails(format($$select public.save_role(null, 'platform', 'Boss of all', null, true, '{}', %L)$$, :'chain'),
                'for its venues');
 select public.save_role(null, 'venue', 'Till operator', 'Takes payments at the till', true, array['gym.payments'], :'chain')
@@ -105,7 +105,7 @@ select public.save_role(null, 'venue', 'Till operator', 'Takes payments at the t
 select public.save_role(null, 'venue', 'Greeter', null, true, array['gym.check_in'], :'chain') as greeter \gset
 select t.eq((select organisation_id from public.roles where id = :'till'), :'chain'::uuid, 'an organisation''s own role');
 select t.eq((public.organisation_roles(:'chain') -> 'roles' -> -1 ->> 'name'), 'Till operator',
-            'organisation_roles: SportsHub''s first, then its own');
+            'organisation_roles: Health Pro''s first, then its own');
 select public.add_venue_staff(:'b2', 'till@chain.bt', 'till_operator');
 select t.as_user('00000000-0000-0000-0000-000000000406');
 select t.eq(public.has_venue_permission(:'b2', 'gym.payments'), true, 'its own role works at its venues');
@@ -178,7 +178,7 @@ select t.fails(format($$select public.set_venue_organisation(%L, (select organis
                       :'b2', :'solo'), 'own roles (Till operator)');
 select public.set_venue_organisation(:'b1', (select organisation_id from public.venues where id = :'solo'));
 select t.as_user('00000000-0000-0000-0000-000000000405');
--- The chain's Manager has 'venue.roles'; SportsHub's doesn't.
+-- The chain's Manager has 'venue.roles'; Health Pro's doesn't.
 select t.eq(public.has_venue_permission(:'b1', 'venue.roles'), false, 'a venue that moves takes its new organisation''s roles');
 select t.eq(public.has_venue_permission(:'b2', 'venue.roles'), true, '...and the venue it left keeps the old ones');
 

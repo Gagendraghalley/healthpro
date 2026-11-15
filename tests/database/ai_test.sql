@@ -43,7 +43,7 @@ select t.eq((select count(*) from public.ai_questions where user_id = '00000000-
 set role anon;
 select t.fails(format($$select public.ai_take_question(%L)$$, :'gym'), 'permission denied');
 
--- ---- SportsHub's assistant, for anyone ---------------------------------
+-- ---- Health Pro's assistant, for anyone ---------------------------------
 -- Only the Edge Function (the service role) counts visitors' questions.
 select t.fails($$select public.ai_take_public_question('visitor-hash-0000000001')$$, 'permission denied');
 reset role; set role authenticated;

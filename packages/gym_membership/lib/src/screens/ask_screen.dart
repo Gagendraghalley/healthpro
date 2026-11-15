@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/ask_data.dart';
 import '../data/dashboard_data.dart';
@@ -15,10 +15,10 @@ import '../widgets/gym_widgets.dart';
 /// month?", "who hasn't come in two weeks?", "when did Pema last come?",
 /// "how do I renew a member?"). The AI (Cloudflare Workers AI, through the
 /// ask-ai Edge Function) only chooses which of the app's reports answers it,
-/// or writes a short how-to from SportsHub's guide. The chart or list is
+/// or writes a short how-to from Health Pro's guide. The chart or list is
 /// worked out here from the gym's records, as the person's role allows, so
 /// the numbers are the app's own and members' details never leave
-/// SportsHub. Suggestions skip the AI and don't count.
+/// Health Pro. Suggestions skip the AI and don't count.
 ///
 /// It opens from the floating Ask AI button on the gym's pages
 /// ([GymAssistantPanel]); this is the same conversation full size.
@@ -51,7 +51,7 @@ class AskScreen extends ConsumerWidget {
 }
 
 /// A gym's Ask AI in the floating panel, for its staff; anyone else there
-/// gets SportsHub's assistant.
+/// gets Health Pro's assistant.
 class GymAssistantPanel extends ConsumerWidget {
   final String venueId;
 
@@ -61,7 +61,7 @@ class GymAssistantPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final access = ref.watch(venueAccessProvider(venueId));
     final a = access.valueOrNull;
-    if (access.hasValue && (a == null || a.venue.type != gymVenueType)) return const SportsHubAssistantPanel();
+    if (access.hasValue && (a == null || a.venue.type != gymVenueType)) return const HealthProAssistantPanel();
     final chat = ref.watch(askChatProvider(venueId));
     return AssistantPanel(
       title: 'Ask AI',
@@ -112,12 +112,12 @@ class AskChat extends ConsumerWidget {
         title: 'Ask about ${access.venue.name}',
         intro: seesReports
             ? 'Ask in your own words, in English or Dzongkha: about members, visits, packages and money, '
-                'or how to do something in SportsHub.'
-            : 'Ask in your own words, in English or Dzongkha, how to do something in SportsHub.',
+                'or how to do something in Health Pro.'
+            : 'Ask in your own words, in English or Dzongkha, how to do something in Health Pro.',
         points: [
           if (seesReports)
             (Icons.insights_rounded, "Charts and lists come from your gym's own records, as your role allows."),
-          (Icons.lock_outline_rounded, "Only your question is sent to the AI (Cloudflare). Members' details stay in SportsHub."),
+          (Icons.lock_outline_rounded, "Only your question is sent to the AI (Cloudflare). Members' details stay in Health Pro."),
           if (suggestions.isNotEmpty)
             (Icons.bolt_rounded, "Suggestions answer straight away and don't count against today's questions."),
         ],
@@ -140,7 +140,7 @@ class AskChat extends ConsumerWidget {
   }
 }
 
-/// A how-to, from SportsHub's guide, with the page that does it.
+/// A how-to, from Health Pro's guide, with the page that does it.
 class _HelpAnswer extends StatelessWidget {
   final VenueAccess access;
   final AskReply reply;
@@ -171,7 +171,7 @@ class _HelpAnswer extends StatelessWidget {
                   style: TextStyle(color: muted)),
           ],
           const SizedBox(height: 10),
-          Text("Written by AI from SportsHub's guide.", style: TextStyle(color: muted, fontSize: 12)),
+          Text("Written by AI from Health Pro's guide.", style: TextStyle(color: muted, fontSize: 12)),
         ],
       ),
     );

@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 import '../gym_routes.dart';
 import '../widgets/gym_art.dart';
@@ -84,7 +84,7 @@ class _GymWelcomePageState extends ConsumerState<GymWelcomePage> {
   }
 
   Widget _page(_Layout layout) {
-    final modules = ref.watch(enabledModulesProvider).valueOrNull ?? const <SportsHubModule>[];
+    final modules = ref.watch(enabledModulesProvider).valueOrNull ?? const <HealthProModule>[];
     final appModules = ref.watch(appModulesProvider).valueOrNull ?? const <AppModuleRow>[];
     final enabledKeys = appModules.where((module) => module.isEnabled).map((module) => module.key).toSet();
     final serviceLinks = modules
@@ -175,7 +175,7 @@ class _Layout {
 
   static const maxContent = 1180.0;
 
-  /// How far What SportsHub does rises into the top, over its wave.
+  /// How far What Health Pro does rises into the top, over its wave.
   static const overlap = 56.0;
 
   bool get wide => width >= 1024;
@@ -330,7 +330,7 @@ class _NavBar extends StatelessWidget {
                             cursor: SystemMouseCursors.click,
                             child: FittedBox(
                               fit: BoxFit.scaleDown,
-                              child: SportsHubLogo(height: layout.medium ? 46 : 38, markOnly: !layout.medium),
+                              child: HealthProLogo(height: layout.medium ? 46 : 38, markOnly: !layout.medium),
                             ),
                           ),
                         ),
@@ -378,7 +378,7 @@ class _NavBar extends StatelessWidget {
 
 // ─── The top ───────────────────────────────────────────────────────────────
 
-/// The headline, what SportsHub is, Get Started and Explore Services, and
+/// The headline, what Health Pro is, Get Started and Explore Services, and
 /// three things that are true of it, beside a slide show of sports filling
 /// the right of the window (a card under them on a phone); a membership card
 /// and a check-in float over it, and a wave runs along the foot.
@@ -509,7 +509,7 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 500),
             child: Text(
-              'Discover gyms, manage memberships and track visits in SportsHub. '
+              'Discover gyms, manage memberships and track visits in Health Pro. '
               'Connected sports services help bring facilities and activities across Bhutan together.',
               style: TextStyle(fontSize: layout.wide ? 18.5 : 16.5, height: 1.6, color: ink.body),
             ),
@@ -2084,7 +2084,7 @@ class _RevealItemState extends State<_RevealItem> with SingleTickerProviderState
   }
 }
 
-// ─── What SportsHub does ───────────────────────────────────────────────────
+// ─── What Health Pro does ───────────────────────────────────────────────────
 
 class _Highlight {
   final IconData icon;
@@ -2148,7 +2148,7 @@ class _Highlights extends StatelessWidget {
   }
 }
 
-/// What SportsHub does, one thing: under the mouse its icon's well warms to
+/// What Health Pro does, one thing: under the mouse its icon's well warms to
 /// orange and lifts a little.
 class _HighlightCell extends StatefulWidget {
   final _Highlight item;
@@ -2221,7 +2221,7 @@ class _Service {
   const _Service(this.name, this.icon, this.photo, {this.open = false});
 }
 
-/// Services currently available in SportsHub and links contributed by the
+/// Services currently available in Health Pro and links contributed by the
 /// enabled service modules.
 class _Services extends StatelessWidget {
   final _Layout layout;
@@ -2260,8 +2260,8 @@ class _Services extends StatelessWidget {
         const SizedBox(height: 16),
         Text(
           serviceLinks.isEmpty
-              ? 'Manage gym memberships and check-ins in SportsHub. The platform is built to connect more sports and facilities across Bhutan.'
-              : 'Manage gym memberships and check-ins in SportsHub. Ground booking and tournaments open on their existing service for now.',
+              ? 'Manage gym memberships and check-ins in Health Pro. The platform is built to connect more sports and facilities across Bhutan.'
+              : 'Manage gym memberships and check-ins in Health Pro. Ground booking and tournaments open on their existing service for now.',
           style: TextStyle(fontSize: 17, height: 1.55, color: ink.body),
         ),
         const SizedBox(height: 28),
@@ -2270,6 +2270,12 @@ class _Services extends StatelessWidget {
           runSpacing: 10,
           children: [
             _PillButton(label: 'Find a gym', icon: Icons.arrow_forward_rounded, onPressed: onFindGym),
+            _PillButton(
+              label: 'Gyms near me',
+              icon: Icons.near_me_outlined,
+              outlined: true,
+              onPressed: () => context.push(GymRoutes.gymsNearMe),
+            ),
             for (final link in serviceLinks)
               _PillButton(
                 label: link.title,
@@ -2433,7 +2439,7 @@ class _ServiceTileState extends State<_ServiceTile> {
 
 // ─── About ─────────────────────────────────────────────────────────────────
 
-/// What SportsHub is, with what members get and three facts about it, on a
+/// What Health Pro is, with what members get and three facts about it, on a
 /// tinted band.
 class _About extends StatelessWidget {
   final _Layout layout;
@@ -2455,7 +2461,7 @@ class _About extends StatelessWidget {
     final words = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _Eyebrow('ABOUT SPORTSHUB', lineBefore: true),
+        const _Eyebrow('ABOUT HEALTH PRO', lineBefore: true),
         const SizedBox(height: 14),
         Text(
           'The Digital Home for\nSports & Fitness',
@@ -2469,7 +2475,7 @@ class _About extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text(
-          'SportsHub connects people, facilities and sports services through one platform built for Bhutan. '
+          'Health Pro connects people, facilities and sports services through one platform built for Bhutan. '
           'Gym memberships are managed here, while enabled sports services connect members to their existing tools.',
           style: TextStyle(fontSize: 16, height: 1.55, color: ink.body),
         ),
@@ -2980,20 +2986,21 @@ class _Faq extends StatelessWidget {
 
   const _Faq({super.key, required this.layout});
 
-  // As the gyms work today: the front desk registers members (no account
-  // needed). SportsHub's assistant answers from the same facts
-  // (supabase/functions/ask-sportshub/reply.ts): change both together.
+  // As the gyms work today: ask to join in the app, or at the front desk
+  // (no account needed there). Health Pro's assistant answers from the same
+  // facts (supabase/functions/ask-sportshub/reply.ts): change both together.
   static const questions = [
     (
       'How do I join a gym?',
-      "You don't need a SportsHub account. Go to the gym: the front desk registers you (your details and a "
-          'photo), sells you a package for 1 to 24 months and takes your payment. Your QR card comes on '
-          'WhatsApp or as a download.',
+      "Scan the gym's QR code (or open its page) and tap Ask to join: the front desk gets your details and "
+          'lets you know. Or go to the gym: the front desk registers you, sells you a package for 1 to 24 months '
+          'and takes your payment. Either way you get one Health Pro QR code that works at every gym.',
     ),
     (
       'What payment methods are accepted?',
-      'You pay the gym directly: cash, mBoB or bank transfer. The desk records it in SportsHub, with the '
-          'journal number for mBoB and transfers.',
+      'You pay the gym: cash at the front desk, or online. To pay online, open My gyms, tap Pay online, scan '
+          "the gym's payment QR code in your bank app and enter the journal number (JRN). The gym checks it "
+          'with the bank and confirms it; your package starts then.',
     ),
     (
       'When does my membership start and end?',
@@ -3015,8 +3022,8 @@ class _Faq extends StatelessWidget {
       'Talk to your gym: changes and refunds are up to them.',
     ),
     (
-      'How do I put my gym on SportsHub?',
-      'Sign up, then Register your venue, choose Gym and add your packages and prices. Once the SportsHub '
+      'How do I put my gym on Health Pro?',
+      'Sign up, then Register your venue, choose Gym and add your packages and prices. Once the Health Pro '
           'team has verified your gym, add your staff and start registering members at the front desk.',
     ),
   ];
@@ -3129,7 +3136,7 @@ class _LastCall extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          'Join SportsHub today and take the first step towards a healthier you.',
+          'Join Health Pro today and take the first step towards a healthier you.',
           style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 17, height: 1.5),
         ),
       ],
@@ -3233,7 +3240,7 @@ class _Footer extends StatelessWidget {
     );
     // The white-lettered logo, straight on the footer's navy, light theme
     // or dark.
-    const logo = SportsHubLogo(height: 60, onDark: true);
+    const logo = HealthProLogo(height: 60, onDark: true);
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -3270,7 +3277,7 @@ class _Footer extends StatelessWidget {
                 Divider(height: 1, color: Colors.white.withValues(alpha: 0.1)),
                 const SizedBox(height: 18),
                 Text(
-                  '© ${BhutanTime.today().year} SportsHub. All rights reserved.',
+                  '© ${BhutanTime.today().year} Health Pro. All rights reserved.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 13, color: dim),
                 ),

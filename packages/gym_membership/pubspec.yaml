@@ -1,5 +1,5 @@
 name: gym_membership
-description: SportsHub module 2 - gym plans, membership requests, payment confirmation, renewals, QR check-in and the gym owner's dashboard.
+description: Health Pro module 2 - gym plans, membership requests, payment confirmation, renewals, QR check-in and the gym owner's dashboard.
 publish_to: 'none'
 version: 1.0.0
 
@@ -19,8 +19,8 @@ dependencies:
   camera: ^0.11.4 # the front desk snaps a registering member's photo with the webcam
   share_plus: ^12.0.2 # sends a member's QR card (share sheet on phones, a download on computers)
   clipboard: ^3.0.10 # copies the QR image to the clipboard for pasting into WhatsApp
-  sportshub_core:
-    path: ../sportshub_core
+  health_pro_core:
+    path: ../health_pro_core
 
 dev_dependencies:
   flutter_test:
@@ -29,6 +29,6 @@ dev_dependencies:
 
 flutter:
   # The Welcome page's photos (assets/PHOTO_CREDITS.md). Its font is the
-  # platform's, in sportshub_core.
+  # platform's, in health_pro_core.
   assets:
     - assets/welcome/

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/dashboard_data.dart';
 import '../data/gym_models.dart';
@@ -145,7 +145,7 @@ class _ConsoleState extends ConsumerState<_Console> {
         _Alert(
           icon: Icons.hourglass_top_rounded,
           color: context.brand.warning,
-          text: 'SportsHub is still checking ${venue.name}. You can set it up meanwhile; '
+          text: 'Health Pro is still checking ${venue.name}. You can set it up meanwhile; '
               'it shows on the public gym list once verified.',
         ),
       if (soon.isNotEmpty)

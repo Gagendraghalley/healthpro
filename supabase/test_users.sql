@@ -1,17 +1,16 @@
--- Test accounts: one for every role, to try SportsHub as each kind of user.
+-- Test accounts: one for every role, to try Health Pro as each kind of user.
 --
--- They sign in with their email and a password (Sign in, then the password
--- box), so no email has to arrive.
+-- They sign in with their email and a 6-digit code (Sign in, then the
+-- 6-digit code boxes), so no email has to arrive.
 --
--- How: Supabase -> SQL Editor -> New query, paste this whole file, put a
--- password of your own on the PASSWORD line below (8 or more characters;
--- every test account gets it), and Run. The table at the end lists the
--- accounts. Don't save the password in this file.
+-- How: Supabase -> SQL Editor -> New query, paste this whole file and
+-- Run. Every test account gets the code 123456; for another, change the CODE
+-- line below. The table at the end lists the accounts.
 --
--- Safe to run again: it makes nothing twice, and puts the passwords and
+-- Safe to run again: it makes nothing twice, and puts the codes and
 -- roles back (and turns a test account back on if it was turned off).
 --
--- What it makes, at "SportsHub Test Gym" (made here, verified):
+-- What it makes, at "Health Pro Test Gym" (made here, verified):
 --   superadmin@example.com  Super admin: can do everything
 --   admin@example.com       Administrator: users, roles, master data, venues, modules
 --   owner@example.com       Owner of the test gym
@@ -20,9 +19,9 @@
 --   trainer@example.com     Trainer: sees members, checks them in
 --   member@example.com      A member with an account: 3 months of Monthly at the test gym
 -- and <role key>@example.com for each role made under Admin -> Roles and
--- permissions (gym_cleaner: gym.cleaner@example.com), SportsHub-wide or the
+-- permissions (gym_cleaner: gym.cleaner@example.com), Health Pro-wide or the
 -- test gym's organisation's own. The gym gets an organisation of its own
--- (SportsHub Test Gym), like any new venue. example.com is kept for
+-- (Health Pro Test Gym), like any new venue. example.com is kept for
 -- examples, so no real person has one of these addresses: every
 -- @example.com account is a test account.
 --
@@ -34,7 +33,7 @@
 
 do $$
 declare
-    v_password constant text := 'SportsHub2026';  -- <- your password here
+  v_code constant text := '123456';  -- <- CODE: every test account's 6-digit code
   v_gym constant uuid := '7e570000-0000-4000-8000-000000000001';
   v_hash text;
   v_account record;
@@ -43,15 +42,16 @@ declare
   v_start date;
   v_end date;
 begin
-  if v_password = 'PASSWORD' or char_length(v_password) < 8 then
-    raise exception 'Put a password of your own (8 or more characters) on the PASSWORD line first.';
+  if v_code !~ '^[0-9]{6}$' then
+    raise exception 'The CODE line needs 6 digits.';
   end if;
-  -- How Supabase Auth keeps passwords (bcrypt).
-  v_hash := extensions.crypt(v_password, extensions.gen_salt('bf'));
+  -- The sign-in code is the account's password, kept as Supabase Auth
+  -- keeps them (bcrypt).
+  v_hash := extensions.crypt(v_code, extensions.gen_salt('bf'));
 
   insert into public.venues (id, type, name, description, dzongkhag, town, address, phone, payment_info,
                              verification_status, verified_at)
-  values (v_gym, 'gym', 'SportsHub Test Gym', 'For trying SportsHub out. Not a real gym.',
+  values (v_gym, 'gym', 'Health Pro Test Gym', 'For trying Health Pro out. Not a real gym.',
           'Thimphu', 'Thimphu', 'Test address', '+97517000000', 'Cash at the front desk.',
           'verified', now())
   on conflict (id) do nothing;
@@ -76,7 +76,7 @@ begin
       ('member',     'Test Member',        'member',   null)
     ) as a (name, full_name, kind, role_key)
     union all
-    -- Roles made under Admin -> Roles and permissions: SportsHub-wide ones,
+    -- Roles made under Admin -> Roles and permissions: Health Pro-wide ones,
     -- and the test gym's organisation's own (other organisations' can't be
     -- given there).
     select replace(r.key, '_', '.'), left('Test ' || r.name, 100), r.scope, r.key
@@ -87,7 +87,7 @@ begin
   loop
     v_email := v_account.name || '@example.com';
 
-    -- The account: made, or its password put back.
+    -- The account: made, or its sign-in code put back.
     select u.id into v_user from auth.users u where lower(u.email) = v_email;
     if v_user is null then
       v_user := gen_random_uuid();
@@ -151,9 +151,9 @@ select p.email,
          else coalesce(
            (select string_agg(r.name, ', ') from public.user_roles ur join public.roles r on r.id = ur.role_id
             where ur.user_id = p.id),
-           (select r.name || ' at SportsHub Test Gym' from public.venue_staff s join public.roles r on r.key = s.role
+           (select r.name || ' at Health Pro Test Gym' from public.venue_staff s join public.roles r on r.key = s.role
             where s.user_id = p.id and s.venue_id = '7e570000-0000-4000-8000-000000000001'),
-           (select 'Member at SportsHub Test Gym until ' || to_char(max(s.end_date), 'DD Mon YYYY')
+           (select 'Member at Health Pro Test Gym until ' || to_char(max(s.end_date), 'DD Mon YYYY')
             from public.gym_subscriptions s
             where s.member_id = p.id and s.venue_id = '7e570000-0000-4000-8000-000000000001' and s.status = 'active'
             having count(*) > 0),

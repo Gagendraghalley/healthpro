@@ -1,6 +1,6 @@
 -- Master data, roles and permissions: runs after scenario_test.sql (it uses
 -- its t.* helpers). Super admin A2, gym owner O2, and people who get roles:
--- U1 (SportsHub team), K (cashier), T (trainer), V (supervisor), M3 (member).
+-- U1 (Health Pro team), K (cashier), T (trainer), V (supervisor), M3 (member).
 \set ON_ERROR_STOP 1
 \set QUIET 1
 \pset tuples_only on
@@ -21,7 +21,7 @@ select t.eq((select count(*) from public.dzongkhags)::int, 20, 'masters: 20 dzon
 select t.eq((select count(*) from public.gewogs)::int, 216, 'masters: 216 gewogs and thromdes');
 select t.eq((select count(*) from public.villages)::int, 4499, 'masters: 4499 villages');
 select t.eq((select count(*) from public.dzongkhags where name in ('Chhukha', 'Samdrup Jongkhar'))::int, 2,
-            'masters: dzongkhags spelled as the rest of SportsHub spells them');
+            'masters: dzongkhags spelled as the rest of Health Pro spells them');
 select t.eq((select count(*) from public.dzongkhags d where d.name not in (
               'Bumthang', 'Chhukha', 'Dagana', 'Gasa', 'Haa', 'Lhuentse', 'Mongar', 'Paro', 'Pemagatshel', 'Punakha',
               'Samdrup Jongkhar', 'Samtse', 'Sarpang', 'Thimphu', 'Trashigang', 'Trashiyangtse', 'Trongsa', 'Tsirang',
@@ -113,8 +113,8 @@ select t.eq((select count(*) from public.role_permissions rp join public.roles r
             (select count(*) from public.permissions where scope = 'venue')::int, 'the owner role lists every venue permission');
 select t.eq((select array_agg(permission_key order by permission_key) from public.role_permissions rp
              join public.roles r on r.id = rp.role_id where r.key = 'staff'),
-            array['gym.check_in', 'gym.members', 'gym.payments', 'gym.register'],
-            'front desk: members, payments, check-in and registering');
+            array['gym.check_in', 'gym.members', 'gym.payments', 'gym.register', 'gym.trainers'],
+            'front desk: members, payments, check-in, registering and checking trainers');
 
 select t.as_user('00000000-0000-0000-0000-0000000001b0');
 select public.gym_save_plan(:'gym', null, 'Monthly', null, 30, 1000, true) as plan \gset

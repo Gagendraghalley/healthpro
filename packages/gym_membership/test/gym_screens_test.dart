@@ -8,7 +8,7 @@ import 'package:gym_membership/src/screens/check_in_screen.dart';
 import 'package:gym_membership/src/screens/members_screens.dart';
 import 'package:gym_membership/src/screens/reports_screen.dart';
 import 'package:gym_membership/src/screens/staff_screens.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 final gym = Venue.fromJson({
@@ -103,7 +103,7 @@ Future<void> show(WidgetTester tester, Widget page, {Size size = const Size(1440
 
 class FakeRepo extends Fake implements GymRepository {
   @override
-  Future<CheckInResult> checkIn(String venueId, MemberRef member) async {
+  Future<CheckInResult> checkIn(String venueId, MemberRef member, {bool asMember = false}) async {
     // As the database refuses it (raise exception: P0001).
     if (member.code == 'ENDED1') {
       throw const PostgrestException(message: "Karma's package ended on 7 Feb 2027. Renew it on their page.", code: 'P0001');

@@ -1,4 +1,4 @@
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 /// gym_subscriptions.status. A member asks for a plan (pending); the gym's
 /// staff confirm the payment (active); it runs out (expired) or is called
@@ -53,7 +53,7 @@ class GymSubscription {
   /// person's memberships share it.
   final String memberId;
 
-  /// Set for a member registered at the front desk (no SportsHub account).
+  /// Set for a member registered at the front desk (no Health Pro account).
   final String? gymMemberId;
   final String? planId;
   final String planName;
@@ -179,7 +179,52 @@ class GymCheckIn {
 }
 
 /// What gym_check_in answers: who it was and how long they have left.
-class CheckInResult {
+/// What a scan at the desk did: a member checked in ([CheckInResult]), or a
+/// trainer arriving for work ([TrainerArrival]).
+sealed class CheckInOutcome {
+  const CheckInOutcome();
+}
+
+/// A trainer verified at the gym arrived: their attendance there is
+/// recorded. With [alsoMember], they're a member too and can be checked in
+/// as one instead.
+class TrainerArrival extends CheckInOutcome {
+  final String name;
+  final String trainerId;
+  final String? photoUrl;
+  final int earlierToday;
+
+  /// Their times at this gym today.
+  final List<OpenPeriod> slotsToday;
+  final bool alsoMember;
+  final String? personToken;
+
+  const TrainerArrival({
+    required this.name,
+    required this.trainerId,
+    this.photoUrl,
+    this.earlierToday = 0,
+    this.slotsToday = const [],
+    this.alsoMember = false,
+    this.personToken,
+  });
+
+  factory TrainerArrival.fromJson(Map<String, dynamic> json) => TrainerArrival(
+        name: json['member_name'] as String? ?? 'Trainer',
+        trainerId: json['trainer_id'] as String,
+        photoUrl: json['photo_url'] as String?,
+        earlierToday: (json['earlier_today'] as num?)?.toInt() ?? 0,
+        slotsToday: [
+          for (final s in (json['slots_today'] as List? ?? const []))
+            if ((OpenPeriod.parse((s as List)[0] as String?), OpenPeriod.parse(s[1] as String?)) case (final int a, final int b))
+              OpenPeriod(a, b),
+        ],
+        alsoMember: json['also_member'] as bool? ?? false,
+        personToken: json['person_token'] as String?,
+      );
+}
+
+class CheckInResult extends CheckInOutcome {
   final String memberName;
   final String? memberCode;
   final String planName;

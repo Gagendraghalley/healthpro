@@ -17,4 +17,8 @@ abstract final class GymPermission {
 
   /// Plans and prices.
   static const plans = 'gym.plans';
+
+  /// Verify trainers who ask to train here; their timings and attendance
+  /// (20261115000004_trainers.sql).
+  static const trainers = 'gym.trainers';
 }

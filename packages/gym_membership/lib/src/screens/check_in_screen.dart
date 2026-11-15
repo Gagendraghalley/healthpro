@@ -4,16 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/gym_models.dart';
 import '../data/gym_repository.dart';
+import '../data/joining.dart';
 import '../data/member_qr.dart';
 import '../data/registered_member.dart';
 import '../gym_permissions.dart';
 import '../gym_routes.dart';
 import '../widgets/gym_widgets.dart';
 import '../widgets/member_photo.dart';
+import 'payment_screens.dart';
+import '../widgets/trainer_widgets.dart';
 
 /// The front desk: scan a member's QR card (or type their member code). It
 /// works only when their package at this gym covers today; otherwise it says
@@ -29,7 +32,14 @@ class CheckInScreen extends ConsumerWidget {
       venueId: venueId,
       title: 'Check-in',
       permission: GymPermission.checkIn,
-      builder: (context, access) => AppPage(title: 'Check-in', body: _CheckInBody(venueId: venueId)),
+      builder: (context, access) => AppPage(
+        title: 'Check-in',
+        body: _CheckInBody(
+          venueId: venueId,
+          canRegister: access.can(GymPermission.register),
+          canPayments: access.can(GymPermission.payments),
+        ),
+      ),
     );
   }
 }
@@ -37,7 +47,13 @@ class CheckInScreen extends ConsumerWidget {
 class _CheckInBody extends ConsumerStatefulWidget {
   final String venueId;
 
-  const _CheckInBody({required this.venueId});
+  /// They may add someone on Health Pro who isn't a member here yet.
+  final bool canRegister;
+
+  /// They may confirm a refused member's online payment.
+  final bool canPayments;
+
+  const _CheckInBody({required this.venueId, required this.canRegister, this.canPayments = false});
 
   @override
   ConsumerState<_CheckInBody> createState() => _CheckInBodyState();
@@ -51,9 +67,14 @@ class _CheckInBodyState extends ConsumerState<_CheckInBody> {
   /// presses Enter, so on a computer the box keeps the cursor.
   final _codeFocus = FocusNode();
   bool _busy = false;
-  CheckInResult? _result;
+
+  /// A member checked in, or a trainer arriving.
+  CheckInOutcome? _result;
   DateTime? _resultAt;
   String? _error;
+
+  /// Someone on Health Pro who isn't a member here yet.
+  NotMemberHere? _notHere;
 
   bool get _atCounter => MediaQuery.sizeOf(context).width >= 900;
 
@@ -104,12 +125,13 @@ class _CheckInBodyState extends ConsumerState<_CheckInBody> {
     _checkIn(raw);
   }
 
-  Future<void> _checkIn(String raw, {bool allowPhone = false}) async {
+  Future<void> _checkIn(String raw, {bool allowPhone = false, bool asMember = false}) async {
     final member = MemberQr.parse(raw);
     if (member == null && !(allowPhone && _looksLikePhone(raw))) {
       setState(() {
         _result = null;
         _refused = null;
+        _notHere = null;
         _error = "That isn't a member card or member code.";
       });
       _show(_ScanState.refused);
@@ -121,13 +143,14 @@ class _CheckInBodyState extends ConsumerState<_CheckInBody> {
       _busy = true;
       _error = null;
       _refused = null;
+      _notHere = null;
     });
     _show(_ScanState.checking);
     final repo = ref.read(gymRepositoryProvider);
     try {
       final result = member == null
           ? await repo.checkInByPhone(widget.venueId, raw)
-          : await repo.checkIn(widget.venueId, member);
+          : await repo.checkIn(widget.venueId, member, asMember: asMember);
       if (!mounted) return;
       setState(() {
         _result = result;
@@ -137,6 +160,16 @@ class _CheckInBodyState extends ConsumerState<_CheckInBody> {
       _code.clear();
       ref.invalidate(gymCheckInsTodayProvider(widget.venueId));
       ref.invalidate(gymDashboardProvider(widget.venueId));
+      if (result is TrainerArrival) ref.invalidate(gymTrainersProvider(widget.venueId));
+    } on NotMemberHere catch (e) {
+      if (mounted) {
+        setState(() {
+          _result = null;
+          _notHere = e;
+        });
+        _show(_ScanState.refused);
+        _code.clear();
+      }
     } catch (e) {
       GymMember? refused;
       if (member?.cardToken != null) {
@@ -223,14 +256,40 @@ class _CheckInBodyState extends ConsumerState<_CheckInBody> {
         opacity: a,
         child: ScaleTransition(scale: Tween<double>(begin: 0.94, end: 1).animate(a), child: child),
       ),
-      child: _result != null
-          ? _ResultCard(key: ValueKey(_resultAt), result: _result!, at: _resultAt ?? DateTime.now())
+      child: _result is CheckInResult
+          ? Column(
+              key: ValueKey(_resultAt),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ResultCard(result: _result! as CheckInResult, at: _resultAt ?? DateTime.now()),
+                if ((_result! as CheckInResult).gymMemberId case final id?)
+                  MemberTrainerPicker(venueId: widget.venueId, gymMemberId: id, canChange: true, compact: true),
+              ],
+            )
+          : _result is TrainerArrival
+              ? _TrainerArrivalCard(
+                  key: ValueKey(_resultAt),
+                  arrival: _result! as TrainerArrival,
+                  at: _resultAt ?? DateTime.now(),
+                  onAsMember: (_result! as TrainerArrival).alsoMember && (_result! as TrainerArrival).personToken != null
+                      ? () => _checkIn(MemberQr.encodePerson((_result! as TrainerArrival).personToken!), asMember: true)
+                      : null,
+                )
+          : _notHere != null
+              ? _NotMemberCard(
+                  key: ValueKey('n${_notHere!.personToken}${_notHere!.name}'),
+                  notHere: _notHere!,
+                  onAdd: widget.canRegister && _notHere!.personToken != null
+                      ? () => context.go(GymRoutes.addPersonFor(widget.venueId, qrToken: _notHere!.personToken!))
+                      : null,
+                )
           : _error != null
               ? _ErrorCard(
                   key: ValueKey('e$_error${_refused?.id}'),
                   message: _error!,
                   member: _refused,
                   onOpen: _refused == null ? null : () => context.go(GymRoutes.memberFor(widget.venueId, _refused!.id)),
+                  canConfirm: widget.canPayments,
                 )
               : const _Waiting(key: ValueKey('waiting')),
     );
@@ -587,7 +646,7 @@ class _ResultCard extends StatelessWidget {
   /// When it was recorded.
   final DateTime at;
 
-  const _ResultCard({super.key, required this.result, required this.at});
+  const _ResultCard({required this.result, required this.at});
 
   @override
   Widget build(BuildContext context) {
@@ -657,7 +716,10 @@ class _ErrorCard extends StatelessWidget {
   final GymMember? member;
   final VoidCallback? onOpen;
 
-  const _ErrorCard({super.key, required this.message, this.member, this.onOpen});
+  /// They may confirm the member's online payment, if one is waiting.
+  final bool canConfirm;
+
+  const _ErrorCard({super.key, required this.message, this.member, this.onOpen, this.canConfirm = false});
 
   @override
   Widget build(BuildContext context) {
@@ -695,6 +757,129 @@ class _ErrorCard extends StatelessWidget {
                 ),
               ],
             ),
+            // They paid online and it waits: confirm it, and check in again.
+            if (member != null) MemberPaymentsWaiting(gymMemberId: member!.id, canConfirm: canConfirm),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Someone on Health Pro who isn't a member here yet: the desk adds them,
+/// and their details fill in from their last gym.
+class _NotMemberCard extends StatelessWidget {
+  final NotMemberHere notHere;
+  final VoidCallback? onAdd;
+
+  const _NotMemberCard({super.key, required this.notHere, this.onAdd});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    const color = BrandColors.blue;
+    return SectionCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: color.withValues(alpha: 0.12),
+                child: const Icon(Icons.person_add_alt_1_rounded, color: color),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Not a member here yet', style: TextStyle(color: color, fontWeight: FontWeight.w800)),
+                    Text(notHere.name, style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            onAdd != null
+                ? "They're on Health Pro already. Add them to this gym: their details fill in from their last "
+                    'gym, and the same QR code works here from then on.'
+                : notHere.personToken == null
+                    ? 'Ask them to show their Health Pro QR code, so they can be added without typing their details.'
+                    : 'Ask a colleague who registers members to add them.',
+            style: TextStyle(color: brand.body, height: 1.4),
+          ),
+          if (onAdd != null) ...[
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.person_add_alt_1_rounded),
+              label: const Text('Add to this gym'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// A trainer verified here arrived: their attendance is recorded. Their
+/// times here today, and, if they're a member too, a way to check them in
+/// as one instead.
+class _TrainerArrivalCard extends StatelessWidget {
+  final TrainerArrival arrival;
+  final DateTime at;
+  final VoidCallback? onAsMember;
+
+  const _TrainerArrivalCard({super.key, required this.arrival, required this.at, this.onAsMember});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    const color = BrandColors.blue;
+    return Card(
+      color: color.withValues(alpha: 0.1),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const _Outcome(text: 'TRAINER ARRIVED', icon: Icons.sports_rounded, color: color),
+            Row(
+              children: [
+                TrainerAvatar(name: arrival.name, photoUrl: arrival.photoUrl, size: 64),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(arrival.name, style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                      Text('Attendance recorded at ${formatTime(at)}', style: TextStyle(color: brand.body)),
+                      const SizedBox(height: 4),
+                      Text(
+                        arrival.slotsToday.isEmpty
+                            ? 'Not scheduled here today'
+                            : 'Here today: ${arrival.slotsToday.map((p) => p.text).join(', ')}',
+                        style: TextStyle(color: brand.muted),
+                      ),
+                      if (arrival.earlierToday > 0)
+                        Text('Also arrived earlier today (${arrival.earlierToday}x)', style: TextStyle(color: brand.muted)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (onAsMember != null) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: onAsMember,
+                icon: const Icon(Icons.fitness_center_rounded, size: 18),
+                label: const Text("They're here to work out: check in as a member"),
+              ),
+            ],
           ],
         ),
       ),

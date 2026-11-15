@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs the SportsHub website locally on http://localhost:3000, like a React
+# Runs the Health Pro website locally on http://localhost:3000, like a React
 # dev server. Run from the sporthubs folder:
 #
 #   ./scripts/run_web.sh            # port 3000, or 3001 when 3000 is taken
@@ -31,14 +31,14 @@ else
   fi
 fi
 
-cd "$(dirname "$0")/../apps/sportshub_app"
+cd "$(dirname "$0")/../apps/health_pro_app"
 if [ ! -f env.json ]; then
-  echo "apps/sportshub_app/env.json is missing: copy env.example.json to env.json and fill it in (see README)." >&2
+  echo "apps/health_pro_app/env.json is missing: copy env.example.json to env.json and fill it in (see README)." >&2
   exit 1
 fi
 
 DEVICE=chrome
 [ "${SERVE_ONLY:-0}" = 1 ] && DEVICE=web-server
 
-echo "SportsHub: http://localhost:$PORT"
+echo "Health Pro: http://localhost:$PORT"
 exec flutter run -d "$DEVICE" --web-hostname localhost --web-port "$PORT" --dart-define-from-file=env.json

@@ -2,7 +2,8 @@
 // key, which only Edge Functions have:
 //
 //   { action: 'create', email, full_name, phone?, venue_id?, venue_role?, platform_role_ids? }
-//     Makes an account (they sign in with the emailed code; no password) and
+//     Makes an account (they sign in with the starting code 123456, and must
+//     choose their own 6-digit code before anything else opens) and
 //     gives it roles. Someone who already has an account just gets the roles.
 //     For people with 'users.manage', or with 'venue.staff' at [venue_id]
 //     (a gym owner making their front desk's account).
@@ -22,6 +23,11 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
+
+// The code a new account starts with (AuthRepository.defaultCode in the
+// app). must_choose_code makes the app ask for their own code first
+// (guardRoute, SetCodeScreen).
+const STARTING_CODE = '123456';
 
 // Long enough to mean "until turned on again".
 const BANNED_FOR = '876000h';
@@ -95,8 +101,9 @@ async function create(body: Record<string, unknown>, asCaller: SupabaseClient, a
   let existed = false;
   const { data: made, error: makeError } = await admin.auth.admin.createUser({
     email,
-    email_confirm: true, // they prove it's theirs with the code each time they sign in
-    user_metadata: { full_name: fullName, ...(phone ? { phone } : {}) },
+    email_confirm: true,
+    password: STARTING_CODE,
+    user_metadata: { full_name: fullName, ...(phone ? { phone } : {}), must_choose_code: true },
   });
   if (made?.user) {
     userId = made.user.id;

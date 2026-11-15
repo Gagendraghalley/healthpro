@@ -1,4 +1,4 @@
-// What the ask-sportshub Edge Function (SportsHub's assistant for anyone)
+// What the ask-sportshub Edge Function (Health Pro's assistant for anyone)
 // lets through from the model and the browser.
 //
 //   deno test tests/functions/
@@ -10,7 +10,7 @@ function same(actual: unknown, expected: unknown) {
   if (a !== e) throw new Error(`got ${a}\nexpected ${e}`);
 }
 
-Deno.test('finding gyms, in a dzongkhag spelled as SportsHub spells it', () => {
+Deno.test('finding gyms, in a dzongkhag spelled as Health Pro spells it', () => {
   same(sanitize({ kind: 'find_venues', venue_type: 'gym', dzongkhag: 'paro' }),
     { kind: 'find_venues', venue_type: 'gym', dzongkhag: 'Paro' });
   same(sanitize('{"kind":"find_venues","dzongkhag":"Wangdue Phodrang"}'),
@@ -32,7 +32,7 @@ Deno.test('help: an answer and a page it knows', () => {
 Deno.test('anything else is a friendly "other"', () => {
   same(sanitize('nonsense'), { kind: 'other', answer: OTHER_ANSWER });
   same(sanitize({ kind: 'report', report: 'revenue' }), { kind: 'other', answer: OTHER_ANSWER });
-  same(sanitize({ kind: 'other', answer: 'I can help with SportsHub.' }), { kind: 'other', answer: 'I can help with SportsHub.' });
+  same(sanitize({ kind: 'other', answer: 'I can help with Health Pro.' }), { kind: 'other', answer: 'I can help with Health Pro.' });
 });
 
 Deno.test('the browser\'s history is checked, kept short, and loses its answers', () => {

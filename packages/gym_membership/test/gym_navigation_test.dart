@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_membership/gym_membership.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 const gymId = '0f8e3a1c-2b4d-4e5f-8a9b-0c1d2e3f4a5b';
 const otherId = '1f8e3a1c-2b4d-4e5f-8a9b-0c1d2e3f4a5c';
@@ -18,7 +18,7 @@ Venue venue(String id, String name) => Venue.fromJson({
     });
 
 /// Who is signed in: the gyms they run (role and its permissions) and
-/// whether they're on the SportsHub team.
+/// whether they're on the Health Pro team.
 List<Override> person({List<MyVenue> gyms = const [], bool team = false}) => [
       currentUserIdProvider.overrideWithValue('u1'),
       myProfileProvider.overrideWith((ref) async => Profile.fromJson({'id': 'u1', 'full_name': 'Gagendra Ghalley'})),
@@ -97,11 +97,15 @@ void main() {
     for (final label in ['Gym management', 'Druk Fitness Club']) {
       expect(inMenu(label), findsOneWidget, reason: label);
     }
-    for (final label in ['Overview', 'My services', 'Notifications']) {
+    for (final label in ['Overview', 'My services']) {
       expect(inMenu(label), findsNothing, reason: "$label: the super admin's");
     }
+    for (final label in ['My QR code', 'My gyms', 'Notifications']) {
+      expect(inMenu(label), findsOneWidget, reason: "$label: everyone's own, under Me");
+    }
     for (final label in [
-      'Dashboard', 'Check-in', 'Members', 'Register member', 'Memberships & packages', 'Payments & income',
+      'Dashboard', 'Check-in', 'Members', 'Register member', 'Join requests', 'Gym QR code', 'Memberships & packages',
+      'Payments & income',
       'Reports & analytics', 'Staff', 'Roles & permissions', 'Gym settings',
     ]) {
       expect(inMenu(label), findsOneWidget, reason: label);
@@ -157,8 +161,11 @@ void main() {
 
   testWidgets("no gym, and not the super admin: nothing they haven't been given", (tester) async {
     await showApp(tester, computer, person(), at: CoreRoutes.account);
-    for (final label in ['Overview', 'My services', 'Notifications', 'Gym management', 'Set up your gym', 'ADMINISTRATION']) {
+    for (final label in ['Overview', 'My services', 'Gym management', 'Set up your gym', 'ADMINISTRATION']) {
       expect(inMenu(label), findsNothing, reason: label);
+    }
+    for (final label in ['My QR code', 'My gyms', 'Notifications']) {
+      expect(inMenu(label), findsOneWidget, reason: '$label: a member\'s own');
     }
   });
 

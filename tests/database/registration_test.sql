@@ -129,7 +129,8 @@ select t.fails(format($$select public.gym_check_in_by_code(%L, (select code from
                       :'gym', :'sonam'), 'no package yet');
 
 select t.as_user('00000000-0000-0000-0000-000000000301');
-select t.fails(format($$select public.gym_check_in_member(%L, %L)$$, :'other_gym', :'karma_token'), 'another gym');
+select t.eq(public.gym_check_in_member(:'other_gym', :'karma_token') ->> 'not_member', 'true',
+            'their QR code at another gym: not a member there yet (the desk can add them)');
 select t.fails(format($$select public.gym_check_in_by_code(%L, %L)$$, :'other_gym', :'karma_code'), 'another gym');
 select t.eq((public.gym_dashboard(:'gym') ->> 'active')::int, 1, 'the dashboard counts registered members');
 select t.eq((public.gym_dashboard(:'gym') ->> 'check_ins_today')::int, 3, '...and their visits');

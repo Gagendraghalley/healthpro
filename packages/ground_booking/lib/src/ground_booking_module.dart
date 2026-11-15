@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 /// Booking futsal, football, basketball and badminton grounds, and
 /// tournaments. For now they run on the separate ground booking website
-/// (its own accounts and data), and SportsHub links to it.
+/// (its own accounts and data), and Health Pro links to it.
 ///
-/// One domain later: the module already owns its paths in SportsHub
+/// One domain later: the module already owns its paths in Health Pro
 /// (/grounds, /tournaments, /register-ground, the same as the booking
 /// website's), so links to them work today (they hand over to the website)
 /// and will open the module's own screens once they move in here. See
 /// README, 'Bringing ground booking in'.
-class GroundBookingModule extends SportsHubModule {
+class GroundBookingModule extends HealthProModule {
   const GroundBookingModule();
 
   /// The booking website; GROUND_BOOKING_URL in env.json changes it.
@@ -78,7 +78,7 @@ class GroundBookingModule extends SportsHubModule {
         ),
       ];
 
-  /// Where SportsHub's assistant sends people asking about grounds.
+  /// Where Health Pro's assistant sends people asking about grounds.
   @override
   Map<String, ModuleMenuItem> get assistantLinks => {
         'grounds': ModuleMenuItem(title: 'Book a ground', icon: Icons.sports_soccer_rounded, externalUrl: page(grounds)),
@@ -103,7 +103,7 @@ class GroundBookingModule extends SportsHubModule {
       );
 }
 
-/// A ground booking page opened in SportsHub: for now, it hands over to the
+/// A ground booking page opened in Health Pro: for now, it hands over to the
 /// same page on the booking website.
 class GroundBookingHandoff extends StatelessWidget {
   final String path;
@@ -118,7 +118,7 @@ class GroundBookingHandoff extends StatelessWidget {
       body: EmptyState(
         icon: tournaments ? Icons.emoji_events_outlined : Icons.sports_soccer_rounded,
         title: tournaments ? 'Tournaments are on our booking website' : 'Grounds are booked on our booking website',
-        message: 'It opens in a new tab. Ground booking is coming into SportsHub soon.',
+        message: 'It opens in a new tab. Ground booking is coming into Health Pro soon.',
         actionLabel: 'Open it',
         onAction: () => openExternal(context, GroundBookingModule.page(path)),
       ),

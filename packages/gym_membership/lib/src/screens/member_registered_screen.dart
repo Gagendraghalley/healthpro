@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/gym_models.dart';
 import '../data/gym_repository.dart';
@@ -72,7 +72,7 @@ class _Registered extends ConsumerWidget {
     final package = SectionCard(
       padding: const EdgeInsets.all(18),
       child: loading
-          ? const Center(child: SportsHubLoader(size: 40, semanticsLabel: 'Loading their package'))
+          ? const Center(child: HealthProLoader(size: 40, semanticsLabel: 'Loading their package'))
           : sold == null
               ? _NoPackage(onSell: access.can(GymPermission.payments) ? () => context.go(GymRoutes.memberFor(id, m.id)) : null)
               : _PackageSummary(sold: sold, subs: subs, today: today),

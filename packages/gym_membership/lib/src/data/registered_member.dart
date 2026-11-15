@@ -1,4 +1,4 @@
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 import 'gym_models.dart';
 
@@ -9,7 +9,7 @@ const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 /// (gym_add_membership takes 1 to 24).
 const packageMonthOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 24];
 
-/// A member registered at a gym's front desk (gym_members): no SportsHub
+/// A member registered at a gym's front desk (gym_members): no Health Pro
 /// account needed. Their QR card holds [qrToken]; staff can also type
 /// [code].
 class GymMember {
@@ -85,7 +85,8 @@ class GymMember {
       id: json['id'] as String,
       venueId: json['venue_id'] as String,
       code: json['code'] as String,
-      qrToken: json['qr_token'] as String,
+      // Their Health Pro QR code, the same at every gym; else this gym's card.
+      qrToken: ((json['person'] as Map<String, dynamic>?)?['qr_token'] as String?) ?? json['qr_token'] as String,
       fullName: json['full_name'] as String,
       phone: json['phone'] as String,
       email: json['email'] as String?,
@@ -133,6 +134,26 @@ class MemberDetails {
     this.emergencyContactPhone,
     this.medicalNotes,
   });
+
+  /// What gym_person_details sends: the details a person gave another gym
+  /// (or their account), to fill the form; the date of joining is [joinedOn].
+  factory MemberDetails.fromJson(Map<String, dynamic> json, {required DateTime joinedOn}) {
+    String? text(String key) => (json[key] as String?)?.trim().isNotEmpty == true ? (json[key] as String).trim() : null;
+    int? id(String key) => (json[key] as num?)?.toInt();
+    return MemberDetails(
+      fullName: text('full_name') ?? '',
+      phone: text('phone') ?? '',
+      email: text('email'),
+      dateOfBirth: text('date_of_birth') == null ? null : BhutanTime.parseDate(text('date_of_birth')!),
+      bloodGroup: text('blood_group'),
+      occupation: text('occupation'),
+      place: LocationSelection(dzongkhagId: id('dzongkhag_id'), gewogId: id('gewog_id'), villageId: id('village_id')),
+      emergencyContactName: text('emergency_contact_name'),
+      emergencyContactPhone: text('emergency_contact_phone'),
+      medicalNotes: text('medical_notes'),
+      joinedOn: joinedOn,
+    );
+  }
 
   /// For gym_register_member and gym_update_member, which check it all again.
   Map<String, dynamic> toJson() {

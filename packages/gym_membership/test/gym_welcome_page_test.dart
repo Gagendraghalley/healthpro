@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_membership/src/welcome/gym_welcome_page.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 void main() {
   Future<void> show(WidgetTester tester, Size size, {bool dark = false}) async {
@@ -38,10 +38,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text(question));
     await tester.pumpAndSettle();
-    expect(find.textContaining('cash, mBoB or bank transfer'), findsNothing);
+    expect(find.textContaining('enter the journal number (JRN)'), findsNothing);
     await tester.tap(find.text(question));
     await tester.pumpAndSettle();
-    expect(find.textContaining('cash, mBoB or bank transfer'), findsOneWidget);
+    expect(find.textContaining('enter the journal number (JRN)'), findsOneWidget);
   });
 
   testWidgets('the answers follow how gyms work today: the front desk registers members', (tester) async {

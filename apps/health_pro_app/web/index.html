@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Health Pro: find a gym, join and check in with your phone, and book sports grounds in Bhutan.">
+  <meta name="theme-color" content="#0C2152">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Health Pro">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>Health Pro · Your Health. Our Priority.</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!--
+    The splash, shown until Flutter draws its first frame: the same logo,
+    size and place as HealthProSplash
+    (packages/health_pro_core/lib/src/widgets/splash.dart), so the handover
+    doesn't jump. Change one, change the other.
+  -->
+  <style>
+    html, body { margin: 0; height: 100%; background: #071229; }
+    #splash {
+      --logo: 240px;
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, #0C2152 0%, #071229 100%);
+      transition: opacity .25s ease;
+    }
+    @media (min-width: 600px) and (min-height: 600px) {
+      #splash { --logo: 320px; }
+    }
+    #splash img {
+      display: block;
+      width: var(--logo);
+      height: calc(var(--logo) * 598 / 2048);
+    }
+    /* 36px under the logo's foot: a green streak (the logo's) along a faint track. */
+    #splash .bar {
+      position: absolute;
+      top: calc(50% + var(--logo) * 299 / 2048 + 36px);
+      left: calc(50% - var(--logo) / 4);
+      width: calc(var(--logo) / 2);
+      height: 4px;
+      overflow: hidden;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, .12);
+    }
+    #splash .bar::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 40%;
+      border-radius: 2px;
+      background: linear-gradient(90deg, rgba(79, 193, 17, 0), #4FC111 40%, #2AAA17);
+      animation: splash-run 1.4s cubic-bezier(.645, .045, .355, 1) infinite;
+    }
+    @keyframes splash-run {
+      from { transform: translateX(-100%); }
+      to { transform: translateX(250%); }
+    }
+    /* Flutter's own splash has its bar: hide this one as the page fades. */
+    #splash.gone { opacity: 0; pointer-events: none; }
+    #splash.gone .bar { visibility: hidden; }
+  </style>
+</head>
+<body>
+  <div id="splash" role="progressbar" aria-label="Loading Health Pro">
+    <img src="splash/logo.png" alt="Health Pro">
+    <div class="bar"></div>
+  </div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var splash = document.getElementById('splash');
+      if (!splash) return;
+      splash.classList.add('gone');
+      setTimeout(function () { splash.remove(); }, 300);
+    }, { once: true });
+
+    // Install app (the sign-in page's button, InstallAppButton in
+    // health_pro_core): the browser's offer to install comes once, often
+    // before Flutter has started, so it's kept here until the button uses it.
+    (function () {
+      var offer = null;
+      var listeners = [];
+      function changed() {
+        listeners.forEach(function (listener) { try { listener(); } catch (e) {} });
+      }
+      window.addEventListener('beforeinstallprompt', function (event) {
+        event.preventDefault();
+        offer = event;
+        changed();
+      });
+      window.addEventListener('appinstalled', function () {
+        offer = null;
+        changed();
+      });
+      window.healthProPwa = {
+        canPrompt: function () { return offer !== null; },
+        isInstalled: function () {
+          return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        },
+        isIos: function () {
+          return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        },
+        prompt: function () {
+          if (!offer) return Promise.resolve('unavailable');
+          var event = offer;
+          offer = null;
+          changed();
+          event.prompt();
+          return event.userChoice.then(
+            function (choice) { return choice.outcome; },
+            function () { return 'dismissed'; });
+        },
+        onChange: function (listener) { listeners.push(listener); }
+      };
+    })();
+
+    // Push notifications (PushNotifications in health_pro_core): the service
+    // worker that shows them (push_sw.js), and turning them on and off on
+    // this device. Subscriptions come back as JSON for the app to keep.
+    (function () {
+      var ready = null;
+      if ('serviceWorker' in navigator) {
+        ready = navigator.serviceWorker.register('push_sw.js')
+          .then(function () { return navigator.serviceWorker.ready; })
+          .catch(function () { return null; });
+      }
+      function keyBytes(base64url) {
+        var b64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+        var raw = atob(b64 + '==='.slice((b64.length + 3) % 4));
+        var out = new Uint8Array(raw.length);
+        for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+        return out;
+      }
+      function asJson(sub) { return sub ? JSON.stringify(sub.toJSON()) : null; }
+      function registration() { return ready ? ready : Promise.resolve(null); }
+      window.healthProPush = {
+        supported: function () { return !!ready && 'PushManager' in window && 'Notification' in window; },
+        permission: function () { return 'Notification' in window ? Notification.permission : 'unsupported'; },
+        current: function () {
+          return registration().then(function (reg) { return reg ? reg.pushManager.getSubscription() : null; }).then(asJson);
+        },
+        subscribe: function (vapidKey) {
+          return Notification.requestPermission().then(function (permission) {
+            if (permission !== 'granted') return null;
+            return registration().then(function (reg) {
+              if (!reg) return null;
+              var options = { userVisibleOnly: true, applicationServerKey: keyBytes(vapidKey) };
+              return reg.pushManager.subscribe(options).catch(function () {
+                // Subscribed before with other keys: start again.
+                return reg.pushManager.getSubscription()
+                  .then(function (old) { return old ? old.unsubscribe() : null; })
+                  .then(function () { return reg.pushManager.subscribe(options); });
+              });
+            }).then(asJson);
+          });
+        },
+        unsubscribe: function () {
+          return registration().then(function (reg) { return reg ? reg.pushManager.getSubscription() : null; })
+            .then(function (sub) {
+              if (!sub) return null;
+              var endpoint = sub.endpoint;
+              return sub.unsubscribe().then(function () { return endpoint; }, function () { return endpoint; });
+            });
+        }
+      };
+    })();
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

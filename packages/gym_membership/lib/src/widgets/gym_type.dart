@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
-/// The platform's typeface (sportshub_core's brandFont), which the theme
+/// The platform's typeface (health_pro_core's brandFont), which the theme
 /// already gives every page; kept for the Welcome page and the card picture.
 const gymFont = brandFont;
 

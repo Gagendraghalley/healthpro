@@ -5,7 +5,12 @@
 # members through tests/database/scenario_test.sql, which checks every rule,
 # then master data, roles and permissions through access_test.sql, and
 # organisations and their own roles through organisations_test.sql, and Ask
-# AI's daily question allowance through ai_test.sql.
+# AI's daily question allowance through ai_test.sql, and one QR code per
+# person and joining a gym by its QR code through people_test.sql, and
+# paying online, the gym's settings and reminders through payments_test.sql,
+# a venue's profile, prices and reviews through profile_test.sql, and
+# trainers (verification, timings, attendance, reviews) through trainers_test.sql,
+# and push notifications through push_test.sql.
 # Needs PostgreSQL 14+ installed (brew install postgresql). Touches nothing else.
 #
 #   scripts/test_database.sh
@@ -33,6 +38,11 @@ db -f tests/database/scenario_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" |
 db -f tests/database/access_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 db -f tests/database/organisations_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 db -f tests/database/registration_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
+db -f tests/database/people_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
+db -f tests/database/payments_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
+db -f tests/database/profile_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
+db -f tests/database/trainers_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
+db -f tests/database/push_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 db -f tests/database/ai_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 echo "Applying supabase/seed.sql (local test data)"
 db -f supabase/seed.sql

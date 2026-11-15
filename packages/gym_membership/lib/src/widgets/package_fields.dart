@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/gym_models.dart';
 import '../data/gym_repository.dart';
@@ -20,7 +20,10 @@ class PackageFields extends ConsumerStatefulWidget {
   /// The sale, or null while no package is chosen.
   final ValueChanged<PackageSale?> onChanged;
 
-  const PackageFields({super.key, required this.venueId, required this.start, required this.onChanged});
+  /// Chosen to start with: the package they asked for, when it's on sale.
+  final String? initialPlanId;
+
+  const PackageFields({super.key, required this.venueId, required this.start, required this.onChanged, this.initialPlanId});
 
   @override
   ConsumerState<PackageFields> createState() => _PackageFieldsState();
@@ -35,6 +38,9 @@ class _PackageFieldsState extends ConsumerState<PackageFields> {
 
   /// Until staff type their own amount, it follows the package and months.
   bool _amountTouched = false;
+
+  /// [PackageFields.initialPlanId] has been looked for in the gym's packages.
+  bool _startedWith = false;
 
   @override
   void dispose() {
@@ -69,6 +75,15 @@ class _PackageFieldsState extends ConsumerState<PackageFields> {
   Widget build(BuildContext context) {
     final plans = ref.watch(gymPlansProvider((venueId: widget.venueId, all: false)));
     final list = plans.valueOrNull ?? const <GymPlan>[];
+    if (!_startedWith && widget.initialPlanId != null && plans.hasValue) {
+      _startedWith = true;
+      final asked = list.where((p) => p.id == widget.initialPlanId).firstOrNull;
+      if (asked != null && _plan == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _plan == null) _choose(asked);
+        });
+      }
+    }
     final plan = _plan;
     final end = packageEnd(widget.start, _months);
     final today = BhutanTime.today();

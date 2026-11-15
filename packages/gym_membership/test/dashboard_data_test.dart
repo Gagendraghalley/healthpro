@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_membership/gym_membership.dart';
 import 'package:gym_membership/src/data/dashboard_data.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 final today = DateTime(2026, 11, 7); // a Saturday
 DateTime day(int offset) => DateTime(today.year, today.month, today.day + offset);

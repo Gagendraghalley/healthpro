@@ -1,4 +1,4 @@
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 import 'gym_models.dart';
 import 'registered_member.dart';

@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_membership/gym_membership.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 GymSubscription sub({
   String member = 'm1',
@@ -44,6 +44,14 @@ void main() {
       expect(MemberQr.parse('sportshub:gym-member:$token'), const MemberRef.card(token));
       expect(MemberQr.parse('SPORTSHUB:GYM-MEMBER:${token.toUpperCase()}'), const MemberRef.card(token));
       expect(MemberQr.parse('sportshub:gym-member:short'), isNull);
+    });
+
+    test('reads a Health Pro QR code: one for every gym', () {
+      const token = 'fedcba9876543210fedcba9876543210';
+      expect(MemberQr.encodePerson(token), 'healthpro:member:$token');
+      expect(MemberQr.parse('healthpro:member:$token'), const MemberRef.card(token));
+      expect(MemberQr.parse('HEALTHPRO:MEMBER:${token.toUpperCase()}'), const MemberRef.card(token));
+      expect(MemberQr.parse('healthpro:member:nope'), isNull);
     });
 
     test('rejects anything else', () {

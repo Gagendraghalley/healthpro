@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../gym_permissions.dart';
@@ -12,7 +12,7 @@ import 'registered_member.dart';
 // Workers AI turn a question into an [AskReply]: which of these reports
 // answers it, or a short how-to. The app then works the report out from the
 // gym's own records, so the numbers are always the app's own and members'
-// details never leave SportsHub. The keys are the ones in reply.ts.
+// details never leave Health Pro. The keys are the ones in reply.ts.
 
 /// What a question about the gym is answered with.
 enum AskReport {
@@ -142,7 +142,7 @@ enum AskKind { report, help, other }
 
 /// What Ask AI says when a question isn't one it can answer.
 const askWhatICanDo =
-    'I answer questions about your gym (members, visits, packages and payments) and how to use SportsHub. '
+    'I answer questions about your gym (members, visits, packages and payments) and how to use Health Pro. '
     'Try one of the suggestions.';
 
 /// What answers a question: one of the app's reports, a how-to (with the
@@ -160,7 +160,7 @@ class AskReply {
   final String? name;
   final AskPage? page;
 
-  /// A how-to, written by the AI from SportsHub's guide; or what it can do.
+  /// A how-to, written by the AI from Health Pro's guide; or what it can do.
   final String? answer;
 
   const AskReply.report(AskReport this.report, {this.period = AskPeriod.month, this.days, this.name})

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 // The gym pages' shared art: the Welcome page, the signed-in home.
 

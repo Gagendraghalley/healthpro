@@ -5,7 +5,7 @@ import 'package:gym_membership/gym_membership.dart';
 import 'package:gym_membership/src/screens/member_registered_screen.dart';
 import 'package:gym_membership/src/widgets/package_fields.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:sportshub_core/sportshub_core.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 final venue = Venue.fromJson({
   'id': 'g1',
