@@ -3,8 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_membership/gym_membership.dart';
 import 'package:gym_membership/src/data/joining.dart';
 import 'package:gym_membership/src/data/trainers.dart';
+import 'package:gym_membership/src/screens/add_trainer_screen.dart';
 import 'package:gym_membership/src/screens/check_in_screen.dart';
 import 'package:gym_membership/src/screens/gym_trainer_screens.dart';
+import 'package:gym_membership/src/screens/my_gyms_screen.dart';
 import 'package:gym_membership/src/screens/trainer_screens.dart';
 import 'package:gym_membership/src/widgets/trainer_widgets.dart';
 import 'package:health_pro_core/health_pro_core.dart';
@@ -25,9 +27,12 @@ const tandin = TrainerProfile(
   ratingCount: 2,
 );
 
-GymTrainer gymTrainer({String status = 'verified'}) => GymTrainer.fromJson({
+GymTrainer gymTrainer({String status = 'verified', String source = 'request'}) => GymTrainer.fromJson({
       'user_id': 't1',
       'status': status,
+      'source': source,
+      'email': 'tandin@x.bt',
+      'phone': '+97517100004',
       'message': 'Mornings and evenings',
       'requested_at': '2026-11-10T00:00:00Z',
       'profile': {'user_id': 't1', 'display_name': 'Tandin Wangchuk', 'headline': 'Strength coach', 'rating_count': 0},
@@ -113,8 +118,95 @@ void main() {
       expect(find.text('2 pm–3 pm · Not available').evaluate().isNotEmpty || find.text('2–3 pm · Not available').evaluate().isNotEmpty,
           isTrue, reason: 'their time at another gym, unnamed');
       expect(find.text('days here, last 30'), findsOneWidget);
+      expect(find.text('Add trainer'), findsOneWidget, reason: 'the gym can add one itself');
       expect(tester.takeException(), isNull);
     }
+  });
+
+  testWidgets('...one the gym added: so marked, with how to reach them, their times to change and arrival to mark',
+      (tester) async {
+    await show(tester, const GymTrainersScreen(venueId: 'g1'), size: const Size(1440, 1000), with_: [
+      ...overrides(),
+      gymTrainersProvider.overrideWith((ref, id) async => [gymTrainer(source: 'gym')]),
+    ]);
+    await tester.pumpAndSettle();
+    expect(find.text('Added by the gym'), findsOneWidget);
+    expect(find.text('+97517100004 · tandin@x.bt'), findsOneWidget);
+    expect(find.text('Change times'), findsOneWidget);
+    expect(find.text('Mark arrived'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  test('a trainer the gym adds: what the database gets', () {
+    final json = NewTrainer(
+      name: ' Xi Trainer ',
+      email: 'xi@x.bt',
+      specialties: const ['Yoga'],
+      experienceYears: 3,
+      certificates: [NewCertificate(title: 'RYT 200', issuer: 'Yoga Alliance', issuedOn: DateTime(2022, 3, 1))],
+      slots: const [TrainerSlot(weekday: 2, starts: 420, ends: 540)],
+    ).toJson(photoUrl: 'https://x/p.jpg', certificateUrls: const ['https://x/c.jpg']);
+    expect(json['display_name'], 'Xi Trainer');
+    expect(json['photo_url'], 'https://x/p.jpg');
+    expect((json['certificates'] as List).single,
+        {'title': 'RYT 200', 'issuer': 'Yoga Alliance', 'issued_on': '2022-03-01', 'file_url': 'https://x/c.jpg'});
+    expect((json['slots'] as List).single, {'weekday': 2, 'starts': '07:00', 'ends': '09:00'});
+  });
+
+  testWidgets('Add a trainer: all their details, as a registration; name and email are needed', (tester) async {
+    for (final size in [const Size(1440, 1000), const Size(390, 844)]) {
+      await show(tester, const AddTrainerScreen(venueId: 'g1'), size: size, with_: overrides());
+      await tester.pumpAndSettle();
+      expect(find.text('Who they are'), findsOneWidget);
+      expect(find.text('Full name *'), findsOneWidget);
+      expect(find.text('Email *'), findsOneWidget);
+      await tester.tap(find.text('Add trainer'));
+      await tester.pumpAndSettle();
+      expect(find.text('Enter their name'), findsOneWidget, reason: 'nothing saved without them');
+      expect(find.text('Email is required'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Certificates'), 300, scrollable: find.byType(Scrollable).first);
+      await tester.scrollUntilVisible(find.text('No times set yet.'), 300, scrollable: find.byType(Scrollable).first);
+      expect(find.textContaining('Their week at'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  group("On a gym's page, for trainers", () {
+    final gym = Venue(
+        id: 'g1', type: 'gym', name: 'Peak Fitness', dzongkhag: 'Thimphu', verificationStatus: 'verified', createdAt: DateTime(2026));
+    Future<void> showCard(WidgetTester tester, {String? user = 'u1', MyTraining mine = const MyTraining()}) async {
+      await show(tester, Scaffold(body: TrainHereCard(gym: gym)), size: const Size(390, 844), with_: [
+        ...overrides(),
+        currentUserIdProvider.overrideWithValue(user),
+        myTrainingProvider.overrideWith((ref) async => mine),
+      ]);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a visitor signs in first', (tester) async {
+      await showCard(tester, user: null);
+      expect(find.text('Are you a trainer?'), findsOneWidget);
+      expect(find.text('Sign in to apply as a trainer'), findsOneWidget);
+    });
+
+    testWidgets('someone with no trainer profile makes one on the way', (tester) async {
+      await showCard(tester);
+      expect(find.text('Apply as a trainer'), findsOneWidget);
+    });
+
+    testWidgets('a trainer applies; one who asked waits; one who trains here goes to their page', (tester) async {
+      await showCard(tester, mine: const MyTraining(profile: tandin));
+      expect(find.text('Apply to train here'), findsOneWidget);
+      await showCard(tester, mine: const MyTraining(profile: tandin, gyms: [
+        MyTrainerGym(venueId: 'g1', venueName: 'Peak Fitness', place: 'Thimphu', status: TrainerStatus.pending),
+      ]));
+      expect(find.textContaining('Your application is with Peak Fitness'), findsOneWidget);
+      await showCard(tester, mine: const MyTraining(profile: tandin, gyms: [
+        MyTrainerGym(venueId: 'g1', venueName: 'Peak Fitness', place: 'Thimphu', status: TrainerStatus.verified),
+      ]));
+      expect(find.text("You're a trainer here"), findsOneWidget);
+      expect(find.text('My times and members'), findsOneWidget);
+    });
   });
 
   testWidgets("a trainer's own page: each gym, its standing, times and attendance", (tester) async {

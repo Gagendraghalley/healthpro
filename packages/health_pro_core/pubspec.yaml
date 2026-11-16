@@ -19,9 +19,12 @@ dependencies:
   shared_preferences: ^2.3.3
   intl: ^0.20.2
   qr_flutter: ^4.1.0 # everyone's Health Pro QR code (My QR code)
+  share_plus: ^12.0.2 # shares or saves their QR code's picture from My dashboard
+  clipboard: ^3.0.10 # copies their QR code's picture from My dashboard
   flutter_map: ^8.3.2 # a venue's place on an OpenStreetMap map (no API key)
   latlong2: ^0.10.1 # flutter_map's coordinates
   geolocator: ^14.0.2 # gyms near me, and pinning a venue where you stand
+  video_player: ^2.10.0 # plays a venue's promotional video (its own short clip)
 
 dev_dependencies:
   flutter_test:

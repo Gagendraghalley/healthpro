@@ -293,51 +293,56 @@ class _GymQrScreenState extends ConsumerState<GymQrScreen> {
         );
         return AppPage(
           title: 'Gym QR code',
-          maxWidth: AppPage.readableWidth,
           body: ListView(
             padding: pagePadding(context),
             children: [
-              Center(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), boxShadow: context.brand.cardShadow),
-                  child: FittedBox(fit: BoxFit.scaleDown, child: poster),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  FilledButton.icon(
-                    onPressed: () => _download(gym.name),
-                    icon: const Icon(Icons.download_rounded),
-                    label: const Text('Download to print'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      await Clipboard.setData(ClipboardData(text: link));
-                      if (context.mounted) showFeedback(context, 'Link copied');
-                    },
-                    icon: const Icon(Icons.link_rounded),
-                    label: const Text('Copy link'),
+              ResponsiveColumns(
+                first: [
+                  Center(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), boxShadow: context.brand.cardShadow),
+                      child: FittedBox(fit: BoxFit.scaleDown, child: poster),
+                    ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 20),
-              if (!gym.isVerified)
-                InfoRow(
-                  icon: Icons.hourglass_top_rounded,
-                  text: 'Requests start once the Health Pro team has checked ${gym.name}.',
-                ),
-              const InfoRow(
-                icon: Icons.notifications_active_outlined,
-                text: 'When someone asks to join, the front desk, managers and owner are told, and the request '
-                    'waits under Join requests until someone adds or declines them.',
-              ),
-              const InfoRow(
-                icon: Icons.qr_code_scanner_rounded,
-                text: 'This code is for joining. Members check in with their own QR code, which the desk scans.',
+                second: [
+                  const SizedBox(height: 20),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: () => _download(gym.name),
+                        icon: const Icon(Icons.download_rounded),
+                        label: const Text('Download to print'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          await Clipboard.setData(ClipboardData(text: link));
+                          if (context.mounted) showFeedback(context, 'Link copied');
+                        },
+                        icon: const Icon(Icons.link_rounded),
+                        label: const Text('Copy link'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  if (!gym.isVerified)
+                    InfoRow(
+                      icon: Icons.hourglass_top_rounded,
+                      text: 'Requests start once the Health Pro team has checked ${gym.name}.',
+                    ),
+                  const InfoRow(
+                    icon: Icons.notifications_active_outlined,
+                    text: 'When someone asks to join, the front desk, managers and owner are told, and the request '
+                        'waits under Join requests until someone adds or declines them.',
+                  ),
+                  const InfoRow(
+                    icon: Icons.qr_code_scanner_rounded,
+                    text: 'This code is for joining. Members check in with their own QR code, which the desk scans.',
+                  ),
+                ],
               ),
             ],
           ),

@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:video_player/video_player.dart';
 
 import '../theme/brand.dart';
 import '../utils/bhutan_time.dart';
 import '../utils/launch.dart';
 import '../widgets/common.dart';
+import '../widgets/loader.dart';
 import 'opening_hours.dart';
 import 'venue.dart';
+import 'venue_repository.dart';
 
 /// 'Open now · until 9 pm', green; 'Closed · opens 4 pm', muted. Nothing
 /// when the venue hasn't said its hours for today.
@@ -176,6 +180,159 @@ class VenueVideosView extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// The venue's promotional video (its own short clip), under [title];
+/// nothing when it has none.
+class VenuePromoVideo extends ConsumerWidget {
+  final Venue venue;
+  final String title;
+
+  const VenuePromoVideo({super.key, required this.venue, this.title = 'Watch'});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (venue.promoVideo == null) return const SizedBox.shrink();
+    final url = ref.watch(venueRepositoryProvider).promoVideoUrl(venue.promoVideo);
+    if (url == null) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SectionTitle(title),
+        PromoVideoPlayer(key: ValueKey(url), url: url),
+      ],
+    );
+  }
+}
+
+/// Plays the clip at [url]. Nothing is downloaded until they press play;
+/// then a tap pauses and plays, and the bar at the foot seeks.
+class PromoVideoPlayer extends StatefulWidget {
+  final String url;
+
+  const PromoVideoPlayer({super.key, required this.url});
+
+  @override
+  State<PromoVideoPlayer> createState() => _PromoVideoPlayerState();
+}
+
+class _PromoVideoPlayerState extends State<PromoVideoPlayer> {
+  VideoPlayerController? _controller;
+  bool _failed = false;
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _start() async {
+    final controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+    setState(() {
+      _controller = controller;
+      _failed = false;
+    });
+    try {
+      await controller.initialize();
+      controller.addListener(_changed);
+      await controller.play();
+    } catch (_) {
+      if (!mounted) return;
+      controller.dispose();
+      setState(() {
+        _controller = null;
+        _failed = true;
+      });
+    }
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
+  void _toggle() {
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
+    if (c.value.isPlaying) {
+      c.pause();
+    } else {
+      // Finished: from the start again.
+      if (c.value.position >= c.value.duration) c.seekTo(Duration.zero);
+      c.play();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _controller;
+    final ready = c != null && c.value.isInitialized;
+    final playing = ready && c.value.isPlaying;
+    // Tall clips (shot on a phone) keep their shape, within reason.
+    final ratio = ready ? c.value.aspectRatio.clamp(9 / 16, 16 / 9).toDouble() : 16 / 9;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 460),
+        child: AspectRatio(
+          aspectRatio: ratio,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Semantics(
+              button: true,
+              label: playing ? 'Pause video' : 'Play video',
+              child: InkWell(
+                onTap: c == null ? _start : _toggle,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    const ColoredBox(color: Color(0xFF0B1220)),
+                    if (ready)
+                      FittedBox(
+                        fit: BoxFit.contain,
+                        child: SizedBox(width: c.value.size.width, height: c.value.size.height, child: VideoPlayer(c)),
+                      ),
+                    if (c != null && !ready)
+                      const Center(child: HealthProLoader(size: 44, semanticsLabel: 'Loading video'))
+                    else if (!playing)
+                      Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.play_circle_fill_rounded, size: 64, color: Colors.white),
+                            if (_failed) ...[
+                              const SizedBox(height: 6),
+                              const Text("The video couldn't be played. Tap to try again.",
+                                  textAlign: TextAlign.center, style: TextStyle(color: Colors.white)),
+                            ],
+                          ],
+                        ),
+                      ),
+                    if (ready)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: VideoProgressIndicator(
+                          c,
+                          allowScrubbing: true,
+                          padding: const EdgeInsets.only(top: 12),
+                          colors: VideoProgressColors(
+                            playedColor: context.colors.primary,
+                            bufferedColor: Colors.white38,
+                            backgroundColor: Colors.white24,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

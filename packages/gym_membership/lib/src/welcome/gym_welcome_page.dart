@@ -2261,7 +2261,7 @@ class _Services extends StatelessWidget {
         Text(
           serviceLinks.isEmpty
               ? 'Manage gym memberships and check-ins in Health Pro. The platform is built to connect more sports and facilities across Bhutan.'
-              : 'Manage gym memberships and check-ins in Health Pro. Ground booking and tournaments open on their existing service for now.',
+              : 'Manage gym memberships and check-ins in Health Pro. Its other services open from here.',
           style: TextStyle(fontSize: 17, height: 1.55, color: ink.body),
         ),
         const SizedBox(height: 28),
@@ -2998,7 +2998,7 @@ class _Faq extends StatelessWidget {
     ),
     (
       'What payment methods are accepted?',
-      'You pay the gym: cash at the front desk, or online. To pay online, open My gyms, tap Pay online, scan '
+      'You pay the gym: cash at the front desk, or online. To pay online, open your dashboard, tap Pay online, scan '
           "the gym's payment QR code in your bank app and enter the journal number (JRN). The gym checks it "
           'with the bank and confirms it; your package starts then.',
     ),

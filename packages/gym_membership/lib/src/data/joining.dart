@@ -29,7 +29,8 @@ enum JoinRequestStatus {
   const JoinRequestStatus(this.value, this.label);
 
   static JoinRequestStatus of(String? value) =>
-      JoinRequestStatus.values.where((s) => s.value == value).firstOrNull ?? JoinRequestStatus.pending;
+      JoinRequestStatus.values.where((s) => s.value == value).firstOrNull ??
+      JoinRequestStatus.pending;
 }
 
 /// A request to join, as the gym's desk sees it.
@@ -87,7 +88,9 @@ class JoinRequest {
       message: json['message'] as String?,
       decisionNote: json['decision_note'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
-      decidedAt: json['decided_at'] == null ? null : DateTime.parse(json['decided_at'] as String),
+      decidedAt: json['decided_at'] == null
+          ? null
+          : DateTime.parse(json['decided_at'] as String),
       gymMemberId: json['gym_member_id'] as String?,
     );
   }
@@ -116,7 +119,8 @@ class PersonDetails {
   factory PersonDetails.fromJson(Map<String, dynamic> json) => PersonDetails(
         personId: json['person_id'] as String,
         name: json['full_name'] as String? ?? 'Member',
-        details: MemberDetails.fromJson(Map<String, dynamic>.from(json['details'] as Map? ?? const {}),
+        details: MemberDetails.fromJson(
+            Map<String, dynamic>.from(json['details'] as Map? ?? const {}),
             joinedOn: BhutanTime.today()),
         gymMemberIdHere: json['gym_member_id'] as String?,
         planId: json['plan_id'] as String?,
@@ -140,8 +144,10 @@ class MyGym {
   /// before, which can't be paid online.
   final String? gymMemberId;
 
-  /// How to pay online: the gym's payment QR image and its note.
-  final String? paymentQrPath;
+  /// How to pay online: the gym's bank account (null until it sets it up),
+  /// and its own note.
+  final PaymentAccount? paymentAccount;
+  final String? paymentQrUrl;
   final String? paymentInfo;
 
   /// Their payment waiting, or the last one the gym answered.
@@ -161,40 +167,62 @@ class MyGym {
     this.endDate,
     this.lastVisit,
     this.gymMemberId,
-    this.paymentQrPath,
+    this.paymentAccount,
+    this.paymentQrUrl,
     this.paymentInfo,
     this.claim,
     this.trainer,
   });
 
-  /// They can pay this gym online: registered here, the gym says how, and
-  /// nothing is waiting already.
+  /// They can pay this gym online: registered here, the gym has set up its
+  /// bank account, and nothing is waiting already.
   bool get canPayOnline =>
-      gymMemberId != null && (paymentQrPath != null || paymentInfo != null) && claim?.status != ClaimStatus.pending;
+      gymMemberId != null &&
+      paymentAccount != null &&
+      paymentQrUrl != null &&
+      claim?.status != ClaimStatus.pending;
 
   /// Their package covers [today] (Bhutan dates, both ends included).
   bool isActiveOn(DateTime today) =>
-      startDate != null && endDate != null && !startDate!.isAfter(today) && !endDate!.isBefore(today);
+      startDate != null &&
+      endDate != null &&
+      !startDate!.isAfter(today) &&
+      !endDate!.isBefore(today);
 
-  bool hasEndedBy(DateTime today) => endDate != null && endDate!.isBefore(today);
+  bool hasEndedBy(DateTime today) =>
+      endDate != null && endDate!.isBefore(today);
 
   factory MyGym.fromJson(Map<String, dynamic> json) {
-    DateTime? date(String key) => json[key] == null ? null : BhutanTime.parseDate(json[key] as String);
+    DateTime? date(String key) =>
+        json[key] == null ? null : BhutanTime.parseDate(json[key] as String);
     final town = (json['town'] as String?)?.trim();
     return MyGym(
       venueId: json['venue_id'] as String,
       venueName: json['venue_name'] as String,
-      place: [if (town != null && town.isNotEmpty) town, json['dzongkhag'] as String].join(', '),
+      place: [
+        if (town != null && town.isNotEmpty) town,
+        json['dzongkhag'] as String
+      ].join(', '),
       phone: json['phone'] as String?,
       memberCode: json['member_code'] as String?,
       planName: json['plan_name'] as String?,
       startDate: date('start_date'),
       endDate: date('end_date'),
-      lastVisit: json['last_visit'] == null ? null : DateTime.parse(json['last_visit'] as String),
+      lastVisit: json['last_visit'] == null
+          ? null
+          : DateTime.parse(json['last_visit'] as String),
       gymMemberId: json['gym_member_id'] as String?,
-      paymentQrPath: json['payment_qr_path'] as String?,
-      paymentInfo: (json['payment_info'] as String?)?.trim().isNotEmpty == true ? json['payment_info'] as String : null,
-      claim: json['claim'] == null ? null : MyClaim.fromJson(Map<String, dynamic>.from(json['claim'] as Map)),
+      paymentAccount: json['payment_account'] is Map
+          ? PaymentAccount.fromJson(
+              Map<String, dynamic>.from(json['payment_account'] as Map))
+          : null,
+      paymentQrUrl: json['payment_qr_url'] as String?,
+      paymentInfo: (json['payment_info'] as String?)?.trim().isNotEmpty == true
+          ? json['payment_info'] as String
+          : null,
+      claim: json['claim'] == null
+          ? null
+          : MyClaim.fromJson(Map<String, dynamic>.from(json['claim'] as Map)),
       trainer: json['trainer'] is Map
           ? (
               id: (json['trainer'] as Map)['id'] as String,
@@ -243,26 +271,35 @@ class MyMemberships {
   final List<MyJoinRequest> requests;
   final List<({String gym, DateTime at})> visits;
 
-  const MyMemberships({this.gyms = const [], this.requests = const [], this.visits = const []});
+  const MyMemberships(
+      {this.gyms = const [], this.requests = const [], this.visits = const []});
 
   static const none = MyMemberships();
 
   /// Their membership at [venueId], if any.
-  MyGym? at(String venueId) => gyms.where((g) => g.venueId == venueId).firstOrNull;
+  MyGym? at(String venueId) =>
+      gyms.where((g) => g.venueId == venueId).firstOrNull;
 
   /// Their request to join [venueId] that's waiting, if any.
-  MyJoinRequest? waitingAt(String venueId) =>
-      requests.where((r) => r.venueId == venueId && r.status == JoinRequestStatus.pending).firstOrNull;
+  MyJoinRequest? waitingAt(String venueId) => requests
+      .where(
+          (r) => r.venueId == venueId && r.status == JoinRequestStatus.pending)
+      .firstOrNull;
 
   factory MyMemberships.fromJson(Map<String, dynamic> json) {
-    List<Map<String, dynamic>> rows(String key) =>
-        [for (final r in (json[key] as List? ?? const [])) Map<String, dynamic>.from(r as Map)];
+    List<Map<String, dynamic>> rows(String key) => [
+          for (final r in (json[key] as List? ?? const []))
+            Map<String, dynamic>.from(r as Map)
+        ];
     return MyMemberships(
       gyms: rows('gyms').map(MyGym.fromJson).toList(),
       requests: rows('requests').map(MyJoinRequest.fromJson).toList(),
       visits: [
         for (final v in rows('visits'))
-          (gym: v['venue_name'] as String, at: DateTime.parse(v['checked_in_at'] as String)),
+          (
+            gym: v['venue_name'] as String,
+            at: DateTime.parse(v['checked_in_at'] as String)
+          ),
       ],
     );
   }

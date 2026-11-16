@@ -32,7 +32,7 @@ select public.add_venue_staff(:'eta', 'desk11@gym.bt', 'staff');
 -- ---- Tandin's profile ---------------------------------------------------------
 select t.as_user('00000000-0000-0000-0000-000000001004');
 select t.fails(format($$select public.trainer_request_gym(%L)$$, :'zeta'), 'trainer profile first');
-select t.fails($$select public.trainer_save_profile('{"display_name":"T"}')$$, 'your name');
+select t.fails($$select public.trainer_save_profile('{"display_name":"T"}')$$, 'the name as members');
 select t.fails($$select public.trainer_save_profile('{"display_name":"Tandin","experience_years":"lots"}')$$, 'as a number');
 select public.trainer_save_profile(jsonb_build_object(
   'display_name', 'Tandin  Wangchuk', 'headline', 'Strength and conditioning coach', 'bio', 'Ten years of lifting.',
@@ -183,6 +183,73 @@ select public.trainer_leave_gym(:'eta');
 select t.eq((select count(*) from public.trainer_slots where venue_id = :'eta')::int, 0, 'leaving a gym takes his times there');
 select t.eq((select status from public.gym_trainers where venue_id = :'eta' and user_id = '00000000-0000-0000-0000-000000001004'),
             'left', '...and he''s no longer its trainer');
+
+-- ---- The gym adds a trainer itself ---------------------------------------------------
+select t.as_user('00000000-0000-0000-0000-000000001006');
+select t.fails(format($$select public.gym_add_trainer(%L, '00000000-0000-0000-0000-000000001007', '{"display_name":"Xi"}')$$, :'zeta'),
+               'Only the gym');
+select t.as_user('00000000-0000-0000-0000-000000001002');
+select t.eq(public.can_add_gym_trainer(:'zeta'), true, 'the desk at Zeta may add trainers');
+select t.eq(public.can_add_gym_trainer(:'eta'), false, '...not at Eta');
+select t.fails(format($$select public.gym_add_trainer(%L, '00000000-0000-0000-0000-000000001007',
+  '{"display_name":"Xi Trainer","photo_url":"https://evil.example/x.jpg"}')$$, :'zeta'), 'Upload the photo');
+select t.fails(format($$select public.gym_add_trainer(%L, '00000000-0000-0000-0000-000000001007',
+  '{"display_name":"Xi Trainer","certificates":[{"title":"CPR","file_url":"https://evil.example/c.pdf"}]}')$$, :'zeta'),
+  'Upload the certificate');
+select t.fails(format($$select public.gym_add_trainer(%L, '00000000-0000-0000-0000-000000001007',
+  '{"display_name":"Xi Trainer","slots":[{"weekday":2,"starts":"09:00","ends":"08:00"}]}')$$, :'zeta'), 'end after');
+select t.eq((select count(*) from public.trainer_profiles where user_id = '00000000-0000-0000-0000-000000001007')::int, 0,
+            'nothing is kept of an addition that failed');
+select t.eq((public.gym_add_trainer(:'zeta', '00000000-0000-0000-0000-000000001007', jsonb_build_object(
+  'display_name', 'Xi  Trainer', 'headline', 'Yoga teacher', 'specialties', '["Yoga"]'::jsonb, 'experience_years', 3,
+  'photo_url', 'https://x.supabase.co/storage/v1/object/public/trainer-media/gym/' || :'zeta' || '/xi.jpg',
+  'certificates', jsonb_build_array(jsonb_build_object('title', 'Yoga Alliance RYT 200', 'issuer', 'Yoga Alliance',
+     'issued_on', '2022-03-01',
+     'file_url', 'https://x.supabase.co/storage/v1/object/public/trainer-media/gym/' || :'zeta' || '/ryt.pdf')),
+  'slots', '[{"weekday":2,"starts":"07:00","ends":"09:00"}]'::jsonb)) ->> 'profile_made')::boolean, true,
+  'the desk adds a trainer with all their details: their profile is made');
+select t.eq((select status || ' ' || source from public.gym_trainers
+             where venue_id = :'zeta' and user_id = '00000000-0000-0000-0000-000000001007'), 'verified gym',
+            '...verified here straight away, added by the gym');
+select t.eq((select display_name from public.trainer_profiles where user_id = '00000000-0000-0000-0000-000000001007'),
+            'Xi Trainer', '...their name, tidied');
+select t.eq((select count(*) from public.trainer_certificates where user_id = '00000000-0000-0000-0000-000000001007')::int, 1,
+            '...their certificate');
+select t.eq((select count(*) from public.trainer_slots where venue_id = :'zeta'
+             and user_id = '00000000-0000-0000-0000-000000001007')::int, 1, '...and their week');
+select t.as_user('00000000-0000-0000-0000-000000001007');
+select t.eq((select title from public.notifications where user_id = '00000000-0000-0000-0000-000000001007'
+             order by created_at desc limit 1), 'You''re a trainer at Zeta Gym', 'they''re told');
+select t.eq((select count(*) from public.people where user_id = '00000000-0000-0000-0000-000000001007')::int, 1,
+            'they have a QR code for the desk to scan');
+select t.as_user('00000000-0000-0000-0000-000000001002');
+select t.fails(format($$select public.gym_add_trainer(%L, '00000000-0000-0000-0000-000000001007', '{"display_name":"Xi"}')$$, :'zeta'),
+               'trains here already');
+select t.eq((select o ->> 'source' || ' ' || (o ->> 'email') from jsonb_array_elements(public.gym_trainers_overview(:'zeta')) o
+             where o ->> 'user_id' = '00000000-0000-0000-0000-000000001007'), 'gym x10@x.bt', 'the gym sees how to reach them');
+select public.gym_save_trainer_slots(:'zeta', '00000000-0000-0000-0000-000000001007',
+  '[{"weekday":2,"starts":"07:00","ends":"09:00"},{"weekday":4,"starts":"17:00","ends":"19:00"}]');
+select t.eq((select count(*) from public.trainer_slots where venue_id = :'zeta'
+             and user_id = '00000000-0000-0000-0000-000000001007')::int, 2, 'the gym changes their times');
+select t.eq((public.gym_trainer_mark_arrived(:'zeta', '00000000-0000-0000-0000-000000001007') ->> 'trainer')::boolean, true,
+            'the desk records their arrival without their QR code');
+select t.fails(format($$select public.gym_trainer_mark_arrived(%L, '00000000-0000-0000-0000-000000001005')$$, :'zeta'),
+               'isn''t verified here');
+
+-- Someone who is a trainer already keeps their own profile; their times elsewhere hold.
+select t.as_user('00000000-0000-0000-0000-000000001003');
+select t.fails(format($$select public.gym_add_trainer(%L, '00000000-0000-0000-0000-000000001004',
+  '{"display_name":"Somebody Else","slots":[{"weekday":1,"starts":"11:30","ends":"12:30"}]}')$$, :'eta'), 'not available then');
+select t.eq((public.gym_add_trainer(:'eta', '00000000-0000-0000-0000-000000001004',
+  '{"display_name":"Somebody Else","slots":[{"weekday":1,"starts":"14:00","ends":"15:00"}]}') ->> 'profile_made')::boolean, false,
+  'a gym adds back a trainer who left');
+select t.eq((select display_name from public.trainer_profiles where user_id = '00000000-0000-0000-0000-000000001004'),
+            'Tandin Wangchuk', '...his own profile stays as he wrote it');
+
+-- ---- No bank account set up: no paying online ----------------------------------------
+select t.as_user('00000000-0000-0000-0000-000000001006');
+select t.fails(format($$select public.gym_claim_payment(%L, %L, 1, 1500, 'JRN777888')$$, :'zeta', :'plan'), 'bank account');
+select t.eq(public.my_gyms() -> 'gyms' -> 0 -> 'payment_account', 'null'::jsonb, '...and her gym shows none');
 
 reset role;
 do $$ begin raise notice 'ALL TRAINER CHECKS PASSED'; end $$;

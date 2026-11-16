@@ -35,7 +35,6 @@ class AskScreen extends ConsumerWidget {
       title: 'Ask AI',
       builder: (context, access) => AppPage(
         title: 'Ask AI',
-        maxWidth: 1000,
         actions: [
           if (chat.turns.isNotEmpty)
             IconButton(

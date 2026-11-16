@@ -105,9 +105,8 @@ Map<String, ModuleMenuItem> corePages({required bool signedIn}) => {
 
 // Suggestions: known answers, so the AI isn't asked (and they always work).
 const _whatIsIt = PublicReply.help(
-  'Health Pro brings gyms, grounds and games across Bhutan into one app, on the web, Android and iOS. '
-  'Gyms run their members, packages and check-ins here; booking grounds and tournaments are on the ground '
-  'booking website for now.',
+  'Health Pro brings gyms across Bhutan into one app, on the web, Android and iOS. '
+  'Gyms run their members, packages and check-ins here, and members join, pay and check in with one QR code.',
 );
 const _joinGym = PublicReply.help(
   "Scan the gym's QR code (or open its page) and tap Ask to join: the front desk gets your details and lets "
@@ -116,7 +115,7 @@ const _joinGym = PublicReply.help(
   page: 'gyms',
 );
 const _checkIn = PublicReply.help(
-  'Show your Health Pro QR code at the counter (My QR code in the app, or your card). The desk can also type '
+  'Show your Health Pro QR code at the counter (on your dashboard in the app, or your card). The desk can also type '
   'your 6-character member code or find you by your phone number. It works while your package covers that day.',
 );
 const _ownGym = PublicReply.help(

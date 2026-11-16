@@ -100,8 +100,10 @@ void main() {
     for (final label in ['Overview', 'My services']) {
       expect(inMenu(label), findsNothing, reason: "$label: the super admin's");
     }
+    expect(inMenu('My dashboard'), findsOneWidget, reason: "everyone's own: their QR code and their gyms");
+    expect(inMenu('My gym'), findsOneWidget, reason: 'the gym they belong to, in full');
     for (final label in ['My QR code', 'My gyms', 'Notifications']) {
-      expect(inMenu(label), findsOneWidget, reason: "$label: everyone's own, under Me");
+      expect(inMenu(label), findsNothing, reason: '$label: on the dashboard, or the bell at the top');
     }
     for (final label in [
       'Dashboard', 'Check-in', 'Members', 'Register member', 'Join requests', 'Gym QR code', 'Memberships & packages',
@@ -164,8 +166,10 @@ void main() {
     for (final label in ['Overview', 'My services', 'Gym management', 'Set up your gym', 'ADMINISTRATION']) {
       expect(inMenu(label), findsNothing, reason: label);
     }
+    expect(inMenu('My dashboard'), findsOneWidget, reason: "a member's own");
+    expect(inMenu('My gym'), findsOneWidget, reason: "a member's own");
     for (final label in ['My QR code', 'My gyms', 'Notifications']) {
-      expect(inMenu(label), findsOneWidget, reason: '$label: a member\'s own');
+      expect(inMenu(label), findsNothing, reason: '$label: on the dashboard, or the bell at the top');
     }
   });
 

@@ -10,8 +10,10 @@ import '../gym_permissions.dart';
 import '../gym_routes.dart';
 import '../widgets/gym_widgets.dart';
 import '../widgets/trainer_widgets.dart';
+import 'trainer_screens.dart' show pickTrainerSlots;
 
-/// The gym's trainers, for its staff who check them: requests waiting
+/// The gym's trainers, for its staff who check them: adding one themselves
+/// (Add trainer: all their details, verified straight away), requests waiting
 /// (their profile and certificates, to verify them or not), and the
 /// verified ones with their week here (their times at other gyms only as
 /// Not available), their attendance here (the desk scans their QR code when
@@ -29,12 +31,21 @@ class GymTrainersScreen extends ConsumerWidget {
       permission: GymPermission.trainers,
       builder: (context, access) => AppPage(
         title: 'Trainers',
+        actions: [
+          FilledButton.icon(
+            onPressed: () => context.go(GymRoutes.addTrainerFor(venueId)),
+            icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+            label: const Text('Add trainer'),
+          ),
+          const SizedBox(width: 8),
+        ],
         body: AsyncValueView<List<GymTrainer>>(
           value: ref.watch(gymTrainersProvider(venueId)),
           onRetry: () => ref.invalidate(gymTrainersProvider(venueId)),
           data: (list) {
             final waiting = list.where((t) => t.status == TrainerStatus.pending).toList();
             final verified = list.where((t) => t.status == TrainerStatus.verified).toList();
+            final inactive = list.where((t) => t.status == TrainerStatus.inactive).toList();
             final declined = list.where((t) => t.status == TrainerStatus.rejected).toList();
             return RefreshIndicator(
               onRefresh: () => ref.refresh(gymTrainersProvider(venueId).future),
@@ -47,11 +58,13 @@ class GymTrainersScreen extends ConsumerWidget {
                         'Each gym keeps its own record.',
                   ),
                   if (list.isEmpty)
-                    const EmptyState(
+                    EmptyState(
                       icon: Icons.sports_rounded,
                       title: 'No trainers yet',
-                      message: 'Trainers make a profile on Health Pro (Trainer profile, in the menu) and ask to train here. '
-                          'You check their certificates and verify them here.',
+                      message: 'Add your trainers here with their details and certificates. Trainers can also apply from '
+                          'your gym\'s page on Health Pro; you check their certificates and verify them here.',
+                      actionLabel: 'Add trainer',
+                      onAction: () => context.go(GymRoutes.addTrainerFor(venueId)),
                     ),
                   if (waiting.isNotEmpty) ...[
                     SectionTitle('Asking to train here (${waiting.length})'),
@@ -64,6 +77,15 @@ class GymTrainersScreen extends ConsumerWidget {
                       maxColumns: 2,
                       equalHeight: false,
                       children: [for (final t in verified) _TrainerCard(trainer: t, venueId: venueId)],
+                    ),
+                  ],
+                  if (inactive.isNotEmpty) ...[
+                    SectionTitle('Inactive at this gym (${inactive.length})'),
+                    ResponsiveGrid(
+                      minItemWidth: 360,
+                      maxColumns: 2,
+                      equalHeight: false,
+                      children: [for (final t in inactive) _TrainerCard(trainer: t, venueId: venueId)],
                     ),
                   ],
                   if (declined.isNotEmpty) ...[
@@ -113,11 +135,82 @@ class _TrainerCard extends ConsumerWidget {
     if (ok) refreshGym(ref, venueId);
   }
 
+  Future<void> _changeTimes(BuildContext context, WidgetRef ref) async {
+    final p = trainer.profile;
+    final saved = await pickTrainerSlots(
+      context,
+      title: '${p.name}\'s times here',
+      initial: trainer.slots.where((s) => s.here).toList(),
+      note: 'Add one row for each day and time. If they\'re already scheduled elsewhere, that time is unavailable. They\'re told when their schedule changes.',
+    );
+    if (saved == null || !context.mounted) return;
+    final ok = await runAction(context, () => ref.read(gymRepositoryProvider).saveTrainerSlots(venueId, p.userId, saved),
+        success: 'Times saved');
+    if (ok) refreshGym(ref, venueId);
+  }
+
+  Future<void> _arrived(BuildContext context, WidgetRef ref) async {
+    final p = trainer.profile;
+    var alreadyMarked = false;
+    final ok = await runAction(context, () async {
+      alreadyMarked = await ref.read(gymRepositoryProvider).markTrainerArrived(venueId, p.userId);
+    });
+    if (ok && context.mounted) {
+      showFeedback(context, alreadyMarked
+          ? '${p.name} is already marked for today. No new attendance was added.'
+          : '${p.name} arrived',
+          problem: alreadyMarked);
+      refreshGym(ref, venueId);
+    }
+  }
+
+  Future<void> _deactivate(BuildContext context, WidgetRef ref) async {
+    final p = trainer.profile;
+    final sure = await confirmAction(
+      context,
+      title: 'Make ${p.name} inactive at this gym?',
+      message: 'They will be removed from this gym\'s public trainer list. Their weekly times will be cleared, members assigned to them will be unassigned, and the trainer and affected members will be notified.',
+      confirmLabel: 'Make inactive',
+      destructive: true,
+    );
+    if (!sure || !context.mounted) return;
+    final ok = await runAction(
+      context,
+      () => ref.read(gymRepositoryProvider).deactivateTrainer(venueId, p.userId),
+      success: '${p.name} is inactive at this gym; affected members and the trainer were notified',
+    );
+    if (ok && context.mounted) refreshGym(ref, venueId);
+  }
+
+  Future<void> _reactivate(BuildContext context, WidgetRef ref) async {
+    final p = trainer.profile;
+    final sure = await confirmAction(
+      context,
+      title: 'Reactivate ${p.name} at this gym?',
+      message: 'They will appear in this gym\'s trainer list again. Their old schedule and member assignments stay cleared; set new times and assign members again as needed.',
+      confirmLabel: 'Reactivate',
+    );
+    if (!sure || !context.mounted) return;
+    final ok = await runAction(
+      context,
+      () => ref.read(gymRepositoryProvider).reactivateTrainer(venueId, p.userId),
+      success: '${p.name} is active at this gym again',
+    );
+    if (ok && context.mounted) refreshGym(ref, venueId);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
     final p = trainer.profile;
     final pending = trainer.status == TrainerStatus.pending;
+    final today = BhutanTime.today();
+    final recentAttendance = uniqueTrainerAttendanceEntries(trainer.attendance);
+    final arrivedToday = recentAttendance.any((at) {
+      final local = BhutanTime.toBhutan(at);
+      return local.year == today.year && local.month == today.month && local.day == today.day;
+    });
+    final contact = [if (trainer.phone != null) trainer.phone!, if (trainer.email != null) trainer.email!].join(' · ');
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: SectionCard(
@@ -126,35 +219,84 @@ class _TrainerCard extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TrainerAvatar(name: p.name, photoUrl: p.photoUrl, size: 52),
-                const SizedBox(width: 12),
+                TrainerAvatar(name: p.name, photoUrl: p.photoUrl, size: 58),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(p.name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                      Text(
-                        [
-                          if (p.headline != null) p.headline!,
-                          if (p.experienceYears != null) '${p.experienceYears} years',
-                          if (p.ratingCount > 0) '★ ${p.ratingAverage!.toStringAsFixed(1)}',
-                        ].join(' · '),
-                        style: TextStyle(color: brand.muted),
+                      Text(p.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                      if ((p.headline ?? '').trim().isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(p.headline!, maxLines: 2, overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: brand.muted)),
+                      ],
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 7,
+                        runSpacing: 6,
+                        children: [
+                          StatusChip(
+                            label: trainer.status.label,
+                            color: trainer.status == TrainerStatus.verified
+                                ? brand.success
+                                : trainer.status == TrainerStatus.pending
+                                    ? brand.warning
+                                    : brand.muted,
+                            icon: trainer.status == TrainerStatus.verified
+                                ? Icons.verified_rounded
+                                : trainer.status == TrainerStatus.inactive
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.schedule_rounded,
+                          ),
+                          if (p.experienceYears != null)
+                            StatusChip(label: '${p.experienceYears} years experience', color: BrandColors.blue),
+                          if (p.ratingCount > 0)
+                            StatusChip(
+                              label: '★ ${p.ratingAverage!.toStringAsFixed(1)} · ${p.ratingCount}',
+                              color: BrandColors.amber,
+                            ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-                TextButton(
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'View trainer profile',
                   onPressed: () => context.push(GymRoutes.trainerFor(p.userId, venueId: venueId)),
-                  child: const Text('Profile'),
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  style: IconButton.styleFrom(backgroundColor: brand.surfaceAlt),
                 ),
               ],
             ),
+            if (trainer.addedByGym || contact.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (trainer.addedByGym) StatusChip(label: 'Added by the gym', color: BrandColors.blue, icon: Icons.badge_outlined),
+                  if (contact.isNotEmpty) Text(contact, style: TextStyle(color: brand.muted, fontSize: 12.5)),
+                ],
+              ),
+            ],
             if (trainer.message != null) ...[
               const SizedBox(height: 8),
               Text('"${trainer.message}"', style: TextStyle(color: brand.body, fontStyle: FontStyle.italic)),
             ],
+            if (trainer.status == TrainerStatus.inactive)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text('Inactive at this gym. Their schedule and member assignments have been cleared.',
+                    style: TextStyle(color: brand.muted)),
+              ),
             if (pending || trainer.status == TrainerStatus.rejected) ...[
               const SizedBox(height: 10),
               Text('Certificates', style: TextStyle(color: brand.muted, fontWeight: FontWeight.w700)),
@@ -174,24 +316,60 @@ class _TrainerCard extends ConsumerWidget {
             ],
             if (trainer.decisionNote != null && trainer.status == TrainerStatus.rejected)
               Text('You said: "${trainer.decisionNote}"', style: TextStyle(color: brand.muted)),
-            const SizedBox(height: 10),
-            Text(pending ? 'The times they\'d like' : 'Their week', style: TextStyle(color: brand.muted, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
-            WeekSlotsView(slots: trainer.slots),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: brand.surfaceAlt,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.calendar_month_rounded, size: 18, color: brand.muted),
+                      const SizedBox(width: 8),
+                      Text(
+                          trainer.status == TrainerStatus.inactive
+                              ? 'Schedule at this gym'
+                              : pending
+                                  ? 'Requested weekly times'
+                                  : 'Weekly availability',
+                          style: TextStyle(color: brand.ink, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (trainer.status == TrainerStatus.inactive)
+                    Text('No active times at this gym.', style: TextStyle(color: brand.muted))
+                  else
+                    WeekSlotsView(slots: trainer.slots),
+                ],
+              ),
+            ),
             if (trainer.status == TrainerStatus.verified) ...[
-              const Divider(height: 22),
+              const SizedBox(height: 14),
               Row(
                 children: [
-                  Expanded(child: _Figure(value: '${trainer.attendance30Days}', label: 'days here, last 30')),
+                  Expanded(child: _Figure(value: '${trainerAttendanceDaysLast30(trainer.attendance, today)}', label: 'attendance days · last 30')),
                   Expanded(child: _Figure(value: '${trainer.members}', label: trainer.members == 1 ? 'member' : 'members')),
                 ],
               ),
-              if (trainer.attendance.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Last here ${timeAgo(trainer.attendance.first)} · '
-                  '${trainer.attendance.take(6).map((a) => '${formatShortDate(BhutanTime.toBhutan(a))} ${formatTime(a)}').join(', ')}',
-                  style: TextStyle(color: brand.muted, fontSize: 12.5),
+            if (recentAttendance.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text('Recent arrivals', style: TextStyle(color: brand.muted, fontSize: 12, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final at in recentAttendance.take(3))
+                      Chip(
+                        avatar: const Icon(Icons.login_rounded, size: 15),
+                        visualDensity: VisualDensity.compact,
+                        label: Text('${formatShortDate(BhutanTime.toBhutan(at))} · ${formatTime(at)}'),
+                      ),
+                  ],
                 ),
               ] else
                 Text('No attendance here yet.', style: TextStyle(color: brand.muted, fontSize: 12.5)),
@@ -207,10 +385,30 @@ class _TrainerCard extends ConsumerWidget {
                     icon: const Icon(Icons.verified_rounded, size: 18),
                     label: const Text('Verify'),
                   ),
+                if (trainer.status == TrainerStatus.verified)
+                  FilledButton.tonalIcon(
+                    onPressed: arrivedToday ? null : () => _arrived(context, ref),
+                    icon: Icon(arrivedToday ? Icons.event_available_rounded : Icons.login_rounded, size: 18),
+                    label: Text(arrivedToday ? 'Already arrived today' : 'Mark arrived'),
+                  ),
+                if (trainer.status == TrainerStatus.inactive)
+                  FilledButton.icon(
+                    onPressed: () => _reactivate(context, ref),
+                    icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                    label: const Text('Reactivate'),
+                  ),
+                if (pending || trainer.status == TrainerStatus.verified)
+                  OutlinedButton.icon(
+                    onPressed: () => _changeTimes(context, ref),
+                    icon: const Icon(Icons.edit_calendar_outlined, size: 18),
+                    label: const Text('Change times'),
+                  ),
                 if (pending || trainer.status == TrainerStatus.verified)
                   OutlinedButton(
-                    onPressed: () => _decide(context, ref, approve: false),
-                    child: Text(pending ? 'Don\'t verify' : 'Stop verifying'),
+                    onPressed: pending
+                        ? () => _decide(context, ref, approve: false)
+                        : () => _deactivate(context, ref),
+                    child: Text(pending ? 'Don\'t verify' : 'Make inactive'),
                   ),
               ],
             ),
@@ -249,7 +447,6 @@ class ChooseTrainerScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return AppPage(
       title: 'Choose your trainer',
-      maxWidth: AppPage.readableWidth,
       body: AsyncValueView<MyMemberships>(
         value: ref.watch(myMembershipsProvider),
         onRetry: () => ref.invalidate(myMembershipsProvider),
@@ -286,7 +483,13 @@ class ChooseTrainerScreen extends ConsumerWidget {
                     style: TextStyle(color: context.brand.muted),
                   ),
                   const SizedBox(height: 14),
-                  for (final t in trainers) _Choice(trainer: t, gym: gym),
+                  ResponsiveGrid(
+                    minItemWidth: 340,
+                    maxColumns: 3,
+                    runSpacing: 2,
+                    equalHeight: false,
+                    children: [for (final t in trainers) _Choice(trainer: t, gym: gym)],
+                  ),
                   if (gym.trainer != null)
                     TextButton(
                       onPressed: () => _choose(context, ref, gym, null, 'You have no trainer now'),

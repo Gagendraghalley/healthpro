@@ -358,15 +358,15 @@ class _Tile extends StatelessWidget {
 
 /// A service's card when it has none of its own: its name and description,
 /// and its pages ([nav]) or, for a service on another website, its links.
-class DefaultServiceCard extends StatelessWidget {
+class DefaultServiceCard extends ConsumerWidget {
   final HealthProModule module;
   final ServiceNav? nav;
 
   const DefaultServiceCard({super.key, required this.module, this.nav});
 
   @override
-  Widget build(BuildContext context) {
-    final links = module.playerMenuItems();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final links = module.playerMenuItems(ref);
     final home = nav?.homeRoute;
     return ServiceCard(
       icon: module.icon,

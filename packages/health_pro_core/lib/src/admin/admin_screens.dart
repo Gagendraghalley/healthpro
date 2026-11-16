@@ -12,6 +12,7 @@ import '../shell/platform_shell.dart' show ServiceIconTile;
 import '../theme/brand.dart';
 import '../utils/formatters.dart';
 import '../venues/venue.dart';
+import '../venues/venue_profile_widgets.dart';
 import '../venues/venue_widgets.dart';
 import '../widgets/app_page.dart';
 import '../widgets/common.dart';
@@ -308,6 +309,7 @@ class _ReviewVenueDialog extends ConsumerWidget {
               if (venue.phone != null) InfoRow(icon: Icons.call_outlined, text: venue.phone!),
               if (venue.description != null) InfoRow(icon: Icons.notes_rounded, text: venue.description!),
               InfoRow(icon: Icons.schedule_rounded, text: 'Sent ${formatMoment(venue.createdAt)}'),
+              VenuePromoVideo(venue: venue, title: 'Promotional video'),
             ],
           ),
         ),

@@ -8,7 +8,7 @@ import '../theme/brand.dart';
 import '../utils/launch.dart';
 import '../venues/venue.dart';
 
-/// What every Health Pro service (gym management, ground booking, later
+/// What every Health Pro service (gym management, later
 /// coaching, events...) gives the platform. A service is a module: a package
 /// that depends only on health_pro_core, never on another module; the app
 /// lists them in main.dart.
@@ -49,7 +49,13 @@ abstract class HealthProModule {
   List<VenueKind> get venueKinds => const [];
 
   /// For players and members: what the module offers them.
-  List<ModuleMenuItem> playerMenuItems() => const [];
+  List<ModuleMenuItem> playerMenuItems([WidgetRef? ref]) => const [];
+
+  /// The service's part of a person's own dashboard (My dashboard, beside
+  /// their QR code): what it keeps for them, e.g. their gyms, packages and
+  /// visits. It sits in a scrolling page, so it sizes to its content; null
+  /// for nothing.
+  Widget? buildMemberDashboard(BuildContext context) => null;
 
   /// For someone running [venue] (one of this module's [venueKinds]): the
   /// pages that run it that their role allows ([VenueAccess.can]).
@@ -103,7 +109,7 @@ abstract class HealthProModule {
   bool ownsPath(String path) => basePaths.any((base) => path == base || path.startsWith('$base/'));
 
   /// Whether this module runs venues of [venueType].
-  bool servesVenueType(String venueType) => venueKinds.any((k) => k.key == venueType && k.externalRegisterUrl == null);
+  bool servesVenueType(String venueType) => venueKinds.any((k) => k.key == venueType);
 }
 
 /// Where someone running [venue] lands: the console of the module that runs
@@ -122,10 +128,6 @@ class VenueKind {
   final String description;
   final IconData icon;
 
-  /// Registered somewhere else (e.g. grounds, on the ground booking
-  /// website): 'Register your venue' opens this instead of the form.
-  final Uri? externalRegisterUrl;
-
   /// What venues of this kind often have, offered as ticks on the form
   /// (a gym: shower, massage...); they add any others.
   final List<String> facilities;
@@ -135,7 +137,6 @@ class VenueKind {
     required this.label,
     required this.description,
     required this.icon,
-    this.externalRegisterUrl,
     this.facilities = const [],
   });
 }

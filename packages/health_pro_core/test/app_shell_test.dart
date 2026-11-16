@@ -84,7 +84,7 @@ void main() {
 
   testWidgets('the super admin: the platform, then each service, then Administration', (tester) async {
     await showShell(tester, const [shop, _Service('cafe', 'Cafe', setUp: false)], team: true);
-    for (final label in ['Overview', 'My services', 'Notifications', 'SERVICES', 'Shop', 'Cafe', 'ADMINISTRATION']) {
+    for (final label in ['Overview', 'My services', 'My dashboard', 'SERVICES', 'Shop', 'Cafe', 'ADMINISTRATION']) {
       expect(inMenu(label), findsOneWidget, reason: label);
     }
     expect(selected(tester, 'Overview'), isTrue);
@@ -98,9 +98,8 @@ void main() {
     for (final label in ['Overview', 'My services']) {
       expect(inMenu(label), findsNothing, reason: "$label: the super admin's");
     }
-    for (final label in ['ME', 'My QR code', 'Notifications']) {
-      expect(inMenu(label), findsOneWidget, reason: "$label: everyone's own");
-    }
+    expect(inMenu('My dashboard'), findsOneWidget, reason: "everyone's own");
+    expect(inMenu('Notifications'), findsNothing, reason: 'the bell at the top');
     expect(inMenu('Shop'), findsOneWidget, reason: 'a service they work in');
     expect(inMenu('Cafe'), findsNothing, reason: 'one they could only start');
     expect(inMenu('ADMINISTRATION'), findsNothing, reason: 'not on the team');

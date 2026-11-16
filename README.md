@@ -4,7 +4,6 @@ Your Health. Our Priority. One app for sport in Bhutan, on the web, Android and 
 
 | Module | Status | What it does |
 |---|---|---|
-| Ground booking (`ground_booking`) | On | Book grounds and follow tournaments. These still run on the ground booking website, and Health Pro links to it (see [Bringing ground booking in](#bringing-ground-booking-in-one-domain)). |
 | Gym membership (`gym_membership`) | Built, off until you turn it on | The front desk registers members (details, webcam photo, package and its expiry date), sends them a QR card on WhatsApp, and checks them in with it. Owners set packages and prices, see income and choose their staff's roles. |
 
 The backend is Supabase: database, security rules, server functions, the daily job and the account-deletion Edge Function. There is no other server.
@@ -16,8 +15,7 @@ pubspec.yaml                  Dart pub workspace: run `flutter pub get` here
 apps/health_pro_app/           the one Flutter app (web, Android, iOS); lib/main.dart lists the modules
 packages/health_pro_core/      accounts, profiles, venues and staff, payments, notifications,
                               the module contract, router, home page, admin, theme
-packages/ground_booking/      module 1: links to the ground booking website
-packages/gym_membership/      module 2: gym plans, memberships, check-in, staff and owner pages
+packages/gym_membership/      the gym module: gym plans, memberships, check-in, staff and owner pages
 supabase/migrations/          core, then one migration per module
 supabase/functions/           Edge Functions (delete-account, admin-users, ask-ai, ask-health-pro; _shared)
 supabase/config.toml          auth settings (email codes) and function settings
@@ -121,11 +119,11 @@ select cron.schedule('gym-daily-maintenance', '5 18 * * *', 'select public.gym_d
 
 ### A platform of services
 
-Health Pro is a multi-service platform: gym management is the first service, and others (ground booking, coaching...) plug in the same way. Each service is a module. The platform owns the frame; a service only describes itself.
+Health Pro is a multi-service platform: gym management is the first service, and others (coaching...) plug in the same way. Each service is a module. The platform owns the frame; a service only describes itself.
 
 **The side menu is service-driven, not feature-driven** (`PlatformShell`, in health_pro_core):
 
-1. The platform's own pages: **Overview** (`/home`: a welcome, every service's shortcuts and card, what needs attention), **My services** (`/services`: every service, in use or not yet set up) and **Notifications**.
+1. The platform's own pages: **Overview** (`/home`: a welcome, every service's shortcuts and card, what needs attention), **My services** (`/services`: every service, in use or not yet set up). Notifications are the bell at the top of every page, not a menu entry.
 2. **Services**: one collapsible section per service: its icon and colour, the person's role in it, what it's working on (a gym, with a switcher for someone at several) and its pages under small headings, as their roles allow. The section of the page in use opens; the others fold to one line, so 20 services stay a short list (from 7, a box to find one).
 3. **Administration** for the Health Pro team, as a section like a service's.
 4. Who is signed in: account, light/dark, sign out.
@@ -215,27 +213,28 @@ Dates are Bhutan dates (Asia/Thimphu), both ends included.
 The client's "Health Pro – QR Code Flow" (migration `20261115000001_people_and_join_requests.sql`, checks in `tests/database/people_test.sql`).
 
 - **People** (`people`): everyone Health Pro knows, with an account or not. Each has one personal QR code, `healthpro:member:<random token>`, nothing else in it. A gym's registered member (`gym_members`) is a person at that gym (`person_id`); a person can be at several gyms, each package running to its own end. Members registered before this got a person each whose QR code is their card's, so printed cards keep working.
-- **My QR code** (`/my-qr`, under Me in the menu, where members start): the person's code, big, on white. "Get a new QR code" makes the old one stop working at every gym, as "New card" on a member's page does.
+- **My dashboard** (`/my-qr`, the one entry under My Health Pro in the menu, where members start): the person's QR code as a small white pass (Enlarge for the scanner, Copy, Share and Save its picture), their details (My details, with Edit), their latest notifications (Latest updates), and what each service keeps for them (`HealthProModule.buildMemberDashboard`; the gym module gives their gyms, packages, days left, what needs their attention (a package ended or ending within a week, a payment waiting or not found), their visits over the last 7 days, requests and recent visits, and each gym card opens My gym).
+- **My gym** (`/gyms/my`, in the menu under My dashboard): the gym the member belongs to, in full: photos, contact, about, facilities, trainers, videos, opening hours and a map, beside their membership there (package, days left, member code, trainer, paying). With several gyms, chips at the top choose one (`/gyms/my?gym=<id>` opens on it). "Get a new QR code" makes the old one stop working at every gym, as "New card" on a member's page does.
 - **Accounts join their person by email.** The first time an account needs its QR code (`my_person`), it takes in the people the desk registered with the same email, once the account has **confirmed** that email. Never by phone: nobody has proved a phone number is theirs, so matching on it would let anyone claim someone's card, details and medical notes.
 - **At the desk**, any QR code (the personal one, a gym's old card, an old account code) checks the person in where they're registered (`gym_check_in_member`, `gym_check_in_account`). At a gym where they aren't, Check-in says **Not a member here yet** with **Add to this gym**: Register member opens filled in with the details they gave their last gym, or their account (`gym_person_details`), and saving adds the same person, so the same QR code works here from then on. Their photo is taken again (each gym's photos are private to it).
 - **Joining by the gym's QR code.** Gym QR code (Front desk, in the gym's menu) shows the gym's code to print: it opens the gym's public page with `?join=1`, where someone signed in taps **Ask to join**, with the package they'd like and a note (`gym_request_to_join`). The front desk, managers and owner are told; the request waits under **Join requests** (a count in the menu) until the desk **adds** them (the filled-in form; saving approves it) or **declines** with a note (`gym_decline_join_request`). The member is told either way, and the gym shows in **My gyms** (`/gyms/my`: their gyms and packages, requests, visits; `my_gyms`).
-- **Notifications** are under Me for everyone now (members, trainers and staff get them), not only the super admin. Overview and My services are still the super admin's.
+- **Notifications** are for everyone (members, trainers and staff get them), from the bell at the top of every page; there is no menu entry. Overview and My services are still the super admin's.
 
 ### Paying online, and a gym's membership settings
 
 Migration `20261115000002_gym_payments_and_settings.sql`, checks in `tests/database/payments_test.sql`.
 
 - **Membership settings** (Manage, for those who edit the gym; `gym_settings`, `gym_save_settings`): the bank's **payment QR code** (an image in the public `gym-payment-qr` bucket, shown with the gym's payment details from Gym settings), **reminders** (any of 1, 3, 7, 14 or 30 days before a package ends; 3 by default) and who answers **requests to join**: the front desk (whoever registers members) or **the owner and managers only**. With managers only, the desk isn't told of requests, doesn't see Join requests in its menu, and the database refuses its answers (a trigger on `gym_join_requests`).
-- **Paying online** (`gym_payment_claims`): in My gyms a member taps **Pay online**, chooses the package and months, scans the gym's payment QR in their bank app, pays, and enters the **journal number (JRN)** (`gym_claim_payment`). One payment waits at a time, and a journal number pays once at a gym (nor one the desk already recorded). Those who take payments (`gym.payments`) are told, and find it under **Payments to confirm** (Front desk, with a count), on the member's page, and on Check-in when the member is refused. They check it with the bank, then **Confirm** (`gym_confirm_payment_claim`: the package starts as a desk renewal would, from the day the current one ends or today, recorded as a bank payment with the JRN) or **Not found** with a note (`gym_reject_payment_claim`). The member is told either way. Cash is still sold at the desk as before. A package that has ended can't check in until a payment is confirmed.
+- **Paying online** (`gym_payment_claims`): on their dashboard, under My gyms, a member taps **Pay online**, chooses the package and months, scans the gym's payment QR in their bank app, pays, and enters the **journal number (JRN)** (`gym_claim_payment`). One payment waits at a time, and a journal number pays once at a gym (nor one the desk already recorded). Those who take payments (`gym.payments`) are told, and find it under **Payments to confirm** (Front desk, with a count), on the member's page, and on Check-in when the member is refused. They check it with the bank, then **Confirm** (`gym_confirm_payment_claim`: the package starts as a desk renewal would, from the day the current one ends or today, recorded as a bank payment with the JRN) or **Not found** with a note (`gym_reject_payment_claim`). The member is told either way. Cash is still sold at the desk as before. A package that has ended can't check in until a payment is confirmed.
 
 ### A gym's profile, and finding a gym
 
 Migration `20261115000003_venue_profile.sql`, checks in `tests/database/profile_test.sql`.
 
-- **The profile** (Gym settings, the venue form; `register_venue`, `update_venue`): besides name, place, phone and WhatsApp, an **email**, a **contact person**, **its place on the map** (tap the map at the entrance, or "Use where I'm standing"; it must be in Bhutan), **opening hours** day by day (closed, or one or two opening times, e.g. 6–10 am and 4–9 pm), **facilities** (the kind's usual ones as ticks, `VenueKind.facilities`, a gym's in `gymFacilities`, plus any of its own), **video links** (YouTube or Facebook, up to 10: posted there, shown as pictures that open the video) and up to **30 photos**. Changing photos, videos, facilities or hours doesn't send a venue that was sent back for checking again.
+- **The profile** (Gym settings, the venue form; `register_venue`, `update_venue`): besides name, place, phone and WhatsApp, an **email**, a **contact person**, **its place on the map** (tap the map at the entrance, or "Use where I'm standing"; it must be in Bhutan), **opening hours** day by day (closed, or one or two opening times, e.g. 6–10 am and 4–9 pm), **facilities** (the kind's usual ones as ticks, `VenueKind.facilities`, a gym's in `gymFacilities`, plus any of its own), **video links** (YouTube or Facebook, up to 10: posted there, shown as pictures that open the video), one optional **promotional video** (MP4, MOV or WebM, up to 20 MB; shown on the public venue page and My gym), and up to **30 photos**. Changing photos, videos, facilities or hours doesn't send a venue that was sent back for checking again.
 - **Price range**: worked out from the packages on sale (lowest and highest price), never typed, so it can't go stale: `gym_price_ranges()` for the list (visitors too), the packages on the gym's page.
 - **The list of gyms** (`/gyms`; Gyms near me on the Welcome page is `/gyms?near=1`): each gym with its cover photo, price range, whether it's open now (Bhutan time) and, with Near me, how far. **Near me** asks for the location (browser or phone) and puts the nearest first; without it, the list stays as it comes. Anyone can sort by price and keep to a **budget** (gyms with a package at or under it), or a dzongkhag.
-- **A gym's page**: prices, open now, contact person and email, facilities, videos, the week's hours, and a small **OpenStreetMap** map with **Directions** (Google Maps) and Bigger map. The map uses OpenStreetMap's free tiles (no key); they ask apps not to send heavy traffic, so for many daily visitors move to a tile service (e.g. MapTiler or Stadia, free tiers) by changing `MapTiles` in `venue_map.dart`.
+- **A gym's page**: prices, open now, contact person and email, facilities, video links and the promotional video, the week's hours, and a small **OpenStreetMap** map with **Directions** (Google Maps) and Bigger map. The map uses OpenStreetMap's free tiles (no key); they ask apps not to send heavy traffic, so for many daily visitors move to a tile service (e.g. MapTiler or Stadia, free tiers) by changing `MapTiles` in `venue_map.dart`.
 - **Reviews**: a gym's members can review it (`has_used_venue` now counts anyone the gym registered, with their account), not only those who paid with their account.
 - **Location permission**: the phone apps ask for it (`AndroidManifest.xml`, `Info.plist`); the website asks in the browser.
 
@@ -243,11 +242,11 @@ Migration `20261115000003_venue_profile.sql`, checks in `tests/database/profile_
 
 Migration `20261115000004_trainers.sql`, checks in `tests/database/trainers_test.sql`.
 
-- **Their profile** (Trainer profile, under Me; `/gyms/trainer`): anyone with an account makes one (name as members see it, what they do, about them, specialties, years of experience, photo) and adds **certificates** (a photo of each, in the public `trainer-media` bucket). It's public (`/trainers/<id>`) once a gym has verified them.
-- **Each gym verifies them** (`gym_trainers`): the trainer asks a gym (Train at a gym); its staff who check trainers (`gym.trainers`, new; the Owner, Manager and Front desk roles have it) are told, check the certificates under **Trainers** (Front desk, with a count) and **Verify** or **Don't verify** with a note (`gym_decide_trainer`); the trainer is told. One gym saying no doesn't touch the others. A trainer can leave a gym (their times and members there go).
+- **Their profile** (Trainer profile, under Me; `/gyms/trainer`): anyone with an account makes one (name as members see it, what they do, about them, specialties, years of experience, photo) and adds **certificates** (a photo of each, in the public `trainer-media` bucket). It's public (`/trainers/<id>`) once a gym has verified them, whether the trainer applied or the gym added them.
+- **Each gym verifies them** (`gym_trainers`): the trainer asks a gym (Train at a gym); its staff who check trainers (`gym.trainers`, new; the Owner, Manager and Front desk roles have it) are told, check the certificates under **Trainers** (Front desk, with a count) and **Verify** or **Don't verify** with a note (`gym_decide_trainer`); the trainer is told. One gym saying no doesn't touch the others. Either the gym or the trainer can make the trainer inactive at that gym: the public listing, schedule and active member assignments are removed, and the gym, trainer and affected members are notified. The gym may reactivate them later.
 - **Their week** (`trainer_slots`): days and times at each gym, never overlapping across gyms. A gym (its page, its Trainers list) sees its own times and the trainer's others only as **Not available**, never the other gym's name (`trainer_timings`, `gym_trainers_overview`). On the trainer's own public profile, each verified gym's times are shown.
-- **Attendance** (`trainer_check_ins`), as the client asked on 15 Nov (instead of working it out from members' check-ins): the front desk scans the trainer's Health Pro QR code at **Check-in** when they arrive, as for members. A trainer verified there is recorded as **Trainer arrived** (with their times there today), not checked in as a member; a trainer who is also a member there gets "check in as a member" instead. Each gym sees only its own record (Trainers: days here in the last 30, last arrivals); the trainer sees all of them, gym by gym, on their own page.
-- **Members and trainers** (`trainer_links`, with history): a member chooses a trainer at each of their gyms (My gyms → Choose / Change), or the front desk assigns one (under a member's check-in, or on their page). The old and the new trainer are told (Trainer changed / New member), and the member when the desk chose.
+- **Attendance** (`trainer_check_ins`), as the client asked on 15 Nov (instead of working it out from members' check-ins): the front desk scans the trainer's Health Pro QR code at **Check-in** when they arrive, as for members, or uses **Mark arrived**. A trainer gets at most one attendance record per gym per Bhutan day; a repeat scan says **Already marked today**, and the staff button disables after the first record. A trainer verified there is recorded as **Trainer arrived** (with their times there today), not checked in as a member; a trainer who is also a member there gets "check in as a member" instead. Each gym sees only its own record (Trainers: days here in the last 30, recent arrivals); the trainer sees all of them, gym by gym, on their own page.
+- **Members and trainers** (`trainer_links`, with history): a member chooses a trainer at each of their gyms (My dashboard → My gyms → Choose / Change), or the front desk assigns one (under a member's check-in, or on their page). The old and the new trainer are told (Trainer changed / New member), and the member when the desk chose.
 - **Reviews** (`trainer_reviews`): only members who have had them as their trainer review a trainer (stars and a comment), on the trainer's profile; the trainer is told; no replies.
 
 ### Push notifications
@@ -330,15 +329,6 @@ Without them, both chats still work: the suggestions answer, and typed questions
    `insert into public.app_modules (key, name, is_enabled, sort_order) values ('coaching', 'Coaching', false, 30);`
 4. Test it as an admin, then turn it on.
 
-## Bringing ground booking in (one domain)
-
-All modules are meant to run from one domain. Ground booking already owns its paths in Health Pro (`/grounds`, `/grounds/venue/:id`, `/tournaments`, `/tournaments/:id`, `/register-ground`, the same hash URLs the booking website uses). For now those paths hand over to the website. To bring it in:
-
-1. Move its screens into `packages/ground_booking` behind those same routes, so shared links keep working.
-2. Add a migration with its tables (`ground_*`, linked to `venues`), its venue types (futsal, football...), and its deposits written to `payments`.
-3. Remove `externalUrl`/`externalRegisterUrl` from `GroundBookingModule`.
-4. Point the old domain at the Health Pro website.
-
 ## Website on Cloudflare
 
 The website is a Cloudflare Pages project named `sporthubs` that serves the Flutter web build as static files: https://sporthubs.pages.dev. Every push to `main` builds and publishes it; other branches get a preview address of their own.
@@ -373,7 +363,6 @@ When it moves to its own domain, add the domain to the Pages project (Custom dom
 ```sh
 (cd packages/health_pro_core && flutter test)
 (cd packages/gym_membership && flutter test)
-(cd packages/ground_booking && flutter test)
 (cd apps/health_pro_app && flutter test)
 scripts/test_database.sh      # needs a local PostgreSQL (brew install postgresql)
 deno test tests/functions/    # the Edge Functions' own logic (brew install deno)

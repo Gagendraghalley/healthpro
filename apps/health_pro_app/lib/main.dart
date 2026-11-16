@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ground_booking/ground_booking.dart';
 import 'package:gym_membership/gym_membership.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -9,7 +8,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// and its migration (supabase/migrations). Admins turn each on and off in
 /// app_modules (Admin -> Modules).
 const modules = <HealthProModule>[
-  GroundBookingModule(),
   GymModule(),
 ];
 

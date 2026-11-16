@@ -7,6 +7,7 @@ import 'dashboard/gym_dashboard_page.dart';
 import 'data/gym_repository.dart';
 import 'gym_permissions.dart';
 import 'gym_routes.dart';
+import 'screens/add_trainer_screen.dart';
 import 'screens/ask_screen.dart';
 import 'screens/check_in_screen.dart';
 import 'screens/gym_trainer_screens.dart';
@@ -38,7 +39,7 @@ class GymModule extends HealthProModule {
   String get name => 'Gym management';
 
   @override
-  String get description => 'Register members, sell packages and check them in with a QR card.';
+  String get description => 'Manage memberships, check-ins, trainers and member payments.';
 
   @override
   IconData get icon => Icons.fitness_center_rounded;
@@ -68,9 +69,12 @@ class GymModule extends HealthProModule {
   @override
   List<RouteBase> get routes => [
         GoRoute(path: GymRoutes.gyms, builder: (_, s) => GymListScreen(nearMe: s.uri.queryParameters['near'] == '1')),
-        GoRoute(path: GymRoutes.my, builder: (_, __) => const MyGymsScreen()),
+        GoRoute(path: GymRoutes.my, builder: (_, s) => MyGymScreen(gymId: s.uri.queryParameters['gym'])),
         GoRoute(path: GymRoutes.trainerHome, builder: (_, __) => const TrainerHomeScreen()),
-        GoRoute(path: GymRoutes.trainerProfile, builder: (_, __) => const TrainerProfileScreen()),
+        GoRoute(
+          path: GymRoutes.trainerProfile,
+          builder: (_, s) => TrainerProfileScreen(thenAskGymId: s.uri.queryParameters['gym']),
+        ),
         GoRoute(path: GymRoutes.chooseTrainer, builder: (_, s) => ChooseTrainerScreen(venueId: s.pathParameters['id']!)),
         GoRoute(
           path: GymRoutes.trainer,
@@ -114,26 +118,39 @@ class GymModule extends HealthProModule {
         GoRoute(path: GymRoutes.requests, builder: (_, s) => JoinRequestsScreen(venueId: s.pathParameters['id']!)),
         GoRoute(path: GymRoutes.gymQr, builder: (_, s) => GymQrScreen(venueId: s.pathParameters['id']!)),
         GoRoute(path: GymRoutes.payments, builder: (_, s) => PaymentsToConfirmScreen(venueId: s.pathParameters['id']!)),
+        GoRoute(path: GymRoutes.addTrainer, builder: (_, s) => AddTrainerScreen(venueId: s.pathParameters['id']!)),
         GoRoute(path: GymRoutes.gymTrainers, builder: (_, s) => GymTrainersScreen(venueId: s.pathParameters['id']!)),
         GoRoute(path: GymRoutes.settings, builder: (_, s) => MembershipSettingsScreen(venueId: s.pathParameters['id']!)),
       ];
 
-  /// A member's own pages, under Me in the side menu (with My QR code).
+  /// On a person's own dashboard, beside their QR code: their gyms,
+  /// packages, requests and visits.
   @override
-  List<ModuleMenuItem> playerMenuItems() => const [
+  Widget? buildMemberDashboard(BuildContext context) => const MyGymsDashboard();
+
+  /// A person's own pages, in the side menu under their dashboard: My gym
+  /// (their gyms in full), and a trainer's page.
+  @override
+  List<ModuleMenuItem> playerMenuItems([WidgetRef? ref]) {
+    final training = ref?.watch(myTrainingProvider).valueOrNull;
+    return [
+      const ModuleMenuItem(
+        title: 'My gym',
+        subtitle: 'Your gym: photos, facilities, where it is and its trainers',
+        icon: Icons.fitness_center_rounded,
+        route: GymRoutes.my,
+      ),
+      if (training?.profile != null)
         ModuleMenuItem(
-          title: 'My gyms',
-          subtitle: 'Your gyms, packages and visits',
-          icon: Icons.fitness_center_rounded,
-          route: GymRoutes.my,
-        ),
-        ModuleMenuItem(
-          title: 'Trainer profile',
-          subtitle: 'For trainers: your gyms, times, attendance and members',
+          title: training!.joinedPublicly ? 'Trainer profile' : 'My training',
+          subtitle: training.joinedPublicly
+              ? 'Your public profile, gyms, schedule and attendance'
+              : 'Your gyms, schedule and attendance',
           icon: Icons.sports_rounded,
           route: GymRoutes.trainerHome,
         ),
-      ];
+    ];
+  }
 
   @override
   ServiceNav? navigation(WidgetRef ref, String location) =>
@@ -182,14 +199,14 @@ class GymModule extends HealthProModule {
         if (access.can(VenuePermission.edit))
           ModuleMenuItem(
             title: 'Membership settings',
-            subtitle: 'Payment QR code, reminders, who answers requests to join',
+            subtitle: 'Bank account for online payments, reminders, who answers requests to join',
             icon: Icons.tune_rounded,
             route: GymRoutes.settingsFor(venue.id),
           ),
         if (access.can(GymPermission.trainers))
           ModuleMenuItem(
             title: 'Trainers',
-            subtitle: 'Verify trainers, their times and attendance',
+            subtitle: 'Add or verify trainers, their times and attendance',
             icon: Icons.sports_rounded,
             route: GymRoutes.gymTrainersFor(venue.id),
           ),
@@ -234,7 +251,7 @@ class GymModule extends HealthProModule {
   /// Not over Ask AI itself, nor over the register form's Save bar.
   @override
   bool hidesAssistantButton(String location) =>
-      RegExp(r'^/gyms/[^/]+/manage/(ask|members/new|members/[^/]+/edit)$').hasMatch(location);
+      RegExp(r'^/gyms/[^/]+/manage/(ask|members/new|members/[^/]+/edit|trainers/new)$').hasMatch(location);
 
   @override
   Map<String, ModuleMenuItem> get assistantLinks => const {

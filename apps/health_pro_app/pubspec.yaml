@@ -16,8 +16,6 @@ dependencies:
   health_pro_core:
     path: ../../packages/health_pro_core
   # Modules: add a package here and one line in lib/main.dart.
-  ground_booking:
-    path: ../../packages/ground_booking
   gym_membership:
     path: ../../packages/gym_membership
 

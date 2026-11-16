@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_membership/gym_membership.dart';
 import 'package:gym_membership/src/data/joining.dart';
+import 'package:gym_membership/src/data/trainers.dart';
 import 'package:gym_membership/src/screens/check_in_screen.dart';
 import 'package:gym_membership/src/screens/join_screens.dart';
 import 'package:gym_membership/src/screens/members_screens.dart';
@@ -214,18 +215,61 @@ void main() {
     });
   });
 
-  testWidgets('My gyms: each gym with its package, and the way to their QR code', (tester) async {
+  testWidgets('My gyms on the dashboard: how things stand, each gym with its package, requests', (tester) async {
     for (final size in [const Size(1440, 1000), const Size(390, 844)]) {
-      await show(tester, const MyGymsScreen(), size: size, with_: [
+      await show(tester, const Scaffold(body: SingleChildScrollView(child: MyGymsDashboard())), size: size, with_: [
         ...overrides(),
         myMembershipsProvider.overrideWith((ref) async => _mine(member: true, waiting: true)),
       ]);
       await tester.pumpAndSettle();
-      expect(find.text('My QR code'), findsOneWidget);
+      for (final label in ['My gyms', 'Active packages', 'Days left', 'Visits in 7 days']) {
+        expect(find.text(label), findsWidgets, reason: label);
+      }
+      expect(find.text('1 request waiting'), findsOneWidget);
       expect(find.text('Peak Fitness'), findsWidgets);
       expect(find.text('Active until ${formatDate(day(25))}'), findsOneWidget);
+      expect(find.text('26 days left'), findsOneWidget, reason: 'the last day counts');
       expect(find.text('Take back'), findsOneWidget, reason: 'their request elsewhere, waiting');
       expect(tester.takeException(), isNull);
     }
+  });
+
+  testWidgets('My gyms on the dashboard, with no gym yet: the way to find one', (tester) async {
+    await show(tester, const Scaffold(body: SingleChildScrollView(child: MyGymsDashboard())), with_: [
+      ...overrides(),
+      myMembershipsProvider.overrideWith((ref) async => MyMemberships.none),
+    ]);
+    await tester.pumpAndSettle();
+    expect(find.text("You're not a member of a gym yet"), findsOneWidget);
+    expect(find.text('No active package'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('My gym: the gym in full (facilities, trainers) beside their membership there', (tester) async {
+    for (final size in [const Size(1440, 1000), const Size(390, 844)]) {
+      await show(tester, const MyGymScreen(), size: size, with_: [
+        ...overrides(),
+        venueProvider.overrideWith((ref, id) async => gym),
+        gymVerifiedTrainersProvider.overrideWith((ref, id) async => const <TrainerProfile>[]),
+        myMembershipsProvider.overrideWith((ref) async => _mine(member: true)),
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.text(gym.name), findsWidgets);
+      for (final label in ['My membership', 'Facilities', 'Trainers']) {
+        await tester.scrollUntilVisible(find.text(label), 200, scrollable: find.byType(Scrollable).first);
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('My gym, with no gym yet: how to join one', (tester) async {
+    await show(tester, const MyGymScreen(), with_: [
+      ...overrides(),
+      myMembershipsProvider.overrideWith((ref) async => MyMemberships.none),
+    ]);
+    await tester.pumpAndSettle();
+    expect(find.text("You're not a member of a gym yet"), findsOneWidget);
+    expect(find.text('Find a gym'), findsWidgets, reason: 'the first step, and the button');
   });
 }

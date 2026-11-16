@@ -119,7 +119,7 @@ void main() {
 
     await tester.tap(find.text('What is Health Pro?'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('brings gyms, grounds and games across Bhutan'), findsOneWidget);
+    expect(find.textContaining('brings gyms across Bhutan'), findsOneWidget);
     expect(ai.asked, isEmpty, reason: 'a suggestion is answered here');
 
     await tester.enterText(find.byType(TextField), 'How do I become a member?');

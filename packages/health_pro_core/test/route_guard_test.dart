@@ -49,8 +49,8 @@ void main() {
   });
 
   test("a module's pages close while it is turned off", () {
-    expect(guard('/gyms', moduleKey: 'gym_membership', enabled: {'ground_booking'}), CoreRoutes.welcome);
-    expect(guard('/my-gym', signedIn: true, moduleKey: 'gym_membership', enabled: {'ground_booking'}), CoreRoutes.home);
+    expect(guard('/gyms', moduleKey: 'gym_membership', enabled: {'coaching'}), CoreRoutes.welcome);
+    expect(guard('/my-gym', signedIn: true, moduleKey: 'gym_membership', enabled: {'coaching'}), CoreRoutes.home);
     expect(guard('/gyms', moduleKey: 'gym_membership', enabled: {'gym_membership'}), isNull);
     expect(guard('/gyms', moduleKey: 'gym_membership'), isNull, reason: 'not known yet: let them in');
   });

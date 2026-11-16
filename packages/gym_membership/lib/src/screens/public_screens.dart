@@ -380,6 +380,7 @@ class GymDetailsScreen extends ConsumerWidget {
                     VenueContactButtons(venue: gym),
                     const SizedBox(height: 8),
                     VenueContactDetails(venue: gym),
+                    VenuePromoVideo(venue: gym, title: 'Take a look inside'),
                     if (gym.description != null) ...[
                       const SectionTitle('About'),
                       Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(gym.description!)),
@@ -397,6 +398,7 @@ class GymDetailsScreen extends ConsumerWidget {
                   ],
                   second: [
                     if (!join) ...[const SectionTitle('How to join'), joinCard],
+                    if (gym.isVerified) TrainHereCard(gym: gym),
                     if (gym.openingHours != null) ...[
                       const SectionTitle('Opening hours'),
                       OpeningHoursView(hours: gym.openingHours!),

@@ -69,7 +69,7 @@ class WelcomeScreen extends ConsumerWidget {
           const Center(child: HealthProLogo(height: 150)),
           const SizedBox(height: 4),
           Text(
-            'Gyms, grounds and games across Bhutan, with one account.',
+            'Gyms across Bhutan, with one account.',
             textAlign: TextAlign.center,
             style: context.text.titleMedium?.copyWith(color: context.brand.muted, fontWeight: FontWeight.w500),
           ),
@@ -94,7 +94,7 @@ class WelcomeScreen extends ConsumerWidget {
           TextButton.icon(
             onPressed: () => context.push(CoreRoutes.registerVenue),
             icon: const Icon(Icons.storefront_rounded),
-            label: const Text('Run a gym or ground? Register your venue'),
+            label: const Text('Run a gym? Register your venue'),
           ),
         ],
       ),
@@ -119,14 +119,29 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   bool _hide = true;
   String? _error;
 
+  /// All six digits are in: Sign in is only live then.
+  bool get _codeComplete => Validators.signInCode(_code.text) == null;
+
+  @override
+  void initState() {
+    super.initState();
+    _code.addListener(_codeChanged);
+  }
+
+  void _codeChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    _code.removeListener(_codeChanged);
     _email.dispose();
     _code.dispose();
     super.dispose();
   }
 
   Future<void> _signIn() async {
+    if (_busy) return;
     if (!_form.currentState!.validate()) return;
     await _run(() async {
       await ref.read(authRepositoryProvider).signIn(email: _email.text, code: _code.text);
@@ -194,6 +209,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   hidden: _hide,
                   onToggleHidden: () => setState(() => _hide = !_hide),
                   autofillHints: const [AutofillHints.password],
+                  // The sixth digit signs them in: no button to press.
+                  onCompleted: (_) => _signIn(),
                   onSubmitted: (_) => _signIn(),
                   validator: Validators.signInCode,
                 ),
@@ -215,7 +232,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         ),
         if (_error != null) ...[const SizedBox(height: 4), AuthError(_error!), const SizedBox(height: 14)],
         const SizedBox(height: 6),
-        AuthPrimaryButton(label: 'Sign in', icon: Icons.arrow_forward_rounded, busy: _busy, onPressed: _signIn),
+        AuthPrimaryButton(label: 'Sign in', icon: Icons.arrow_forward_rounded, busy: _busy, onPressed: _codeComplete ? _signIn : null),
         const SizedBox(height: 22),
         const AuthDivider(text: 'or continue with'),
         const SizedBox(height: 18),

@@ -55,8 +55,7 @@ class ServicesScreen extends ConsumerWidget {
             padding: pagePadding(context, bottom: 40),
             children: [
               Text(
-                'Each service runs one side of your business, with its own pages, staff and roles. '
-                'Switch between them from the menu.',
+                'Open a service to see its dashboard and available tasks. Services you use appear first; other services are ready to set up.',
                 style: TextStyle(color: context.brand.muted, fontSize: 15, height: 1.45),
               ),
               if (inUse.isNotEmpty) ...[SectionTitle('In use (${inUse.length})'), grid(inUse)],
@@ -71,7 +70,7 @@ class ServicesScreen extends ConsumerWidget {
   }
 }
 
-class _ServiceTile extends StatelessWidget {
+class _ServiceTile extends ConsumerWidget {
   final HealthProModule module;
   final ServiceNav? nav;
 
@@ -81,13 +80,13 @@ class _ServiceTile extends StatelessWidget {
   const _ServiceTile({required this.module, required this.nav, required this.off});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
     final nav = this.nav;
     final home = nav?.homeRoute;
     final setUp = nav?.isSetUp ?? false;
     final pages = [for (final d in nav?.destinations ?? const <NavDestination>[]) if (!d.isExternal) d];
-    final links = module.playerMenuItems();
+    final links = module.playerMenuItems(ref);
     final Widget status = off
         ? StatusChip(label: 'Admins only', color: brand.warning, icon: Icons.visibility_off_outlined)
         : setUp

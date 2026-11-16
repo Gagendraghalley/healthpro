@@ -9,7 +9,7 @@ import 'health_pro_module.dart';
 
 /// Every module the app is built with, in main.dart's order. main.dart
 /// overrides this:
-///   registeredModulesProvider.overrideWithValue([GroundBookingModule(), GymModule()])
+///   registeredModulesProvider.overrideWithValue([GymModule()])
 final registeredModulesProvider = Provider<List<HealthProModule>>((ref) => const []);
 
 final moduleRepositoryProvider = Provider<ModuleRepository>((ref) => ModuleRepository(ref.watch(supabaseProvider)));

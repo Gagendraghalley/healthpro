@@ -18,7 +18,7 @@ void main() {
     });
   });
 
-  testWidgets('My QR code: big, on white in both themes, with their name', (tester) async {
+  testWidgets('My dashboard: their QR code on white in both themes, with their name, details and updates', (tester) async {
     for (final (theme, size) in [(AppTheme.light, const Size(390, 844)), (AppTheme.dark, const Size(1440, 1000))]) {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1;
@@ -27,17 +27,35 @@ void main() {
         key: UniqueKey(),
         overrides: [
           myPersonProvider.overrideWith((ref) async => const MyPerson(id: 'p1', qrToken: 'abc', name: 'Sonam Choden')),
+          myProfileProvider.overrideWith((ref) async =>
+              const Profile(id: 'u1', fullName: 'Sonam Choden', role: 'user', memberCode: 'X', email: 'sonam@x.bt')),
+          notificationsProvider.overrideWith((ref) => Stream.value([
+                AppNotification(id: 'n1', title: 'Payment confirmed', createdAt: DateTime.now().toUtc()),
+              ])),
+          enabledModulesProvider.overrideWith((ref) async => const <HealthProModule>[]),
         ],
         child: MaterialApp(theme: theme, home: const MyQrScreen()),
       ));
       await tester.pumpAndSettle();
       final qr = tester.widget<QrImageView>(find.byType(QrImageView));
       expect(qr.backgroundColor, Colors.white);
-      expect(tester.getSize(find.byType(QrImageView)).width, greaterThanOrEqualTo(260), reason: 'big enough to scan');
-      expect(find.text('Sonam Choden'), findsOneWidget);
+      expect(tester.getSize(find.byType(QrImageView)).width, 176, reason: 'small on the page; Enlarge shows it big');
+      expect(find.text('Sonam Choden'), findsNWidgets(2), reason: 'on the pass, and in My details');
+      for (final label in ['Enlarge', 'Copy', 'Share', 'Save', 'My details', 'sonam@x.bt', 'Not added']) {
+        expect(find.text(label), findsWidgets, reason: label);
+      }
+      expect(find.text('Latest updates · 1 new'), findsOneWidget);
+      expect(find.text('Payment confirmed'), findsOneWidget);
+      expect(find.textContaining(', Sonam'), findsOneWidget, reason: 'greeted by first name');
       expect(find.text('Get a new QR code'), findsOneWidget);
       expect(tester.takeException(), isNull);
     }
+    // Enlarge: the code big, for the desk's scanner.
+    await tester.ensureVisible(find.text('Enlarge'));
+    await tester.tap(find.text('Enlarge'));
+    await tester.pumpAndSettle();
+    expect(find.text('Show this at the front desk'), findsOneWidget);
+    expect(tester.getSize(find.byType(QrImageView).last).width, greaterThanOrEqualTo(260), reason: 'big enough to scan');
   });
 
   testWidgets('Install app: nothing outside a browser (the phone apps are installed already)', (tester) async {

@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ground_booking/ground_booking.dart';
 import 'package:gym_membership/gym_membership.dart';
 import 'package:health_pro_app/main.dart' show modules;
 import 'package:health_pro_core/health_pro_core.dart';
@@ -30,7 +29,6 @@ class FakeModules extends Fake implements ModuleRepository {
 
   @override
   Future<List<AppModuleRow>> list() async => [
-        const AppModuleRow(key: 'ground_booking', name: 'Ground booking', isEnabled: true, sortOrder: 10),
         AppModuleRow(key: 'gym_membership', name: 'Gym membership', isEnabled: gymOn, sortOrder: 20),
       ];
 }
@@ -108,14 +106,6 @@ void main() {
     expect(find.text('Peak Fitness'), findsOneWidget);
   });
 
-  testWidgets('ground booking keeps its existing website handoff route', (tester) async {
-    final container = await pumpApp(tester);
-    container.read(appRouterProvider).go(GroundBookingModule.grounds);
-    await tester.pumpAndSettle();
-    expect(find.text('Grounds are booked on our booking website'), findsOneWidget);
-    expect(find.text('Open it'), findsOneWidget);
-  });
-
   testWidgets("a gym's staff pages need signing in", (tester) async {
     final container = await pumpApp(tester);
     final router = container.read(appRouterProvider);
@@ -164,7 +154,7 @@ void main() {
         reason: 'home, which for someone given nothing is their QR code');
   });
 
-  test('main.dart registers the ground booking and gym services', () {
-    expect(modules.map((m) => m.key), ['ground_booking', 'gym_membership']);
+  test('main.dart registers the gym service', () {
+    expect(modules.map((m) => m.key), ['gym_membership']);
   });
 }

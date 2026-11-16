@@ -5,7 +5,7 @@ import '../module/module_providers.dart';
 import '../module/health_pro_module.dart';
 
 // The side menu is made of services, not features. Each service (a module:
-// gym management, ground booking, later coaching...) describes its own
+// gym management, later coaching...) describes its own
 // pages for whoever is signed in; the platform draws every service the same
 // way, one collapsible section each. A new service adds its section without
 // anyone touching the menu.

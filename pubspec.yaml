@@ -10,5 +10,4 @@ environment:
 workspace:
   - apps/health_pro_app
   - packages/health_pro_core
-  - packages/ground_booking
   - packages/gym_membership

@@ -26,7 +26,9 @@ PaymentClaim claim({String status = 'pending', int amount = 3000, int months = 2
       'created_at': DateTime.now().toUtc().toIso8601String(),
     });
 
-MyGym myGym({MyClaim? claim, String? info = 'Bank of Bhutan 200123456, Peak Fitness'}) => MyGym(
+const peakAccount = PaymentAccount(bankName: 'Bank of Bhutan', accountNumber: '200123456789', accountName: 'Peak Fitness');
+
+MyGym myGym({MyClaim? claim, PaymentAccount? account = peakAccount}) => MyGym(
       venueId: 'g1',
       venueName: 'Peak Fitness',
       place: 'Thimphu',
@@ -34,7 +36,7 @@ MyGym myGym({MyClaim? claim, String? info = 'Bank of Bhutan 200123456, Peak Fitn
       startDate: day(-40),
       endDate: day(-10),
       gymMemberId: 'm1',
-      paymentInfo: info,
+      paymentAccount: account,
       claim: claim,
     );
 
@@ -43,15 +45,27 @@ void main() {
     final d = GymSettings.defaults('g1');
     expect(d.reminderDays, [3]);
     expect(d.managersAnswerJoins, isFalse);
-    final s = GymSettings.fromJson(
-        {'venue_id': 'g1', 'payment_qr_path': 'g1/qr.png', 'reminder_days': [7, 3], 'join_approval': 'managers'});
+    expect(d.account, isNull, reason: 'no bank account yet: payments at the desk only');
+    final s = GymSettings.fromJson({
+      'venue_id': 'g1', 'bank_name': 'Bank of Bhutan', 'account_number': '200123456789', 'account_name': 'Peak Fitness',
+      'online_provider': 'bank_account', 'reminder_days': [7, 3], 'join_approval': 'managers',
+    });
+    expect(s.account!.spacedNumber, '2001 2345 6789');
+    expect(s.onlineProvider, OnlineProvider.bankAccount);
     expect(s.reminderDays, [7, 3]);
     expect(s.managersAnswerJoins, isTrue);
   });
 
-  test('a member pays online where they are registered, the gym says how, and nothing waits', () {
+  test('the payment QR code holds the account, the amount and what it is for', () {
+    expect(peakAccount.qrData(amount: 1500, note: 'Peak Fitness, Gym'),
+        'Pay to: Peak Fitness\nBank: Bank of Bhutan\nAccount: 200123456789\nAmount: Nu. 1500\nFor: Peak Fitness, Gym');
+    expect(peakAccount.qrData(), isNot(contains('Amount')));
+    expect(PaymentAccount.fromJson({'bank_name': null, 'account_number': null}), isNull);
+  });
+
+  test('a member pays online where they are registered, the gym has set up its account, and nothing waits', () {
     expect(myGym().canPayOnline, isTrue);
-    expect(myGym(info: null).canPayOnline, isFalse, reason: 'no payment QR or details: at the desk');
+    expect(myGym(account: null).canPayOnline, isFalse, reason: 'no bank account set up: at the desk');
     final waiting =
         MyClaim(id: 'c1', status: ClaimStatus.pending, planName: 'Gym', months: 1, amount: 1500, jrn: 'JRN1', createdAt: DateTime.now());
     expect(myGym(claim: waiting).canPayOnline, isFalse, reason: 'one waits already');
@@ -72,7 +86,7 @@ void main() {
       expect(find.text('The price for that is Nu. 3,000.'), findsOneWidget, reason: 'they paid Nu. 2,500');
       expect(find.text('Confirm'), findsOneWidget);
       expect(find.text('Not found'), findsOneWidget);
-      expect(find.text('Add your payment QR code'), findsOneWidget, reason: 'the owner, with none yet');
+      expect(find.text('Set up your bank account'), findsOneWidget, reason: 'the owner, with none yet');
       expect(tester.takeException(), isNull);
     }
   });
@@ -92,15 +106,22 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('Membership settings: payment QR, reminder days, who answers requests to join', (tester) async {
+  testWidgets('Membership settings: the bank account, reminder days, who answers requests to join', (tester) async {
     for (final size in [const Size(1440, 1000), const Size(390, 844)]) {
       await show(tester, const MembershipSettingsScreen(venueId: 'g1'), size: size, with_: [
         ...overrides(),
         gymSettingsProvider.overrideWith(
-            (ref, id) async => const GymSettings(venueId: 'g1', reminderDays: [7, 3], joinApproval: JoinApproval.managers)),
+            (ref, id) async => const GymSettings(
+                venueId: 'g1', account: peakAccount, reminderDays: [7, 3], joinApproval: JoinApproval.managers)),
       ]);
       await tester.pumpAndSettle();
-      expect(find.text('Upload payment QR'), findsOneWidget);
+      expect(find.text('Account number'), findsOneWidget);
+      expect(find.widgetWithText(TextFormField, '200123456789'), findsOneWidget);
+      expect(find.text('Upload payment QR'), findsNothing, reason: 'no picture to upload any more');
+      await tester.scrollUntilVisible(find.text('What payers see'), 200, scrollable: find.byType(Scrollable).first);
+      expect(find.text('2001 2345 6789'), findsOneWidget, reason: 'the QR code made from the account');
+      await tester.scrollUntilVisible(find.text('Online payment gateway (RMA)'), 200, scrollable: find.byType(Scrollable).first);
+      await tester.scrollUntilVisible(find.text('7 days'), 200, scrollable: find.byType(Scrollable).first);
       FilterChip chip(String label) => tester.widget<FilterChip>(find.widgetWithText(FilterChip, label));
       expect(chip('7 days').selected, isTrue);
       expect(chip('3 days').selected, isTrue);
@@ -125,13 +146,26 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Peak Fitness'), findsOneWidget);
       expect(find.text('Choose your package'), findsOneWidget);
-      expect(find.text('Scan this in your bank app and pay Nu. 1,500'), findsOneWidget, reason: 'their usual package');
-      expect(find.text('Bank of Bhutan 200123456, Peak Fitness'), findsOneWidget);
+      expect(find.text('2001 2345 6789'), findsNothing, reason: 'the QR code comes when they go on to pay');
+      expect(find.text("I've paid: send it to the gym"), findsNothing);
+      await tester.tap(find.text('Proceed to pay Nu. 1,500'));
+      await tester.pumpAndSettle();
+      expect(find.text('Pay Nu. 1,500 in your bank app'), findsOneWidget, reason: 'their usual package');
+      await tester.scrollUntilVisible(find.text('2001 2345 6789'), 200, scrollable: find.byType(Scrollable).first);
+      expect(find.text('Bank of Bhutan'), findsOneWidget);
       await tester.scrollUntilVisible(find.text("I've paid: send it to the gym"), 200, scrollable: find.byType(Scrollable).first);
+      await tester.ensureVisible(find.text("I've paid: send it to the gym"));
+      await tester.pumpAndSettle();
       await tester.tap(find.text("I've paid: send it to the gym"));
       await tester.pumpAndSettle();
       expect(find.text('Enter the journal number from the receipt'), findsOneWidget, reason: 'nothing sent without it');
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a gym with no bank account set up: at the desk', (tester) async {
+      await showPay(tester, MyMemberships(gyms: [myGym(account: null)]));
+      await tester.pumpAndSettle();
+      expect(find.text('Peak Fitness takes payments at the front desk'), findsOneWidget);
     });
 
     testWidgets('a payment waiting: nothing to pay again', (tester) async {

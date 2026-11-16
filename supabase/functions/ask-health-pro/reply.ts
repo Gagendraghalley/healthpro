@@ -6,7 +6,7 @@ import { asObject, cleanText } from '../_shared/workers_ai.ts';
 
 /** Pages it may point to: the core's, and the modules' (the app shows a
  *  button only for those it has). */
-export const PAGES = ['sign_up', 'sign_in', 'register_venue', 'account', 'gyms', 'grounds', 'tournaments'] as const;
+export const PAGES = ['sign_up', 'sign_in', 'register_venue', 'account', 'gyms'] as const;
 export const VENUE_TYPES = ['gym'] as const;
 export const DZONGKHAGS = [
   'Bumthang',
@@ -55,18 +55,17 @@ Set "kind":
 - "other" for anything not about Health Pro or sport in Bhutan. Set "answer" to one short friendly sentence saying what you can help with.
 
 Guide:
-- About: Health Pro brings gyms, grounds and games across Bhutan into one app. Gyms are run on Health Pro now; booking grounds and following tournaments are on the ground booking website for now (pages grounds, tournaments).
+- About: Health Pro brings gyms across Bhutan into one app: gyms run their members, packages and check-ins on it, and members join, pay and check in with one QR code.
 - Finding a gym: the gyms page (gyms) lists the gyms Health Pro has checked, by dzongkhag, with each gym's packages and prices in Ngultrum. Each gym sets its own.
 - Joining a gym: with a Health Pro account, scan the gym's QR code (or open its page) and tap Ask to join; the front desk gets your details and lets you know. Or go to the gym: the front desk registers you (no account needed; your details and a photo), sells you a package for 1 to 24 months, and you pay the gym (cash, mBoB or bank transfer). You can belong to several gyms at once; each package runs to its own end.
-- Your QR code: everyone gets one Health Pro QR code that works at every gym (My QR code in the app, or the card the desk sends on WhatsApp). At a new gym the desk scans it and your details fill in, so you don't give them again.
+- Your QR code: everyone gets one Health Pro QR code that works at every gym (on My dashboard in the app, or the card the desk sends on WhatsApp). At a new gym the desk scans it and your details fill in, so you don't give them again.
 - Checking in: show your Health Pro QR code at the counter. The desk can also type your 6-character member code or find you by phone number. It works only while your package covers that day.
 - Installing the app: Health Pro is a web app. On the sign-in page tap Install app (Android, or Chrome and Edge on a computer); on an iPhone, in Safari tap Share, then Add to Home Screen, then Add.
-- Expiry and renewing: a package ends on the same date that many months later (joining on 8 November for 3 months ends on 8 February), and you can still come that day. Renew at the gym's desk, or pay online: in My gyms (my_gyms) tap Pay online, scan the gym's payment QR code in your bank app, pay, and enter the journal number (JRN); the gym checks it with the bank and confirms it, and you're told. The new package starts the day the current one ends, so no days are lost; a package that has ended can't check in until the payment is confirmed. Members with the app are reminded before it ends, on the days their gym chooses, and on its last day.
-- A lost card or a copied QR code: get a new one under My QR code, or ask the gym's desk for a new card; the old one stops working at every gym.
+- Expiry and renewing: a package ends on the same date that many months later (joining on 8 November for 3 months ends on 8 February), and you can still come that day. Renew at the gym's desk, or pay online: on My dashboard, under My gyms (my_gyms) tap Pay online, scan the gym's payment QR code in your bank app, pay, and enter the journal number (JRN); the gym checks it with the bank and confirms it, and you're told. The new package starts the day the current one ends, so no days are lost; a package that has ended can't check in until the payment is confirmed. Members with the app are reminded before it ends, on the days their gym chooses, and on its last day.
+- A lost card or a copied QR code: get a new one on My dashboard, or ask the gym's desk for a new card; the old one stops working at every gym.
 - Changes and refunds: up to your gym.
 - Putting a gym on Health Pro: sign up (sign_up), then Register your venue (register_venue), choose Gym and add your packages and prices. The Health Pro team checks the gym before visitors can see it. Then add your staff by email and choose what each role may do; the front desk registers members and checks them in.
 - Running a gym: owners get a dashboard, the members register, payments and income, reports, and Ask AI for questions about their gym.
-- Grounds: grounds are registered and booked on the ground booking website (grounds).
 - Accounts: sign up with your email: Health Pro emails you a 6-digit code, then you choose your own 6-digit code (sign_up). Sign in with your email and that code; there are no passwords, and "Forgot code?" on the sign-in page lets you choose a new one (sign_in). The account page (account) changes your details or deletes your account.
 - Privacy: a gym's staff see only their own gym's members; the QR card holds only a random code, not your details.
 

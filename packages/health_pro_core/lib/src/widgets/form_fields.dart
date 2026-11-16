@@ -80,12 +80,13 @@ class RatingPicker extends StatelessWidget {
 
 /// A photo from the gallery (or camera), made small enough to upload
 /// quickly; null when they cancel.
-Future<({Uint8List bytes, String contentType})?> pickPhoto(BuildContext context, {bool camera = false}) async {
+Future<({Uint8List bytes, String contentType})?> pickPhoto(BuildContext context,
+    {bool camera = false, int imageQuality = 80}) async {
   final file = await ImagePicker().pickImage(
     source: camera ? ImageSource.camera : ImageSource.gallery,
     maxWidth: 1600,
     maxHeight: 1600,
-    imageQuality: 80,
+    imageQuality: imageQuality,
   );
   if (file == null) return null;
   final bytes = await file.readAsBytes();
@@ -97,6 +98,30 @@ String imageContentType(Uint8List bytes) {
   if (bytes.length > 4 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) return 'image/png';
   if (bytes.length > 12 && String.fromCharCodes(bytes.sublist(8, 12)) == 'WEBP') return 'image/webp';
   return 'image/jpeg';
+}
+
+/// A short video from the gallery, of up to [maxBytes]; null when they
+/// cancel. Throws a StateError, with what to tell them, when it's too big or
+/// not a kind phones and browsers play (MP4, MOV, WebM).
+Future<({Uint8List bytes, String contentType})?> pickVideo(BuildContext context, {required int maxBytes}) async {
+  final file = await ImagePicker().pickVideo(source: ImageSource.gallery, maxDuration: const Duration(minutes: 1));
+  if (file == null) return null;
+  final mb = (maxBytes / (1024 * 1024)).round();
+  if (await file.length() > maxBytes) throw StateError('That video is too big. Choose one of up to $mb MB.');
+  final bytes = await file.readAsBytes();
+  final contentType = videoContentType(bytes);
+  if (contentType == null) throw StateError('Choose an MP4, MOV or WebM video.');
+  return (bytes: bytes, contentType: contentType);
+}
+
+/// What kind of video [bytes] are, from their first bytes; null when it's
+/// not MP4, MOV or WebM.
+String? videoContentType(Uint8List bytes) {
+  if (bytes.length > 12 && String.fromCharCodes(bytes.sublist(4, 8)) == 'ftyp') {
+    return String.fromCharCodes(bytes.sublist(8, 12)) == 'qt  ' ? 'video/quicktime' : 'video/mp4';
+  }
+  if (bytes.length > 4 && bytes[0] == 0x1A && bytes[1] == 0x45 && bytes[2] == 0xDF && bytes[3] == 0xA3) return 'video/webm';
+  return null;
 }
 
 /// A required field's label: 'Name *'.

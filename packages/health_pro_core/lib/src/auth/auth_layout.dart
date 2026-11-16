@@ -646,7 +646,11 @@ class AuthPrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = context.brand.accent;
-    return Pressable(
+    // Faded while there's nothing to press yet (not while it's working).
+    return AnimatedOpacity(
+      opacity: busy || onPressed != null ? 1 : 0.45,
+      duration: Motion.of(context, Motion.hover),
+      child: Pressable(
       enabled: !busy && onPressed != null,
       child: DecoratedBox(
       decoration: BoxDecoration(
@@ -695,6 +699,7 @@ class AuthPrimaryButton extends StatelessWidget {
                   ],
                 ),
         ),
+      ),
       ),
       ),
     );

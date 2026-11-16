@@ -627,7 +627,22 @@ class _PlanSheetState extends ConsumerState<_PlanSheet> {
 
 // ─── Payments & income ─────────────────────────────────────────────────────
 
-const _monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const _monthNames = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec'
+];
+
+enum _IncomePeriod { daily, monthly, custom }
 
 Color methodColor(PaymentMethod m) => switch (m.value) {
       'cash' => BrandColors.green,
@@ -649,7 +664,12 @@ class IncomeScreen extends ConsumerStatefulWidget {
 }
 
 class _IncomeScreenState extends ConsumerState<IncomeScreen> {
-  late DateTime _month = DateTime(BhutanTime.today().year, BhutanTime.today().month);
+  late DateTime _month =
+      DateTime(BhutanTime.today().year, BhutanTime.today().month);
+  _IncomePeriod _period = _IncomePeriod.monthly;
+  DateTime _day = BhutanTime.today();
+  DateTime? _rangeStart;
+  DateTime? _rangeEnd;
   String _search = '';
   PaymentMethod? _method;
 
@@ -657,12 +677,29 @@ class _IncomeScreenState extends ConsumerState<IncomeScreen> {
   Widget build(BuildContext context) {
     final today = BhutanTime.today();
     final thisMonth = DateTime(today.year, today.month);
-    final months = [for (var i = 11; i >= 0; i--) DateTime(thisMonth.year, thisMonth.month - i)];
+    final months = [
+      for (var i = 11; i >= 0; i--)
+        DateTime(thisMonth.year, thisMonth.month - i)
+    ];
+    final start = switch (_period) {
+      _IncomePeriod.daily => DateTime(_day.year, _day.month, _day.day),
+      _IncomePeriod.monthly => months.first,
+      _IncomePeriod.custom =>
+        _rangeStart ?? DateTime(today.year, today.month, today.day),
+    };
+    final endExclusive = switch (_period) {
+      _IncomePeriod.daily => DateTime(_day.year, _day.month, _day.day + 1),
+      _IncomePeriod.monthly => DateTime(thisMonth.year, thisMonth.month + 1),
+      _IncomePeriod.custom => DateTime(
+          (_rangeEnd ?? _rangeStart ?? today).year,
+          (_rangeEnd ?? _rangeStart ?? today).month,
+          (_rangeEnd ?? _rangeStart ?? today).day + 1),
+    };
     final query = (
       venueId: widget.venueId,
       moduleKey: gymModuleKey,
-      from: bhutanMidnightUtc(months.first),
-      to: bhutanMidnightUtc(DateTime(thisMonth.year, thisMonth.month + 1)),
+      from: bhutanMidnightUtc(start),
+      to: bhutanMidnightUtc(endExclusive),
     );
     return GymStaffPage(
       venueId: widget.venueId,
@@ -680,42 +717,138 @@ class _IncomeScreenState extends ConsumerState<IncomeScreen> {
               return DateTime(d.year, d.month);
             }
 
-            final totals = [for (final m in months) paid.where((p) => monthOf(p) == m).fold(0, (s, p) => s + p.amount)];
+            final totals = [
+              for (final m in months)
+                paid
+                    .where((p) => monthOf(p) == m)
+                    .fold(0, (s, p) => s + p.amount)
+            ];
             final index = months.indexOf(_month).clamp(0, 11);
-            final inMonth = paid.where((p) => monthOf(p) == _month).toList();
-            final summary = IncomeSummary.of(inMonth);
+            final inPeriod = paid.where((p) {
+              final local = BhutanTime.toBhutan(p.createdAt);
+              final date = DateTime(local.year, local.month, local.day);
+              return !date.isBefore(start) &&
+                  date.isBefore(endExclusive) &&
+                  (_period != _IncomePeriod.monthly || monthOf(p) == _month);
+            }).toList();
+            final summary = IncomeSummary.of(inPeriod);
             final before = index > 0 ? totals[index - 1] : null;
-            final change = before == null || before == 0 ? null : (summary.total - before) / before;
+            final change = before == null || before == 0
+                ? null
+                : (summary.total - before) / before;
             final yearToDate = [
               for (var i = 0; i < 12; i++)
                 if (months[i].year == thisMonth.year) totals[i],
             ].fold(0, (s, v) => s + v);
-            final shown = inMonth.where((p) {
+            final shown = inPeriod.where((p) {
               if (_method != null && p.method != _method) return false;
               if (_search.isEmpty) return true;
               final q = _search.toLowerCase();
-              return (p.payerName ?? '').toLowerCase().contains(q) || (p.reference ?? '').toLowerCase().contains(q);
+              return (p.payerName ?? '').toLowerCase().contains(q) ||
+                  (p.reference ?? '').toLowerCase().contains(q);
             }).toList();
             return RefreshIndicator(
-              onRefresh: () async => ref.invalidate(venuePaymentsProvider(query)),
+              onRefresh: () async =>
+                  ref.invalidate(venuePaymentsProvider(query)),
               child: ListView(
                 padding: pagePadding(context, bottom: 40),
                 children: [
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      IconButton.filledTonal(
-                        tooltip: 'Previous month',
-                        icon: const Icon(Icons.chevron_left_rounded),
-                        onPressed: index == 0 ? null : () => setState(() => _month = months[index - 1]),
-                      ),
-                      Expanded(child: Text(formatMonth(_month), textAlign: TextAlign.center, style: context.text.titleLarge)),
-                      IconButton.filledTonal(
-                        tooltip: 'Next month',
-                        icon: const Icon(Icons.chevron_right_rounded),
-                        onPressed: _month == thisMonth ? null : () => setState(() => _month = months[index + 1]),
+                      ChoiceChip(
+                          label: const Text('Daily'),
+                          selected: _period == _IncomePeriod.daily,
+                          onSelected: (_) => setState(() {
+                                _period = _IncomePeriod.daily;
+                                _search = '';
+                                _method = null;
+                              })),
+                      ChoiceChip(
+                          label: const Text('Monthly'),
+                          selected: _period == _IncomePeriod.monthly,
+                          onSelected: (_) => setState(() {
+                                _period = _IncomePeriod.monthly;
+                                _search = '';
+                                _method = null;
+                              })),
+                      OutlinedButton.icon(
+                        icon:
+                            const Icon(Icons.calendar_today_rounded, size: 18),
+                        label: Text(_period == _IncomePeriod.daily
+                            ? formatDate(_day)
+                            : _period == _IncomePeriod.custom &&
+                                    _rangeStart != null
+                                ? '${formatDate(_rangeStart!)} – ${formatDate(_rangeEnd ?? _rangeStart!)}'
+                                : 'Custom dates'),
+                        onPressed: () async {
+                          if (_period == _IncomePeriod.daily) {
+                            final selected = await showDatePicker(
+                              context: context,
+                              initialDate: _day,
+                              firstDate: DateTime(2000),
+                              lastDate: today,
+                            );
+                            if (selected != null && mounted) {
+                              setState(() => _day = selected);
+                            }
+                            return;
+                          }
+                          final picked = await showDateRangePicker(
+                            context: context,
+                            firstDate: DateTime(2000),
+                            lastDate: today,
+                            initialDateRange: DateTimeRange(
+                              start: _rangeStart ?? _month,
+                              end: _rangeEnd ?? today,
+                            ),
+                          );
+                          if (picked != null && mounted) {
+                            setState(() {
+                              _rangeStart = picked.start;
+                              _rangeEnd = picked.end;
+                              _period = _IncomePeriod.custom;
+                              _search = '';
+                              _method = null;
+                            });
+                          }
+                        },
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  Text('Statement of payments recorded by this gym',
+                      style: TextStyle(
+                          color: context.brand.muted, fontSize: 13)),
+                  const SizedBox(height: 12),
+                  if (_period == _IncomePeriod.monthly)
+                    Row(
+                      children: [
+                        IconButton.filledTonal(
+                          tooltip: 'Previous month',
+                          icon: const Icon(Icons.chevron_left_rounded),
+                          onPressed: index == 0
+                              ? null
+                              : () =>
+                                  setState(() => _month = months[index - 1]),
+                        ),
+                        Expanded(
+                            child: Text(formatMonth(_month),
+                                textAlign: TextAlign.center,
+                                style: context.text.titleLarge)),
+                        IconButton.filledTonal(
+                          tooltip: 'Next month',
+                          icon: const Icon(Icons.chevron_right_rounded),
+                          onPressed: _month == thisMonth
+                              ? null
+                              : () =>
+                                  setState(() => _month = months[index + 1]),
+                        ),
+                      ],
+                    ),
                   const SizedBox(height: 16),
                   LayoutBuilder(
                     builder: (context, c) => ConsoleCells(
@@ -728,7 +861,7 @@ class _IncomeScreenState extends ConsumerState<IncomeScreen> {
                           count: summary.total,
                           format: (v) => formatNu(v.round()),
                           label: 'Received',
-                          note: formatMonth(_month),
+                          note: _periodLabel(),
                           trailing: change == null ? null : _Change(change),
                         ),
                         ConsoleKpi(
@@ -737,81 +870,145 @@ class _IncomeScreenState extends ConsumerState<IncomeScreen> {
                           value: '${summary.count}',
                           count: summary.count,
                           label: 'Payments',
-                          note: summary.count == 0 ? 'None yet' : 'Average ${formatNu((summary.total / summary.count).round())}',
+                          note: summary.count == 0
+                              ? 'None yet'
+                              : 'Average ${formatNu((summary.total / summary.count).round())}',
                         ),
                         ConsoleKpi(
-                          icon: Icons.history_rounded,
+                          icon: _period == _IncomePeriod.monthly
+                              ? Icons.history_rounded
+                              : Icons.account_balance_rounded,
                           color: BrandColors.green,
-                          value: before == null ? '—' : formatNu(before),
-                          count: before,
+                          value: _period == _IncomePeriod.monthly
+                              ? before == null
+                                  ? '—'
+                                  : formatNu(before)
+                              : formatNu(summary.byMethod[PaymentMethod.bank] ?? 0),
+                          count: _period == _IncomePeriod.monthly
+                              ? before
+                              : summary.byMethod[PaymentMethod.bank] ?? 0,
                           format: (v) => formatNu(v.round()),
-                          label: 'Month before',
-                          note: index > 0 ? formatMonth(months[index - 1]) : 'Not in range',
+                          label: _period == _IncomePeriod.monthly
+                              ? 'Month before'
+                              : 'Bank transfer',
+                          note: _period == _IncomePeriod.monthly && index > 0
+                              ? formatMonth(months[index - 1])
+                              : _period == _IncomePeriod.monthly
+                                  ? 'Monthly comparison'
+                                  : 'Recorded in this period',
                         ),
                         ConsoleKpi(
-                          icon: Icons.calendar_month_rounded,
+                          icon: _period == _IncomePeriod.monthly
+                              ? Icons.calendar_month_rounded
+                              : Icons.payments_rounded,
                           color: const Color(0xFF7C4DFF),
-                          value: formatNu(yearToDate),
-                          count: yearToDate,
+                          value: formatNu(_period == _IncomePeriod.monthly
+                              ? yearToDate
+                              : summary.byMethod[PaymentMethod.cash] ?? 0),
+                          count: _period == _IncomePeriod.monthly
+                              ? yearToDate
+                              : summary.byMethod[PaymentMethod.cash] ?? 0,
                           format: (v) => formatNu(v.round()),
-                          label: 'This year so far',
-                          note: '${thisMonth.year}',
+                          label: _period == _IncomePeriod.monthly
+                              ? 'This year so far'
+                              : 'Cash received',
+                          note: _period == _IncomePeriod.monthly
+                              ? '${thisMonth.year}'
+                              : 'Recorded in this period',
                         ),
                       ]),
                     ),
                   ),
                   const SizedBox(height: 20),
-                  ResponsiveColumns(
-                    breakpoint: 1000,
-                    flex: (3, 2),
-                    first: [
-                      FadeSlideIn(
-                        child: ConsoleCard(
-                          icon: Icons.bar_chart_rounded,
-                          title: 'Last 12 months',
-                          trailing: Text('Tap a month', style: TextStyle(color: context.brand.muted, fontSize: 12.5)),
-                          child: ConsoleBarChart(
-                            name: 'Income by month',
-                            height: 230,
-                            points: [
-                              for (var i = 0; i < 12; i++) (label: _monthNames[months[i].month - 1], value: totals[i]),
-                            ],
-                            format: (v) => compactNu(v),
-                            highlight: index,
-                            onTap: (i) => setState(() => _month = months[i]),
+                  if (_period == _IncomePeriod.monthly)
+                    ResponsiveColumns(
+                      breakpoint: 1000,
+                      flex: (3, 2),
+                      first: [
+                        FadeSlideIn(
+                          child: ConsoleCard(
+                            icon: Icons.bar_chart_rounded,
+                            title: 'Last 12 months',
+                            trailing: Text('Tap a month',
+                                style: TextStyle(
+                                    color: context.brand.muted,
+                                    fontSize: 12.5)),
+                            child: ConsoleBarChart(
+                              name: 'Income by month',
+                              height: 230,
+                              points: [
+                                for (var i = 0; i < 12; i++)
+                                  (
+                                    label: _monthNames[months[i].month - 1],
+                                    value: totals[i]
+                                  ),
+                              ],
+                              format: (v) => compactNu(v),
+                              highlight: index,
+                              onTap: (i) => setState(() => _month = months[i]),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                    second: [
-                      FadeSlideIn(
-                        delay: const Duration(milliseconds: 80),
-                        child: ConsoleCard(
-                          icon: Icons.pie_chart_outline_rounded,
-                          title: 'How they paid',
-                          child: summary.total == 0
-                              ? Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 24),
-                                  child: Text('No payments in ${formatMonth(_month)}.', style: TextStyle(color: context.brand.muted)),
-                                )
-                              : Column(
-                                  children: [
-                                    for (final m in PaymentMethod.values)
-                                      if ((summary.byMethod[m] ?? 0) > 0)
-                                        ConsoleShareRow(
-                                          color: methodColor(m),
-                                          label: m.label,
-                                          value: formatNu(summary.byMethod[m]!),
-                                          share: summary.byMethod[m]! / summary.total,
-                                        ),
-                                  ],
-                                ),
+                      ],
+                      second: [
+                        FadeSlideIn(
+                          delay: const Duration(milliseconds: 80),
+                          child: ConsoleCard(
+                            icon: Icons.pie_chart_outline_rounded,
+                            title: 'How they paid',
+                            child: summary.total == 0
+                                ? Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 24),
+                                    child: Text(
+                                        'No payments in ${formatMonth(_month)}.',
+                                        style: TextStyle(
+                                            color: context.brand.muted)),
+                                  )
+                                : Column(
+                                    children: [
+                                      for (final m in PaymentMethod.values)
+                                        if ((summary.byMethod[m] ?? 0) > 0)
+                                          ConsoleShareRow(
+                                            color: methodColor(m),
+                                            label: m.label,
+                                            value:
+                                                formatNu(summary.byMethod[m]!),
+                                            share: summary.byMethod[m]! /
+                                                summary.total,
+                                          ),
+                                    ],
+                                  ),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  SectionTitle('Payments in ${formatMonth(_month)}',
-                      trailing: Text('${shown.length} of ${inMonth.length}', style: TextStyle(color: context.brand.muted))),
+                      ],
+                    ),
+                  if (_period != _IncomePeriod.monthly)
+                    ConsoleCard(
+                      icon: Icons.pie_chart_outline_rounded,
+                      title: 'How they paid',
+                      child: summary.total == 0
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              child: Text('No recorded payments for this period.',
+                                  style: TextStyle(color: context.brand.muted)),
+                            )
+                          : Column(
+                              children: [
+                                for (final m in PaymentMethod.values)
+                                  if ((summary.byMethod[m] ?? 0) > 0)
+                                    ConsoleShareRow(
+                                      color: methodColor(m),
+                                      label: m.label,
+                                      value: formatNu(summary.byMethod[m]!),
+                                      share: summary.byMethod[m]! / summary.total,
+                                    ),
+                              ],
+                            ),
+                    ),
+                  SectionTitle('Payments · ${_periodLabel()}',
+                      trailing: Text('${shown.length} of ${inPeriod.length}',
+                          style: TextStyle(color: context.brand.muted))),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -828,10 +1025,16 @@ class _IncomeScreenState extends ConsumerState<IncomeScreen> {
                           onChanged: (v) => setState(() => _search = v.trim()),
                         ),
                       ),
-                      ChoiceChip(label: const Text('All'), selected: _method == null, onSelected: (_) => setState(() => _method = null)),
+                      ChoiceChip(
+                          label: const Text('All'),
+                          selected: _method == null,
+                          onSelected: (_) => setState(() => _method = null)),
                       for (final m in PaymentMethod.values)
                         if (summary.byMethod.containsKey(m))
-                          ChoiceChip(label: Text(m.label), selected: _method == m, onSelected: (_) => setState(() => _method = m)),
+                          ChoiceChip(
+                              label: Text(m.label),
+                              selected: _method == m,
+                              onSelected: (_) => setState(() => _method = m)),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -839,7 +1042,10 @@ class _IncomeScreenState extends ConsumerState<IncomeScreen> {
                     SectionCard(
                       child: Padding(
                         padding: const EdgeInsets.all(12),
-                        child: Text(inMonth.isEmpty ? 'No payments this month.' : 'No payments match.',
+                        child: Text(
+                            inPeriod.isEmpty
+                                ? 'No recorded payments for this period.'
+                                : 'No payments match.',
                             style: TextStyle(color: context.brand.muted)),
                       ),
                     )
@@ -853,6 +1059,14 @@ class _IncomeScreenState extends ConsumerState<IncomeScreen> {
       ),
     );
   }
+
+  String _periodLabel() => switch (_period) {
+        _IncomePeriod.daily => formatDate(_day),
+        _IncomePeriod.monthly => formatMonth(_month),
+        _IncomePeriod.custom => _rangeStart == null
+            ? 'Choose dates'
+            : '${formatDate(_rangeStart!)} – ${formatDate(_rangeEnd ?? _rangeStart!)}',
+      };
 }
 
 /// '+12%' in green, '-8%' in red.
@@ -867,14 +1081,18 @@ class _Change extends StatelessWidget {
     final color = up ? context.brand.success : context.brand.danger;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(20)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(up ? Icons.trending_up_rounded : Icons.trending_down_rounded, size: 15, color: color),
+          Icon(up ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+              size: 15, color: color),
           const SizedBox(width: 3),
           Text('${up ? '+' : ''}${(change * 100).round()}%',
-              style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 12)),
+              style: TextStyle(
+                  color: color, fontWeight: FontWeight.w800, fontSize: 12)),
         ],
       ),
     );
@@ -907,7 +1125,8 @@ class _PaymentsTable extends StatelessWidget {
             final n = name(p);
             final carry = [
               if (!DataGrid.shows(context, 'method')) p.method.label,
-              if (!DataGrid.shows(context, 'reference') && p.reference != null) p.reference!,
+              if (!DataGrid.shows(context, 'reference') && p.reference != null)
+                p.reference!,
               if (!DataGrid.shows(context, 'when')) formatMoment(p.createdAt),
             ];
             return Row(
@@ -915,7 +1134,9 @@ class _PaymentsTable extends StatelessWidget {
                 CircleAvatar(
                   radius: 18,
                   backgroundColor: color.withValues(alpha: 0.14),
-                  child: Text(n.isEmpty ? '?' : n[0].toUpperCase(), style: TextStyle(color: color, fontWeight: FontWeight.w800)),
+                  child: Text(n.isEmpty ? '?' : n[0].toUpperCase(),
+                      style:
+                          TextStyle(color: color, fontWeight: FontWeight.w800)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -926,10 +1147,13 @@ class _PaymentsTable extends StatelessWidget {
                       Text(n.isEmpty ? 'Member' : n,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700, color: brand.ink)),
                       if (carry.isNotEmpty)
                         Text(carry.join(' · '),
-                            maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.muted, fontSize: 13)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: brand.muted, fontSize: 13)),
                     ],
                   ),
                 ),
@@ -943,7 +1167,8 @@ class _PaymentsTable extends StatelessWidget {
           flex: 2,
           showFrom: 600,
           sortBy: (p) => p.method.label,
-          cell: (context, p) => StatusChip(label: p.method.label, color: methodColor(p.method)),
+          cell: (context, p) =>
+              StatusChip(label: p.method.label, color: methodColor(p.method)),
         ),
         GridColumn(
           key: 'reference',
@@ -967,7 +1192,8 @@ class _PaymentsTable extends StatelessWidget {
           flex: 3,
           showFrom: 760,
           sortBy: (p) => p.createdAt,
-          cell: (context, p) => Text(formatMoment(p.createdAt), style: TextStyle(color: brand.body)),
+          cell: (context, p) => Text(formatMoment(p.createdAt),
+              style: TextStyle(color: brand.body)),
         ),
         GridColumn(
           key: 'amount',
@@ -976,7 +1202,11 @@ class _PaymentsTable extends StatelessWidget {
           alignEnd: true,
           sortBy: (p) => p.amount,
           cell: (context, p) => Text(formatNu(p.amount),
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: brand.ink, fontFeatures: const [FontFeature.tabularFigures()])),
+              style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                  color: brand.ink,
+                  fontFeatures: const [FontFeature.tabularFigures()])),
         ),
       ],
     );

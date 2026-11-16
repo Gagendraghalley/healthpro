@@ -138,9 +138,8 @@ create table if not exists public.reviews (
   constraint reviews_one_per_user unique (venue_id, user_id)
 );
 
--- Every payment at a venue, in any module (gym fees today; ground booking
--- deposits once ground booking moves in). Written only by the modules'
--- functions. Kept when an account is deleted, without the person.
+-- Every payment at a venue, in any module (gym fees today). Written only
+-- by the modules' functions. Kept when an account is deleted, without the person.
 create table if not exists public.payments (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid constraint payments_user_id_fkey references public.profiles (id) on delete set null,

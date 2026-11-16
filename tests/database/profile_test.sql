@@ -48,6 +48,24 @@ select public.update_venue(:'gym', '{"opening_hours": null, "facilities": [], "c
 select t.eq((select (opening_hours is null, cardinality(facilities), contact_person is null)::text from public.venues where id = :'gym'),
             '(t,0,t)', 'and cleared');
 
+-- ---- The promotional video: one clip, in the gym's folder ---------------------
+select t.as_user('00000000-0000-0000-0000-000000000901');
+select t.fails(format($$select public.set_venue_promo_video(%L, %L)$$, :'gym', :'gym' || '/promo.mp4'), 'Upload the video');
+insert into storage.objects (bucket_id, name) values ('venue-videos', :'gym' || '/promo.mp4');
+select public.set_venue_promo_video(:'gym', :'gym' || '/promo.mp4');
+select t.eq((select promo_video from public.venues where id = :'gym'), :'gym' || '/promo.mp4', 'the owner sets the promotional video');
+select t.fails(format($$select public.set_venue_promo_video(%L, 'https://evil.example/v.mp4')$$, :'gym'), 'Upload the video');
+select t.fails(format($$select public.set_venue_promo_video(%L, %L)$$, :'gym', :'gym' || '/promo.exe'), 'Upload the video');
+insert into storage.objects (bucket_id, name) values ('venue-videos', :'gym' || '/next.mp4');
+select t.fails(format($$insert into storage.objects (bucket_id, name) values ('venue-videos', %L)$$, :'gym' || '/third.mp4'),
+               'row-level security');
+select t.as_user('00000000-0000-0000-0000-000000000903');
+select t.fails(format($$select public.set_venue_promo_video(%L, null)$$, :'gym'), 'can edit this venue');
+select t.fails($$insert into storage.objects (bucket_id, name) values ('venue-videos', 'not-a-venue/a.mp4')$$, 'row-level security');
+select t.as_user('00000000-0000-0000-0000-000000000901');
+select public.set_venue_promo_video(:'gym', null);
+select t.eq((select promo_video from public.venues where id = :'gym'), null, '...and removes it');
+
 -- ---- Prices, for the list of gyms -------------------------------------------
 select public.gym_save_plan(:'gym', null, 'Monthly', null, 30, 2000, true) as plan \gset
 select public.gym_save_plan(:'gym', null, 'Yearly', null, 365, 10000, true);

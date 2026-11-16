@@ -193,6 +193,8 @@ class TrainerArrival extends CheckInOutcome {
   final String trainerId;
   final String? photoUrl;
   final int earlierToday;
+  final bool alreadyMarked;
+  final DateTime? markedAt;
 
   /// Their times at this gym today.
   final List<OpenPeriod> slotsToday;
@@ -204,6 +206,8 @@ class TrainerArrival extends CheckInOutcome {
     required this.trainerId,
     this.photoUrl,
     this.earlierToday = 0,
+    this.alreadyMarked = false,
+    this.markedAt,
     this.slotsToday = const [],
     this.alsoMember = false,
     this.personToken,
@@ -214,6 +218,8 @@ class TrainerArrival extends CheckInOutcome {
         trainerId: json['trainer_id'] as String,
         photoUrl: json['photo_url'] as String?,
         earlierToday: (json['earlier_today'] as num?)?.toInt() ?? 0,
+        alreadyMarked: json['already_marked'] as bool? ?? false,
+        markedAt: json['marked_at'] == null ? null : DateTime.parse(json['marked_at'] as String),
         slotsToday: [
           for (final s in (json['slots_today'] as List? ?? const []))
             if ((OpenPeriod.parse((s as List)[0] as String?), OpenPeriod.parse(s[1] as String?)) case (final int a, final int b))

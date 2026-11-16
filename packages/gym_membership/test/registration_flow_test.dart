@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_membership/gym_membership.dart';
+import 'package:gym_membership/src/data/online_payments.dart';
 import 'package:gym_membership/src/screens/member_registered_screen.dart';
 import 'package:gym_membership/src/widgets/package_fields.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -112,6 +113,38 @@ void main() {
     expect(sale?.months, 3);
     // The amount follows the package until the desk types its own.
     expect(sale?.amount, 4500);
+  });
+
+  testWidgets('the desk can show the gym QR with the amount while adding or renewing a package', (tester) async {
+    tester.view.physicalSize = const Size(900, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        gymPlansProvider.overrideWith((ref, q) async => plans),
+        gymSettingsProvider.overrideWith((ref, id) async => const GymSettings(
+            venueId: 'g1', account: PaymentAccount(bankName: 'Bank of Bhutan', accountNumber: '200123456789', accountName: 'Peak Fitness'))),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: Form(
+            child: PackageFields(venueId: 'g1', start: DateTime(2026, 11, 8), onChanged: (_) {}),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(SearchableDropdown<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Standard Membership').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bank transfer'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(QrImageView), findsOneWidget);
+    expect(find.text('Nu. 1,500'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   for (final (name, size) in [('computer', const Size(1440, 1000)), ('phone', const Size(390, 844))]) {

@@ -1,5 +1,5 @@
 name: gym_membership
-description: Health Pro module 2 - gym plans, membership requests, payment confirmation, renewals, QR check-in and the gym owner's dashboard.
+description: Health Pro gym module - gym plans, membership requests, payment confirmation, renewals, QR check-in and the gym owner's dashboard.
 publish_to: 'none'
 version: 1.0.0
 

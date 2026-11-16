@@ -15,28 +15,26 @@ import '../widgets/trainer_widgets.dart';
 /// A trainer's own page: their profile and certificates, each gym they
 /// train at (or asked to: whether it verified them), their times there,
 /// their attendance there gym by gym, their members there, and their
-/// reviews. Someone who isn't a trainer yet is offered to become one.
+/// reviews. A verified trainer is public whether they applied themselves or
+/// were added by a gym.
 class TrainerHomeScreen extends ConsumerWidget {
   const TrainerHomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final training = ref.watch(myTrainingProvider);
     return AppPage(
-      title: 'Trainer profile',
-      maxWidth: 1100,
+      title: training.valueOrNull?.joinedPublicly == true ? 'Trainer profile' : 'My training',
       body: AsyncValueView<MyTraining>(
-        value: ref.watch(myTrainingProvider),
+        value: training,
         onRetry: () => ref.invalidate(myTrainingProvider),
         data: (mine) {
           final profile = mine.profile;
           if (profile == null) {
             return EmptyState(
               icon: Icons.sports_rounded,
-              title: 'Train members at Health Pro gyms',
-              message: 'Make your trainer profile, add your certificates, and ask the gyms you work at to verify you. '
-                  'Members can then choose you as their trainer.',
-              actionLabel: 'Make my trainer profile',
-              onAction: () => context.go(GymRoutes.trainerProfile),
+              title: 'No trainer profile yet',
+              message: 'Open a gym\'s public page and apply as a trainer to set up your profile.',
             );
           }
           return RefreshIndicator(
@@ -44,30 +42,58 @@ class TrainerHomeScreen extends ConsumerWidget {
             child: ListView(
               padding: pagePadding(context),
               children: [
-                _ProfileHeader(profile: profile),
-                const SizedBox(height: 8),
-                _Certificates(certificates: mine.certificates),
+                if (!mine.joinedPublicly)
+                  SectionCard(
+                    padding: const EdgeInsets.all(14),
+                    child: const InfoRow(
+                      icon: Icons.lock_outline_rounded,
+                      text: 'Your trainer profile becomes public when a gym verifies you. It is not listed while you only have pending requests.',
+                    ),
+                  ),
+                _ProfileHeader(profile: profile, publicProfile: mine.joinedPublicly),
+                const SizedBox(height: 16),
+                _TrainerSummary(
+                  activeGyms: mine.gyms.where((g) => g.status == TrainerStatus.verified).length,
+                  pendingGyms: mine.gyms.where((g) => g.status == TrainerStatus.pending).length,
+                  attendanceDays: mine.gyms.fold<int>(
+                    0,
+                    (sum, g) => sum +
+                        (g.status == TrainerStatus.verified
+                            ? trainerAttendanceDaysLast30(g.attendance, BhutanTime.today())
+                            : 0),
+                  ),
+                  members: mine.gyms
+                      .where((g) => g.status == TrainerStatus.verified)
+                      .fold<int>(0, (sum, g) => sum + g.members.length),
+                ),
+                _Certificates(certificates: mine.certificates, canEdit: mine.joinedPublicly),
                 SectionTitle(
-                  'Gyms',
+                  'Your gyms',
                   trailing: TextButton.icon(
                     onPressed: () => _askGym(context, ref, mine),
                     icon: const Icon(Icons.add_business_rounded, size: 18),
                     label: const Text('Train at a gym'),
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text('Schedules, attendance and member assignments for each gym.',
+                      style: TextStyle(color: context.brand.muted)),
+                ),
                 if (mine.gyms.isEmpty)
                   const FormHint('Ask the gyms you work at to verify you. Each gym checks your certificates itself.')
                 else
                   ResponsiveGrid(
                     minItemWidth: 340,
-                    maxColumns: 2,
+                    maxColumns: 3,
                     equalHeight: false,
                     children: [for (final g in mine.gyms) _MyGymCard(gym: g)],
                   ),
-                if (mine.reviews.isNotEmpty) ...[
-                  SectionTitle('Reviews (${mine.reviews.length})'),
+                SectionTitle('Reviews (${mine.reviews.length})'),
+                if (mine.reviews.isEmpty)
+                  const FormHint('Reviews from members you have trained with will appear here.')
+                else
                   _ReviewList(reviews: mine.reviews),
-                ],
                 const SizedBox(height: 24),
               ],
             ),
@@ -133,8 +159,9 @@ class TrainerHomeScreen extends ConsumerWidget {
 
 class _ProfileHeader extends StatelessWidget {
   final TrainerProfile profile;
+  final bool publicProfile;
 
-  const _ProfileHeader({required this.profile});
+  const _ProfileHeader({required this.profile, required this.publicProfile});
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +171,15 @@ class _ProfileHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: StatusChip(
+              label: publicProfile ? 'Public trainer profile' : 'Private trainer profile',
+              color: publicProfile ? brand.success : brand.muted,
+              icon: publicProfile ? Icons.public_rounded : Icons.lock_outline_rounded,
+            ),
+          ),
+          const SizedBox(height: 12),
           Row(
             children: [
               TrainerAvatar(name: profile.name, photoUrl: profile.photoUrl, size: 72),
@@ -169,31 +205,88 @@ class _ProfileHeader extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilledButton.tonalIcon(
-                onPressed: () => context.go(GymRoutes.trainerProfile),
-                icon: const Icon(Icons.edit_outlined, size: 18),
-                label: const Text('Edit profile'),
-              ),
-              OutlinedButton(
-                onPressed: () => context.push(GymRoutes.trainerFor(profile.userId)),
-                child: const Text('See my public profile'),
-              ),
-            ],
-          ),
+          if (publicProfile)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: () => context.go(GymRoutes.trainerProfile),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Edit profile'),
+                ),
+                OutlinedButton(
+                  onPressed: () => context.push(GymRoutes.trainerFor(profile.userId)),
+                  child: const Text('See my public profile'),
+                ),
+              ],
+            ),
         ],
       ),
     );
   }
 }
 
+class _TrainerSummary extends StatelessWidget {
+  final int activeGyms;
+  final int pendingGyms;
+  final int attendanceDays;
+  final int members;
+
+  const _TrainerSummary({
+    required this.activeGyms,
+    required this.pendingGyms,
+    required this.attendanceDays,
+    required this.members,
+  });
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) => ConsoleCells(
+          columns: constraints.maxWidth >= 900 ? 4 : 2,
+          children: staggered([
+            ConsoleKpi(
+              icon: Icons.fitness_center_rounded,
+              color: BrandColors.orange,
+              value: '$activeGyms',
+              count: activeGyms,
+              label: 'Active gyms',
+              note: pendingGyms == 0 ? 'No requests waiting' : '$pendingGyms requests waiting',
+            ),
+            ConsoleKpi(
+              icon: Icons.event_available_rounded,
+              color: BrandColors.blue,
+              value: '$attendanceDays',
+              count: attendanceDays,
+              label: 'Attendance days',
+              note: 'Across active gyms · last 30 days',
+            ),
+            ConsoleKpi(
+              icon: Icons.groups_rounded,
+              color: BrandColors.green,
+              value: '$members',
+              count: members,
+              label: 'Current members',
+              note: 'Across active gyms',
+            ),
+            ConsoleKpi(
+              icon: Icons.workspace_premium_rounded,
+              color: BrandColors.amber,
+              value: '$pendingGyms',
+              count: pendingGyms,
+              label: 'Pending requests',
+              note: pendingGyms == 0 ? 'All caught up' : 'Waiting for gym review',
+            ),
+          ]),
+        ),
+      );
+}
+
 class _Certificates extends ConsumerWidget {
   final List<TrainerCertificate> certificates;
+  final bool canEdit;
 
-  const _Certificates({required this.certificates});
+  const _Certificates({required this.certificates, required this.canEdit});
 
   Future<void> _add(BuildContext context, WidgetRef ref) async {
     final title = TextEditingController();
@@ -263,14 +356,16 @@ class _Certificates extends ConsumerWidget {
       children: [
         SectionTitle(
           'Certificates',
-          trailing: TextButton.icon(
+          trailing: canEdit ? TextButton.icon(
             onPressed: () => _add(context, ref),
             icon: const Icon(Icons.add_rounded, size: 18),
             label: const Text('Add'),
-          ),
+          ) : null,
         ),
         if (certificates.isEmpty)
-          const FormHint('Add your certificates: gyms check them before they verify you, and members see them.')
+          FormHint(canEdit
+              ? 'Add your certificates: gyms check them before they verify you, and members see them.'
+              : 'Your gym has not added any certificates yet.')
         else
           SectionCard(
             padding: const EdgeInsets.symmetric(vertical: 6),
@@ -290,14 +385,15 @@ class _Certificates extends ConsumerWidget {
                             icon: const Icon(Icons.open_in_new_rounded),
                             onPressed: () => openExternal(context, Uri.parse(c.fileUrl!)),
                           ),
-                        IconButton(
-                          tooltip: 'Remove',
-                          icon: const Icon(Icons.delete_outline_rounded),
-                          onPressed: () async {
-                            final ok = await runAction(context, () => ref.read(gymRepositoryProvider).removeCertificate(c.id));
-                            if (ok) ref.invalidate(myTrainingProvider);
-                          },
-                        ),
+                        if (canEdit)
+                          IconButton(
+                            tooltip: 'Remove',
+                            icon: const Icon(Icons.delete_outline_rounded),
+                            onPressed: () async {
+                              final ok = await runAction(context, () => ref.read(gymRepositoryProvider).removeCertificate(c.id));
+                              if (ok) ref.invalidate(myTrainingProvider);
+                            },
+                          ),
                       ],
                     ),
                   ),
@@ -319,9 +415,11 @@ class _MyGymCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
+    final recentAttendance = uniqueTrainerAttendanceEntries(gym.attendance);
     final color = switch (gym.status) {
       TrainerStatus.verified => brand.success,
       TrainerStatus.pending => brand.warning,
+      TrainerStatus.inactive => brand.muted,
       _ => brand.danger,
     };
     return SectionCard(
@@ -348,10 +446,15 @@ class _MyGymCard extends ConsumerWidget {
             Text('"${gym.decisionNote}"', style: TextStyle(color: brand.body, fontStyle: FontStyle.italic)),
           ],
           const SizedBox(height: 12),
-          Text('Your times', style: TextStyle(color: brand.muted, fontWeight: FontWeight.w700)),
+          Text(gym.status == TrainerStatus.inactive ? 'Schedule at this gym' : 'Your times',
+              style: TextStyle(color: brand.muted, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
-          WeekSlotsView(slots: gym.slots),
-          if (gym.status != TrainerStatus.rejected)
+          if (gym.status == TrainerStatus.inactive)
+            Text('This gym made your trainer role inactive. Contact them if you would like to return.',
+                style: TextStyle(color: brand.muted))
+          else
+            WeekSlotsView(slots: gym.slots),
+          if (gym.status != TrainerStatus.rejected && gym.status != TrainerStatus.inactive)
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
@@ -364,53 +467,74 @@ class _MyGymCard extends ConsumerWidget {
             const Divider(height: 20),
             Row(
               children: [
-                Expanded(child: _Stat(value: '${gym.attendance30Days}', label: 'days here, last 30')),
+                Expanded(
+                    child: _Stat(
+                        value: '${trainerAttendanceDaysLast30(gym.attendance, BhutanTime.today())}',
+                        label: 'attendance days · last 30')),
                 Expanded(child: _Stat(value: '${gym.members.length}', label: gym.members.length == 1 ? 'member' : 'members')),
               ],
             ),
-            if (gym.attendance.isNotEmpty) ...[
+            if (recentAttendance.isNotEmpty) ...[
               const SizedBox(height: 10),
-              Text('Attendance here', style: TextStyle(color: brand.muted, fontWeight: FontWeight.w700)),
+              Text('Recent attendance', style: TextStyle(color: brand.muted, fontWeight: FontWeight.w700)),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
                 children: [
-                  for (final a in gym.attendance.take(14))
+                  for (final a in recentAttendance.take(7))
                     Chip(
                       visualDensity: VisualDensity.compact,
-                      label: Text('${formatShortDate(BhutanTime.toBhutan(a))} ${formatTime(a)}'),
+                      avatar: const Icon(Icons.event_available_rounded, size: 16),
+                      label: Text('${formatShortDate(BhutanTime.toBhutan(a))} · ${formatTime(a)}'),
                     ),
                 ],
               ),
+            ] else ...[
+              const SizedBox(height: 10),
+              Text('No attendance recorded yet.', style: TextStyle(color: brand.muted, fontSize: 12.5)),
             ],
             if (gym.members.isNotEmpty) ...[
               const SizedBox(height: 10),
               Text('Your members here', style: TextStyle(color: brand.muted, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text(gym.members.map((m) => m.name).join(', ')),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final member in gym.members)
+                    Chip(
+                      avatar: const Icon(Icons.person_outline_rounded, size: 16),
+                      visualDensity: VisualDensity.compact,
+                      label: Text(member.name),
+                    ),
+                ],
+              ),
             ],
           ],
           const SizedBox(height: 6),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () async {
+          if (gym.status != TrainerStatus.inactive)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () async {
                 final sure = await confirmAction(
                   context,
                   title: gym.status == TrainerStatus.pending ? 'Take your request back?' : 'Stop training at ${gym.venueName}?',
-                  message: 'Your times there go, and your members there no longer have you as their trainer.',
+                  message: gym.status == TrainerStatus.pending
+                      ? 'Your request will be withdrawn and the gym will be notified.'
+                      : 'You will be made inactive at this gym. Your public listing, schedule, and member assignments here will be removed. The gym and your assigned members will be notified.',
                   confirmLabel: gym.status == TrainerStatus.pending ? 'Take it back' : 'Stop training there',
                   destructive: true,
                 );
                 if (!sure || !context.mounted) return;
                 final ok = await runAction(context, () => ref.read(gymRepositoryProvider).leaveGym(gym.venueId));
                 if (ok) ref.invalidate(myTrainingProvider);
-              },
-              child: Text(gym.status == TrainerStatus.pending ? 'Take my request back' : 'Stop training here',
-                  style: TextStyle(color: brand.danger)),
+                },
+                child: Text(gym.status == TrainerStatus.pending ? 'Take my request back' : 'Stop training here',
+                    style: TextStyle(color: brand.danger)),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -433,10 +557,17 @@ class _Stat extends StatelessWidget {
       );
 }
 
-/// Changes the trainer's week at [gym]: a day and a from–to time each.
-Future<void> editTrainerSlots(BuildContext context, WidgetRef ref, MyTrainerGym gym) async {
-  var slots = [...gym.slots];
-  final saved = await showAppDialog<List<TrainerSlot>>(
+/// A week of times to choose: a day and a from–to time each. Returns them,
+/// or null when cancelled.
+Future<List<TrainerSlot>?> pickTrainerSlots(
+  BuildContext context, {
+  required String title,
+  required List<TrainerSlot> initial,
+  String note = "Add one row for each day and time. They can't overlap your times at other gyms.",
+  String saveLabel = 'Save times',
+}) {
+  var slots = [...initial];
+  return showAppDialog<List<TrainerSlot>>(
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setState) {
@@ -452,7 +583,7 @@ Future<void> editTrainerSlots(BuildContext context, WidgetRef ref, MyTrainerGym 
         }
 
         return AlertDialog(
-          title: Text('Your times at ${gym.venueName}'),
+          title: Text(title),
           content: SizedBox(
             width: 460,
             child: SingleChildScrollView(
@@ -460,7 +591,7 @@ Future<void> editTrainerSlots(BuildContext context, WidgetRef ref, MyTrainerGym 
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('Each week. They can\'t overlap your times at other gyms.'),
+                  Text(note),
                   const SizedBox(height: 12),
                   for (final (i, s) in slots.indexed)
                     Padding(
@@ -492,7 +623,7 @@ Future<void> editTrainerSlots(BuildContext context, WidgetRef ref, MyTrainerGym 
                       onPressed: () => setState(() => slots.add(
                           TrainerSlot(weekday: slots.isEmpty ? 1 : slots.last.weekday, starts: 660, ends: 720))),
                       icon: const Icon(Icons.add_rounded, size: 18),
-                      label: const Text('Add a time'),
+                      label: const Text('Add another day or time'),
                     ),
                   ),
                 ],
@@ -501,21 +632,29 @@ Future<void> editTrainerSlots(BuildContext context, WidgetRef ref, MyTrainerGym 
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(context, slots), child: const Text('Save times')),
+            FilledButton(onPressed: () => Navigator.pop(context, slots), child: Text(saveLabel)),
           ],
         );
       },
     ),
   );
+}
+
+/// Changes the trainer's week at [gym].
+Future<void> editTrainerSlots(BuildContext context, WidgetRef ref, MyTrainerGym gym) async {
+  final saved = await pickTrainerSlots(context, title: 'Your times at ${gym.venueName}', initial: gym.slots);
   if (saved == null || !context.mounted) return;
   final ok = await runAction(context, () => ref.read(gymRepositoryProvider).saveSlots(gym.venueId, saved), success: 'Times saved');
   if (ok) ref.invalidate(myTrainingProvider);
 }
 
 /// Making or changing a trainer profile: name, what they do, about them,
-/// specialties, experience, photo.
+/// specialties, experience, photo. From a gym's page ([thenAskGymId]),
+/// saving it also asks that gym to let them train there.
 class TrainerProfileScreen extends ConsumerWidget {
-  const TrainerProfileScreen({super.key});
+  final String? thenAskGymId;
+
+  const TrainerProfileScreen({super.key, this.thenAskGymId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -523,10 +662,22 @@ class TrainerProfileScreen extends ConsumerWidget {
     return AsyncValueView<MyTraining>(
       value: ref.watch(myTrainingProvider),
       onRetry: () => ref.invalidate(myTrainingProvider),
-      data: (mine) => _ProfileForm(
-        profile: mine.profile ?? TrainerProfile(userId: '', name: profile?.fullName ?? ''),
-        isNew: mine.profile == null,
-      ),
+      data: (mine) {
+        if (thenAskGymId == null && !mine.joinedPublicly) {
+          return const EmptyState(
+            icon: Icons.sports_rounded,
+            title: 'Apply from a gym’s public page',
+            message: 'Trainer profiles are for people who apply to a gym as a trainer.',
+          );
+        }
+        return _ProfileForm(
+          profile: mine.profile ?? TrainerProfile(userId: '', name: profile?.fullName ?? ''),
+          isNew: mine.profile == null,
+          askGym: thenAskGymId == null || mine.gyms.any((g) => g.venueId == thenAskGymId && g.status != TrainerStatus.rejected)
+              ? null
+              : ref.watch(venueProvider(thenAskGymId!)).valueOrNull,
+        );
+      },
     );
   }
 }
@@ -535,7 +686,10 @@ class _ProfileForm extends ConsumerStatefulWidget {
   final TrainerProfile profile;
   final bool isNew;
 
-  const _ProfileForm({required this.profile, required this.isNew});
+  /// The gym they're applying to train at, asked when they save.
+  final Venue? askGym;
+
+  const _ProfileForm({required this.profile, required this.isNew, this.askGym});
 
   @override
   ConsumerState<_ProfileForm> createState() => _ProfileFormState();
@@ -548,13 +702,14 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
   late final _bio = TextEditingController(text: widget.profile.bio ?? '');
   late final _years = TextEditingController(text: widget.profile.experienceYears?.toString() ?? '');
   final _specialty = TextEditingController();
+  final _note = TextEditingController();
   late List<String> _specialties = [...widget.profile.specialties];
   late String? _photo = widget.profile.photoUrl;
   bool _busy = false;
 
   @override
   void dispose() {
-    for (final c in [_name, _headline, _bio, _years, _specialty]) {
+    for (final c in [_name, _headline, _bio, _years, _specialty, _note]) {
       c.dispose();
     }
     super.dispose();
@@ -581,18 +736,27 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
     setState(() => _busy = true);
+    final gym = widget.askGym;
+    final repo = ref.read(gymRepositoryProvider);
     final ok = await runAction(
       context,
-      () => ref.read(gymRepositoryProvider).saveTrainerProfile(TrainerProfile(
-            userId: widget.profile.userId,
-            name: _name.text,
-            headline: _headline.text,
-            bio: _bio.text,
-            specialties: _specialties,
-            experienceYears: int.tryParse(_years.text.trim()),
-            photoUrl: _photo,
-          )),
-      success: widget.isNew ? 'You\'re a trainer on Health Pro. Now ask your gyms to verify you.' : 'Saved',
+      () async {
+        await repo.saveTrainerProfile(TrainerProfile(
+          userId: widget.profile.userId,
+          name: _name.text,
+          headline: _headline.text,
+          bio: _bio.text,
+          specialties: _specialties,
+          experienceYears: int.tryParse(_years.text.trim()),
+          photoUrl: _photo,
+        ));
+        if (gym != null) await repo.requestGym(gym.id, message: _note.text);
+      },
+      success: gym != null
+          ? 'Sent to ${gym.name}. Add your certificates and times: they check them before they verify you.'
+          : widget.isNew
+              ? 'You\'re a trainer on Health Pro. Now ask your gyms to verify you.'
+              : 'Saved',
     );
     if (!mounted) return;
     setState(() => _busy = false);
@@ -604,83 +768,122 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
   @override
   Widget build(BuildContext context) {
     return AppPage(
-      title: widget.isNew ? 'Become a trainer' : 'Your trainer profile',
-      maxWidth: AppPage.readableWidth,
+      title: widget.askGym != null
+          ? 'Apply to train at ${widget.askGym!.name}'
+          : widget.isNew
+              ? 'Become a trainer'
+              : 'Your trainer profile',
       body: Form(
         key: _form,
         child: ListView(
           padding: pagePadding(context),
           children: [
-            Row(
-              children: [
-                TrainerAvatar(name: _name.text, photoUrl: _photo, size: 80),
-                const SizedBox(width: 16),
-                OutlinedButton.icon(
-                  onPressed: _busy ? null : _uploadPhoto,
-                  icon: const Icon(Icons.add_a_photo_outlined, size: 18),
-                  label: Text(_photo == null ? 'Add a photo' : 'Change photo'),
+            if (widget.askGym != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 18),
+                child: InfoRow(
+                  icon: Icons.sports_rounded,
+                  text: 'This is your trainer profile on Health Pro: one for every gym you train at. '
+                      '${widget.askGym!.name} checks it and your certificates, then verifies you; members can then choose you.',
+                ),
+              ),
+            ResponsiveColumns(
+              spacing: 32,
+              first: [
+                Row(
+                  children: [
+                    TrainerAvatar(name: _name.text, photoUrl: _photo, size: 80),
+                    const SizedBox(width: 16),
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : _uploadPhoto,
+                      icon: const Icon(Icons.add_a_photo_outlined, size: 18),
+                      label: Text(_photo == null ? 'Add a photo' : 'Change photo'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                TextFormField(
+                  controller: _name,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(labelText: 'Your name, as members see it *'),
+                  validator: (v) => (v ?? '').trim().length < 2 ? 'Enter your name' : null,
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _headline,
+                  maxLength: 80,
+                  decoration: const InputDecoration(labelText: 'What you do', hintText: 'e.g. Strength and conditioning coach'),
+                ),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller: _years,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Years of experience'),
+                  validator: (v) {
+                    if ((v ?? '').trim().isEmpty) return null;
+                    final n = int.tryParse(v!.trim());
+                    return n == null || n < 0 || n > 60 ? 'Enter 0 to 60' : null;
+                  },
                 ),
               ],
-            ),
-            const SizedBox(height: 18),
-            TextFormField(
-              controller: _name,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(labelText: 'Your name, as members see it *'),
-              validator: (v) => (v ?? '').trim().length < 2 ? 'Enter your name' : null,
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: _headline,
-              maxLength: 80,
-              decoration: const InputDecoration(labelText: 'What you do', hintText: 'e.g. Strength and conditioning coach'),
-            ),
-            const SizedBox(height: 6),
-            TextFormField(
-              controller: _years,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Years of experience'),
-              validator: (v) {
-                if ((v ?? '').trim().isEmpty) return null;
-                final n = int.tryParse(v!.trim());
-                return n == null || n < 0 || n > 60 ? 'Enter 0 to 60' : null;
-              },
-            ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: _bio,
-              maxLines: 5,
-              minLines: 3,
-              maxLength: 2000,
-              decoration: const InputDecoration(labelText: 'About you', hintText: 'How you train people, what you\'re good at'),
-            ),
-            const SizedBox(height: 6),
-            Text('Specialties', style: context.text.titleSmall),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final s in _specialties)
-                  InputChip(label: Text(s), onDeleted: () => setState(() => _specialties = _specialties.where((x) => x != s).toList())),
-              ],
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _specialty,
-                    decoration: const InputDecoration(labelText: 'Add a specialty', hintText: 'e.g. Weight loss, Yoga'),
-                    onSubmitted: (_) => _addSpecialty(),
+              second: [
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _bio,
+                  maxLines: 5,
+                  minLines: 3,
+                  maxLength: 2000,
+                  decoration: const InputDecoration(labelText: 'About you', hintText: 'How you train people, what you\'re good at'),
+                ),
+                const SizedBox(height: 6),
+                Text('Specialties', style: context.text.titleSmall),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final s in _specialties)
+                      InputChip(label: Text(s), onDeleted: () => setState(() => _specialties = _specialties.where((x) => x != s).toList())),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _specialty,
+                        decoration: const InputDecoration(labelText: 'Add a specialty', hintText: 'e.g. Weight loss, Yoga'),
+                        onSubmitted: (_) => _addSpecialty(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton(onPressed: _addSpecialty, child: const Text('Add')),
+                  ],
+                ),
+                if (widget.askGym != null) ...[
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _note,
+                    maxLines: 3,
+                    minLines: 1,
+                    maxLength: 500,
+                    decoration: InputDecoration(
+                      labelText: 'A note for ${widget.askGym!.name} (optional)',
+                      hintText: 'e.g. I can train mornings and weekends',
+                    ),
                   ),
+                ],
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: _busy ? null : _save,
+                  child: Text(widget.askGym != null
+                      ? 'Send my application'
+                      : widget.isNew
+                          ? 'Make my trainer profile'
+                          : 'Save'),
                 ),
-                const SizedBox(width: 8),
-                OutlinedButton(onPressed: _addSpecialty, child: const Text('Add')),
               ],
             ),
-            const SizedBox(height: 24),
-            FilledButton(onPressed: _busy ? null : _save, child: Text(widget.isNew ? 'Make my trainer profile' : 'Save')),
           ],
         ),
       ),
@@ -733,7 +936,6 @@ class TrainerPublicScreen extends ConsumerWidget {
     final profile = ref.watch(trainerProfileProvider(trainerId));
     return AppPage(
       title: profile.valueOrNull?.name ?? 'Trainer',
-      maxWidth: 1100,
       body: AsyncValueView<TrainerProfile?>(
         value: profile,
         onRetry: () => ref.invalidate(trainerProfileProvider(trainerId)),

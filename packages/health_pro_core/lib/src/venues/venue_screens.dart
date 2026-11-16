@@ -9,7 +9,6 @@ import '../module/module_providers.dart';
 import '../module/health_pro_module.dart';
 import '../router/core_routes.dart';
 import '../theme/brand.dart';
-import '../utils/launch.dart';
 import '../utils/validators.dart';
 import '../widgets/app_page.dart';
 import '../widgets/common.dart';
@@ -23,9 +22,9 @@ import 'venue_widgets.dart';
 import 'opening_hours.dart';
 import 'venue_map.dart';
 import 'venue_profile_fields.dart';
+import 'venue_profile_widgets.dart';
 
-/// 'Register your venue': the kinds the enabled modules serve. Gyms are
-/// registered here; grounds on the ground booking website.
+/// 'Register your venue': the kinds the enabled modules serve.
 class RegisterVenueScreen extends ConsumerWidget {
   const RegisterVenueScreen({super.key});
 
@@ -58,17 +57,10 @@ class RegisterVenueScreen extends ConsumerWidget {
                   child: MenuTile(
                     icon: kind.icon,
                     title: kind.label,
-                    subtitle: kind.externalRegisterUrl == null
-                        ? kind.description
-                        : '${kind.description}\nRegistered on our ground booking website',
-                    trailing: kind.externalRegisterUrl == null ? null : const Icon(Icons.open_in_new_rounded, size: 20),
+                    subtitle: kind.description,
                     onTap: () {
-                      if (kind.externalRegisterUrl != null) {
-                        openExternal(context, kind.externalRegisterUrl!);
-                      } else {
-                        final form = CoreRoutes.registerVenueFor(kind.key);
-                        context.push(signedIn ? form : CoreRoutes.signInFor(form));
-                      }
+                      final form = CoreRoutes.registerVenueFor(kind.key);
+                      context.push(signedIn ? form : CoreRoutes.signInFor(form));
                     },
                   ),
                 ),
@@ -224,6 +216,8 @@ class _VenueFormScreenState extends ConsumerState<VenueFormScreen> {
           children: [
             if (venue != null) ...[
               _PhotoEditor(venue: venue),
+              const SizedBox(height: 20),
+              _PromoVideoEditor(venue: venue),
               const SizedBox(height: 20),
             ],
             TextFormField(
@@ -415,6 +409,105 @@ class _PhotoEditorState extends ConsumerState<_PhotoEditor> {
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// The venue's promotional video: one short clip, uploaded, replaced or
+/// removed. Saved as soon as it's chosen, like the photos.
+class _PromoVideoEditor extends ConsumerStatefulWidget {
+  final Venue venue;
+
+  const _PromoVideoEditor({required this.venue});
+
+  @override
+  ConsumerState<_PromoVideoEditor> createState() => _PromoVideoEditorState();
+}
+
+class _PromoVideoEditorState extends ConsumerState<_PromoVideoEditor> {
+  late String? _path = widget.venue.promoVideo;
+  bool _busy = false;
+
+  Future<void> _upload() async {
+    final repo = ref.read(venueRepositoryProvider);
+    setState(() => _busy = true);
+    await runAction(context, () async {
+      final video = await pickVideo(context, maxBytes: VenueRepository.maxPromoVideoBytes);
+      if (video == null) return;
+      final path = await repo.setPromoVideo(widget.venue.id, video.bytes, contentType: video.contentType);
+      if (mounted) setState(() => _path = path);
+      ref.invalidate(venueProvider(widget.venue.id));
+    });
+    if (mounted) setState(() => _busy = false);
+  }
+
+  Future<void> _remove() async {
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove the video?'),
+        content: const Text("It will no longer show on this venue's page."),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Keep it')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Remove')),
+        ],
+      ),
+    );
+    if (sure != true || !mounted) return;
+    setState(() => _busy = true);
+    final ok = await runAction(context, () => ref.read(venueRepositoryProvider).removePromoVideo(widget.venue.id),
+        success: 'Video removed');
+    if (mounted) {
+      setState(() {
+        _busy = false;
+        if (ok) _path = null;
+      });
+    }
+    ref.invalidate(venueProvider(widget.venue.id));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final url = ref.watch(venueRepositoryProvider).promoVideoUrl(_path);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Promotional video', style: context.text.titleMedium),
+        const SizedBox(height: 4),
+        const FormHint('One short video that shows off the place, on its page for everyone. '
+            'MP4, MOV or WebM, up to 20 MB (about a minute). A new one replaces it.'),
+        const SizedBox(height: 10),
+        if (url != null) ...[
+          PromoVideoPlayer(key: ValueKey(url), url: url),
+          const SizedBox(height: 10),
+        ],
+        if (_busy)
+          const Row(
+            children: [
+              HealthProLoader(size: 32, semanticsLabel: 'Uploading'),
+              SizedBox(width: 10),
+              Text('Working on the video...'),
+            ],
+          )
+        else
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _upload,
+                icon: const Icon(Icons.video_call_outlined),
+                label: Text(url == null ? 'Upload video' : 'Replace video'),
+              ),
+              if (url != null)
+                TextButton.icon(
+                  onPressed: _remove,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  label: const Text('Remove'),
+                ),
+            ],
+          ),
       ],
     );
   }

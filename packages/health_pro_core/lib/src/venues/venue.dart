@@ -92,6 +92,10 @@ class Venue {
   final List<String> facilities;
   final List<String> videos;
 
+  /// Its promotional video: one short clip uploaded to Health Pro, as its
+  /// place in the venue-videos bucket (VenueRepository.promoVideoUrl).
+  final String? promoVideo;
+
   const Venue({
     required this.id,
     required this.type,
@@ -119,6 +123,7 @@ class Venue {
     this.openingHours,
     this.facilities = const [],
     this.videos = const [],
+    this.promoVideo,
   });
 
   bool get isVerified => verificationStatus == VerificationStatus.verified;
@@ -155,6 +160,7 @@ class Venue {
         openingHours: OpeningHours.fromJson(json['opening_hours']),
         facilities: (json['facilities'] as List?)?.cast<String>() ?? const [],
         videos: (json['videos'] as List?)?.cast<String>() ?? const [],
+        promoVideo: json['promo_video'] as String?,
       );
 }
 

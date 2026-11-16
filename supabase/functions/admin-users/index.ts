@@ -8,6 +8,12 @@
 //     For people with 'users.manage', or with 'venue.staff' at [venue_id]
 //     (a gym owner making their front desk's account).
 //
+//   { action: 'trainer_account', venue_id, email, full_name, phone? }
+//     The account of a trainer the gym [venue_id] is adding: made as above
+//     (no roles), or the one that email already has. For the gym's staff
+//     who check trainers ('gym.trainers'); the app then calls
+//     gym_add_trainer with it.
+//
 //   { action: 'set_active', user_id, active }
 //     Turns a person off (they lose every role and can't sign in) or on.
 //
@@ -71,6 +77,8 @@ Deno.serve(async (req) => {
   switch (body.action) {
     case 'create':
       return await create(body, asCaller, admin);
+    case 'trainer_account':
+      return await trainerAccount(body, asCaller, admin);
     case 'set_active':
       return await setActive(body, asCaller, admin);
     default:
@@ -127,6 +135,37 @@ async function create(body: Record<string, unknown>, asCaller: SupabaseClient, a
     if (error) return reply({ error: error.message, user_id: userId, existed }, 400);
   }
   return reply({ user_id: userId, existed }, 200);
+}
+
+async function trainerAccount(body: Record<string, unknown>, asCaller: SupabaseClient, admin: SupabaseClient) {
+  const email = text(body.email, 320)?.toLowerCase() ?? null;
+  const fullName = text(body.full_name, 100);
+  const phone = text(body.phone, 20);
+  const venueId = uuid(body.venue_id);
+
+  if (!venueId) return reply({ error: 'Choose the gym.' }, 400);
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return reply({ error: 'Enter a valid email.' }, 400);
+  if (!fullName) return reply({ error: 'Enter their name.' }, 400);
+  if (phone && !/^\+[0-9]{8,15}$/.test(phone)) return reply({ error: 'Enter the phone as +975 and the number.' }, 400);
+
+  const { data: allowed, error: checkError } = await asCaller.rpc('can_add_gym_trainer', { venue: venueId });
+  if (checkError) return reply({ error: checkError.message }, 400);
+  if (!allowed) return reply({ error: 'Only the gym\'s staff who check trainers can add one.' }, 403);
+
+  // Whoever has that email already is the trainer; otherwise a new account.
+  const { data: found } = await admin.from('profiles').select('id').eq('email', email).maybeSingle();
+  if (found) return reply({ user_id: found.id as string, existed: true }, 200);
+  const { data: made, error: makeError } = await admin.auth.admin.createUser({
+    email,
+    email_confirm: true,
+    password: STARTING_CODE,
+    user_metadata: { full_name: fullName, ...(phone ? { phone } : {}), must_choose_code: true },
+  });
+  if (!made?.user) {
+    console.error('admin-users trainer_account failed', makeError?.message);
+    return reply({ error: 'Could not make their account. Please try again.' }, 500);
+  }
+  return reply({ user_id: made.user.id, existed: false }, 200);
 }
 
 async function setActive(body: Record<string, unknown>, asCaller: SupabaseClient, admin: SupabaseClient) {

@@ -28,12 +28,12 @@ class _Module extends HealthProModule {
 
 void main() {
   group('visibleModules', () {
-    const a = _Module('ground_booking');
+    const a = _Module('nutrition');
     const b = _Module('gym_membership');
     const c = _Module('coaching');
     const rows = [
       AppModuleRow(key: 'gym_membership', name: 'Gym', isEnabled: true, sortOrder: 5),
-      AppModuleRow(key: 'ground_booking', name: 'Grounds', isEnabled: false, sortOrder: 10),
+      AppModuleRow(key: 'nutrition', name: 'Nutrition', isEnabled: false, sortOrder: 10),
     ];
 
     test('users see enabled modules only', () {
@@ -55,7 +55,7 @@ void main() {
     expect(m.ownsPath('/gyms/1/manage'), isTrue);
     expect(m.ownsPath('/gymsxyz'), isFalse);
     expect(m.servesVenueType('gym'), isTrue);
-    expect(m.servesVenueType('ground'), isFalse);
+    expect(m.servesVenueType('court'), isFalse);
   });
 
   group('BhutanTime', () {

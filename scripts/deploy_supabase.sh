@@ -105,7 +105,6 @@ if [[ ! -f "$env_file" ]]; then
     const env = {
       SUPABASE_URL: `https://${process.env.PROJECT_REF}.supabase.co`,
       SUPABASE_ANON_KEY: key.api_key,
-      GROUND_BOOKING_URL: "https://kuzuhelp.com",
     };
     require("fs").writeFileSync(process.argv[1], JSON.stringify(env, null, 2) + "\n");
   ' "$env_file"

@@ -7,7 +7,6 @@ import '../access/access_repository.dart';
 import '../admin/admin_repository.dart';
 import '../module/module_providers.dart';
 import '../module/health_pro_module.dart';
-import '../notifications/notification_repository.dart';
 import '../push/push_notifications.dart';
 import '../router/core_routes.dart';
 import '../theme/brand.dart';
@@ -85,7 +84,7 @@ class _PlatformShellState extends ConsumerState<PlatformShell> {
     final admin = adminNav(access, pending: ref.watch(_pendingCountProvider));
     final memberItems = [
       for (final m in ref.watch(enabledModulesProvider).valueOrNull ?? const <HealthProModule>[])
-        for (final item in m.playerMenuItems())
+        for (final item in m.playerMenuItems(ref))
           if (item.route != null) item,
     ];
     final active = [
@@ -302,7 +301,6 @@ class _PlatformSidebarState extends ConsumerState<PlatformSidebar> {
   @override
   Widget build(BuildContext context) {
     final location = widget.location;
-    final unread = ref.watch(unreadCountProvider);
     final services = _find.isEmpty
         ? widget.services
         : widget.services.where((s) => s.name.toLowerCase().contains(_find.toLowerCase())).toList();
@@ -369,21 +367,18 @@ class _PlatformSidebarState extends ConsumerState<PlatformSidebar> {
                               selected: location == CoreRoutes.services,
                               onTap: () => _open(CoreRoutes.services),
                             ),
-                            SideNavTile(
-                              icon: Icons.notifications_none_rounded,
-                              label: 'Notifications',
-                              badge: unread,
-                              selected: location == CoreRoutes.notifications,
-                              onTap: () => _open(CoreRoutes.notifications),
-                            ),
                           ],
-                          // Everyone's own: their QR code for the front desk,
-                          // what the services keep for them, their alerts.
-                          if (widget.platformPages || widget.services.isNotEmpty || widget.admin != null)
-                            const SideNavHeading('Me'),
+                          // Everyone's own: their dashboard (their QR code for
+                          // the front desk, and what the services keep for
+                          // them). Their alerts are the bell at the top.
+                          if (widget.platformPages ||
+                              widget.services.isNotEmpty ||
+                              widget.memberItems.isNotEmpty ||
+                              widget.admin != null)
+                            const SideNavHeading('My Health Pro'),
                           SideNavTile(
-                            icon: Icons.qr_code_2_rounded,
-                            label: 'My QR code',
+                            icon: Icons.dashboard_rounded,
+                            label: 'My dashboard',
                             selected: location == CoreRoutes.myQr,
                             onTap: () => _open(CoreRoutes.myQr),
                           ),
@@ -393,14 +388,6 @@ class _PlatformSidebarState extends ConsumerState<PlatformSidebar> {
                               label: item.title,
                               selected: location == item.route,
                               onTap: () => _open(item.route!),
-                            ),
-                          if (!widget.platformPages)
-                            SideNavTile(
-                              icon: Icons.notifications_none_rounded,
-                              label: 'Notifications',
-                              badge: unread,
-                              selected: location == CoreRoutes.notifications,
-                              onTap: () => _open(CoreRoutes.notifications),
                             ),
                           if (widget.services.isNotEmpty) ...[
                             SideNavHeading('Services', count: widget.services.length),

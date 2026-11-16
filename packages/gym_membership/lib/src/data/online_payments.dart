@@ -1,12 +1,78 @@
-/// A gym's settings for its members: its bank's payment QR code (for paying
-/// online), the days before a package ends that members are reminded, and
-/// who answers requests to join.
+/// The bank account a gym is paid into. Payment screens pair this with the
+/// bank-issued QR image the gym uploaded in Membership settings.
+class PaymentAccount {
+  final String bankName;
+  final String accountNumber;
+  final String accountName;
+
+  const PaymentAccount(
+      {required this.bankName,
+      required this.accountNumber,
+      required this.accountName});
+
+  /// From gym_settings, or my_gyms()'s `payment_account`; null until the gym
+  /// has set its account up.
+  static PaymentAccount? fromJson(Map<String, dynamic>? json) {
+    final number = (json?['account_number'] as String?)?.trim() ?? '';
+    if (number.isEmpty) return null;
+    return PaymentAccount(
+      bankName: json!['bank_name'] as String? ?? '',
+      accountNumber: number,
+      accountName: json['account_name'] as String? ?? '',
+    );
+  }
+
+  /// '2001 2345 6789': easier to read out and type.
+  String get spacedNumber =>
+      accountNumber.replaceAllMapped(RegExp(r'.{4}(?=.)'), (m) => '${m[0]} ');
+
+  /// Descriptive text only. This is not a bank payment QR and must not be
+  /// shown as one; payment screens use the QR image issued by the bank.
+  String qrData({int? amount, String? note}) => [
+        'Pay to: $accountName',
+        'Bank: $bankName',
+        'Account: $accountNumber',
+        if (amount != null && amount > 0) 'Amount: Nu. $amount',
+        if (note != null && note.trim().isNotEmpty) 'For: ${note.trim()}',
+      ].join('\n');
+}
+
+/// Banks in Bhutan, to choose the gym's from.
+const bhutanBanks = [
+  'Bank of Bhutan',
+  'Bhutan National Bank',
+  'Bhutan Development Bank',
+  'Druk PNB Bank',
+  'T Bank',
+  'Digital Kidu Bank',
+];
+
+/// How a gym is paid online (gym_settings.online_provider), and how a
+/// payment came (gym_payment_claims.channel).
+abstract final class OnlineProvider {
+  /// Into the gym's bank account, with the QR code; the member gives the
+  /// journal number and the desk confirms it.
+  static const bankAccount = 'bank_account';
+
+  /// The RMA payment gateway: not connected yet. The member will pay from
+  /// their own account and the gateway confirms it, without the desk.
+  static const rmaGateway = 'rma_gateway';
+}
+
+/// A gym's settings for its members: the bank account they pay into online,
+/// the days before a package ends that members are reminded, and who answers
+/// requests to join.
 class GymSettings {
   final String venueId;
 
-  /// The payment QR image, `<venue id>/<file>` in the public gym-payment-qr
-  /// bucket; null when the gym takes payments at the desk only.
+  /// Null while the gym takes payments at the desk only.
+  final PaymentAccount? account;
+
+  /// Bank-issued QR image path in the gym-payment-qr bucket.
   final String? paymentQrPath;
+
+  /// [OnlineProvider.bankAccount] until the gateway is connected.
+  final String onlineProvider;
 
   /// Days before the end, most first: [7, 3].
   final List<int> reminderDays;
@@ -16,7 +82,9 @@ class GymSettings {
 
   const GymSettings({
     required this.venueId,
+    this.account,
     this.paymentQrPath,
+    this.onlineProvider = OnlineProvider.bankAccount,
     this.reminderDays = const [3],
     this.joinApproval = JoinApproval.desk,
   });
@@ -26,8 +94,14 @@ class GymSettings {
 
   factory GymSettings.fromJson(Map<String, dynamic> json) => GymSettings(
         venueId: json['venue_id'] as String,
+        account: PaymentAccount.fromJson(json),
         paymentQrPath: json['payment_qr_path'] as String?,
-        reminderDays: [for (final d in (json['reminder_days'] as List? ?? const [3])) (d as num).toInt()],
+        onlineProvider:
+            json['online_provider'] as String? ?? OnlineProvider.bankAccount,
+        reminderDays: [
+          for (final d in (json['reminder_days'] as List? ?? const [3]))
+            (d as num).toInt()
+        ],
         joinApproval: json['join_approval'] as String? ?? JoinApproval.desk,
       );
 
@@ -55,10 +129,11 @@ enum ClaimStatus {
   const ClaimStatus(this.value, this.label);
 
   static ClaimStatus of(String? value) =>
-      ClaimStatus.values.where((s) => s.value == value).firstOrNull ?? ClaimStatus.pending;
+      ClaimStatus.values.where((s) => s.value == value).firstOrNull ??
+      ClaimStatus.pending;
 }
 
-/// A member paid online (the gym's payment QR in their bank app) and gave
+/// A member paid online (into the gym's bank account, from its QR code) and gave
 /// the journal number (JRN): the gym checks it with the bank and confirms
 /// it, which starts their package, or says it couldn't find it.
 class PaymentClaim {
@@ -115,7 +190,9 @@ class PaymentClaim {
       status: ClaimStatus.of(json['status'] as String?),
       decisionNote: json['decision_note'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
-      decidedAt: json['decided_at'] == null ? null : DateTime.parse(json['decided_at'] as String),
+      decidedAt: json['decided_at'] == null
+          ? null
+          : DateTime.parse(json['decided_at'] as String),
     );
   }
 }

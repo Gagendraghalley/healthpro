@@ -6,6 +6,7 @@ import 'package:health_pro_core/health_pro_core.dart';
 import '../data/gym_models.dart';
 import '../data/gym_repository.dart';
 import '../data/registered_member.dart';
+import 'payment_qr.dart';
 
 /// Selling a package at the desk: which of the gym's packages, for how many
 /// months, when it ends (worked out), what they paid and how. Inside a
@@ -23,7 +24,12 @@ class PackageFields extends ConsumerStatefulWidget {
   /// Chosen to start with: the package they asked for, when it's on sale.
   final String? initialPlanId;
 
-  const PackageFields({super.key, required this.venueId, required this.start, required this.onChanged, this.initialPlanId});
+  const PackageFields(
+      {super.key,
+      required this.venueId,
+      required this.start,
+      required this.onChanged,
+      this.initialPlanId});
 
   @override
   ConsumerState<PackageFields> createState() => _PackageFieldsState();
@@ -66,14 +72,17 @@ class _PackageFieldsState extends ConsumerState<PackageFields> {
     setState(() {
       _plan = plan;
       _months = months ?? (plan == null ? 1 : defaultMonths(plan));
-      if (plan != null && !_amountTouched) _amount.text = '${packagePrice(plan, _months)}';
+      if (plan != null && !_amountTouched) {
+        _amount.text = '${packagePrice(plan, _months)}';
+      }
     });
     _emit();
   }
 
   @override
   Widget build(BuildContext context) {
-    final plans = ref.watch(gymPlansProvider((venueId: widget.venueId, all: false)));
+    final plans =
+        ref.watch(gymPlansProvider((venueId: widget.venueId, all: false)));
     final list = plans.valueOrNull ?? const <GymPlan>[];
     if (!_startedWith && widget.initialPlanId != null && plans.hasValue) {
       _startedWith = true;
@@ -94,15 +103,16 @@ class _PackageFieldsState extends ConsumerState<PackageFields> {
         if (plans.hasValue && list.isEmpty)
           const Padding(
             padding: EdgeInsets.only(bottom: 12),
-            child: FormHint('This gym has no packages on sale yet. Add them under Plans & prices.'),
+            child: FormHint(
+                'This gym has no packages on sale yet. Add them under Plans & prices.'),
           ),
         SearchableDropdown<String>(
           value: plan?.id,
           decoration: const InputDecoration(labelText: 'Package *'),
           options: [
             for (final p in list)
-              DropdownOption(
-                  p.id, '${p.name} · ${p.price == 0 ? 'Free' : formatNu(p.price)} / ${formatDuration(p.durationDays)}'),
+              DropdownOption(p.id,
+                  '${p.name} · ${p.price == 0 ? 'Free' : formatNu(p.price)} / ${formatDuration(p.durationDays)}'),
           ],
           onChanged: (id) => _choose(list.where((p) => p.id == id).firstOrNull),
           validator: (id) => id == null ? 'Choose the package' : null,
@@ -117,18 +127,25 @@ class _PackageFieldsState extends ConsumerState<PackageFields> {
                 value: _months,
                 decoration: const InputDecoration(labelText: 'Signed for *'),
                 options: [
-                  for (final m in packageMonthOptions) DropdownOption(m, m == 1 ? '1 month' : '$m months'),
+                  for (final m in packageMonthOptions)
+                    DropdownOption(m, m == 1 ? '1 month' : '$m months'),
                 ],
-                onChanged: plan == null ? null : (m) => _choose(plan, months: m),
+                onChanged:
+                    plan == null ? null : (m) => _choose(plan, months: m),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: InputDecorator(
-                decoration: const InputDecoration(labelText: 'Expiry date', helperText: 'Worked out for you'),
+                decoration: const InputDecoration(
+                    labelText: 'Expiry date', helperText: 'Worked out for you'),
                 child: Text(
                   plan == null ? '—' : formatDate(end),
-                  style: TextStyle(fontWeight: FontWeight.w700, color: plan != null && end.isBefore(today) ? context.brand.danger : null),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: plan != null && end.isBefore(today)
+                          ? context.brand.danger
+                          : null),
                 ),
               ),
             ),
@@ -137,7 +154,8 @@ class _PackageFieldsState extends ConsumerState<PackageFields> {
         if (plan != null && end.isBefore(today))
           const Padding(
             padding: EdgeInsets.only(top: 6),
-            child: FormHint('This package has already ended: they will show as an old member until they renew.'),
+            child: FormHint(
+                'This package has already ended: they will show as an old member until they renew.'),
           ),
         const SizedBox(height: 14),
         TextFormField(
@@ -147,14 +165,17 @@ class _PackageFieldsState extends ConsumerState<PackageFields> {
           decoration: InputDecoration(
             labelText: 'Amount received',
             prefixText: 'Nu. ',
-            helperText: plan == null ? null : 'Suggested from the package price: ${formatNu(packagePrice(plan, _months))}',
+            helperText: plan == null
+                ? null
+                : 'Suggested from the package price: ${formatNu(packagePrice(plan, _months))}',
           ),
           onChanged: (_) {
             _amountTouched = true;
             setState(() {});
             _emit();
           },
-          validator: (v) => plan == null ? null : Validators.wholeNumber(v, max: 1000000),
+          validator: (v) =>
+              plan == null ? null : Validators.wholeNumber(v, max: 1000000),
         ),
         if (amount > 0) ...[
           const SizedBox(height: 14),
@@ -173,19 +194,59 @@ class _PackageFieldsState extends ConsumerState<PackageFields> {
                 ),
             ],
           ),
+          if (_method != PaymentMethod.cash)
+            _DeskPaymentQr(venueId: widget.venueId, amount: amount, plan: plan),
           const SizedBox(height: 14),
           TextFormField(
             controller: _reference,
             decoration: InputDecoration(
-              labelText: _method == PaymentMethod.mbob ? 'mBoB journal number' : 'Reference (optional)',
+              labelText: _method == PaymentMethod.mbob
+                  ? 'mBoB journal number'
+                  : 'Reference (optional)',
             ),
             onChanged: (_) => _emit(),
-            validator: (v) => _method == PaymentMethod.mbob && (v ?? '').trim().isEmpty
-                ? 'Enter the journal number from the mBoB message'
-                : null,
+            validator: (v) =>
+                _method == PaymentMethod.mbob && (v ?? '').trim().isEmpty
+                    ? 'Enter the journal number from the mBoB message'
+                    : null,
           ),
         ],
       ],
+    );
+  }
+}
+
+/// At the desk, for a payment that isn't cash: show the gym's QR code with
+/// this sale's amount, so the member can scan it before the package is saved.
+class _DeskPaymentQr extends ConsumerWidget {
+  final String venueId;
+  final int amount;
+  final GymPlan? plan;
+
+  const _DeskPaymentQr(
+      {required this.venueId, required this.amount, required this.plan});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(gymSettingsProvider(venueId));
+    if (!settings.hasValue) return const SizedBox.shrink();
+    final paymentSettings = settings.value!;
+    final account = paymentSettings.account;
+    final qrUrl = ref
+        .read(gymRepositoryProvider)
+        .paymentQrUrl(paymentSettings.paymentQrPath);
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: account == null || qrUrl == null
+          ? const FormHint(
+              'Set up the gym\'s bank account and upload its bank-issued QR in Membership settings.')
+          : Center(
+              child: PaymentQrCard(
+                  account: account,
+                  qrImageUrl: qrUrl,
+                  amount: amount,
+                  note: plan?.name,
+                  size: 160)),
     );
   }
 }
@@ -203,13 +264,17 @@ class DateField extends FormField<DateTime> {
     bool clearable = false,
   }) : super(
           initialValue: value,
-          validator: required ? (v) => v == null ? 'Choose the date' : null : null,
+          validator:
+              required ? (v) => v == null ? 'Choose the date' : null : null,
           builder: (state) {
             final context = state.context;
             Future<void> pick() async {
               final picked = await showDatePicker(
                 context: context,
-                initialDate: state.value ?? (lastDate.isBefore(DateTime.now()) ? lastDate : DateTime.now()),
+                initialDate: state.value ??
+                    (lastDate.isBefore(DateTime.now())
+                        ? lastDate
+                        : DateTime.now()),
                 firstDate: firstDate,
                 lastDate: lastDate,
               );
@@ -237,8 +302,11 @@ class DateField extends FormField<DateTime> {
                         )
                       : const Icon(Icons.calendar_month_outlined),
                 ),
-                child: Text(state.value == null ? 'Choose' : formatDate(state.value!),
-                    style: state.value == null ? TextStyle(color: context.brand.muted) : null),
+                child: Text(
+                    state.value == null ? 'Choose' : formatDate(state.value!),
+                    style: state.value == null
+                        ? TextStyle(color: context.brand.muted)
+                        : null),
               ),
             );
           },

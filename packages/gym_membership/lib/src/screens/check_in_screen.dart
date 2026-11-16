@@ -847,7 +847,10 @@ class _TrainerArrivalCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const _Outcome(text: 'TRAINER ARRIVED', icon: Icons.sports_rounded, color: color),
+            _Outcome(
+                text: arrival.alreadyMarked ? 'ALREADY MARKED TODAY' : 'TRAINER ARRIVED',
+                icon: arrival.alreadyMarked ? Icons.event_available_rounded : Icons.sports_rounded,
+                color: color),
             Row(
               children: [
                 TrainerAvatar(name: arrival.name, photoUrl: arrival.photoUrl, size: 64),
@@ -857,7 +860,12 @@ class _TrainerArrivalCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(arrival.name, style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-                      Text('Attendance recorded at ${formatTime(at)}', style: TextStyle(color: brand.body)),
+                      Text(
+                        arrival.alreadyMarked
+                            ? 'Already marked at ${formatTime(arrival.markedAt ?? at)}. No new attendance was added.'
+                            : 'Attendance recorded at ${formatTime(arrival.markedAt ?? at)}',
+                        style: TextStyle(color: brand.body),
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         arrival.slotsToday.isEmpty
@@ -865,7 +873,7 @@ class _TrainerArrivalCard extends StatelessWidget {
                             : 'Here today: ${arrival.slotsToday.map((p) => p.text).join(', ')}',
                         style: TextStyle(color: brand.muted),
                       ),
-                      if (arrival.earlierToday > 0)
+                      if (!arrival.alreadyMarked && arrival.earlierToday > 0)
                         Text('Also arrived earlier today (${arrival.earlierToday}x)', style: TextStyle(color: brand.muted)),
                     ],
                   ),

@@ -6,9 +6,13 @@ abstract final class GymRoutes {
   /// The gyms, nearest first (asks for the location).
   static const gymsNearMe = '/gyms?near=1';
 
-  /// A member's own: their gyms, packages, requests to join and visits.
+  /// My gym: the gyms a member belongs to, each in full (photos, facilities,
+  /// where it is, its trainers) with their membership there.
   /// Before ':id', so it isn't taken for a gym.
   static const my = '/gyms/my';
+
+  /// My gym, opened on one of their gyms.
+  static String myGymFor(String venueId) => '$my?gym=$venueId';
 
   // Public information, for visitors: the gyms on Health Pro and each gym's
   // page (its packages, prices and how to reach it).
@@ -41,7 +45,8 @@ abstract final class GymRoutes {
   /// Online payments (a journal number) for the desk to check and confirm.
   static const payments = '/gyms/:id/manage/payments';
 
-  /// The payment QR code, reminders, and who answers requests to join.
+  /// The bank account for online payments, reminders, and who answers
+  /// requests to join.
   static const settings = '/gyms/:id/manage/settings';
 
   /// A member pays their gym online: package, payment QR, journal number.
@@ -57,6 +62,9 @@ abstract final class GymRoutes {
 
   /// A gym's trainers, for its staff: verify them, their times, attendance.
   static const gymTrainers = '/gyms/:id/manage/trainers';
+
+  /// The gym adds a trainer itself, with all their details.
+  static const addTrainer = '/gyms/:id/manage/trainers/new';
 
   /// A trainer's public profile (certificates, gyms, times, reviews); seen
   /// from a gym with `?gym=<its id>`.
@@ -82,6 +90,10 @@ abstract final class GymRoutes {
   static String payFor(String id) => '/gyms/my/$id/pay';
   static String chooseTrainerFor(String id) => '/gyms/my/$id/trainer';
   static String gymTrainersFor(String id) => '/gyms/$id/manage/trainers';
+  static String addTrainerFor(String id) => '/gyms/$id/manage/trainers/new';
+
+  /// Making a trainer profile on the way to asking gym [id] to train there.
+  static String trainerProfileFor(String id) => '/gyms/trainer/profile?gym=$id';
   static String trainerFor(String id, {String? venueId}) => venueId == null ? '/trainers/$id' : '/trainers/$id?gym=$venueId';
 
   /// A gym's public page; [join] from its QR code (asks to join, up top).

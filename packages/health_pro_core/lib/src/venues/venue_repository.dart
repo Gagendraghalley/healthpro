@@ -55,6 +55,13 @@ class VenueRepository {
 
   static const photoBucket = 'venue-photos';
 
+  /// Promotional videos: public, one clip in a folder per venue.
+  static const videoBucket = 'venue-videos';
+
+  /// The biggest clip a venue can upload (the bucket refuses more): 20 MB,
+  /// about a minute from a phone.
+  static const maxPromoVideoBytes = 20 * 1024 * 1024;
+
   Future<List<Venue>> listPublic({required String type, String? dzongkhag}) async {
     var query = _client.from('venues').select().eq('type', type).eq('verification_status', VerificationStatus.verified);
     if (dzongkhag != null) query = query.eq('dzongkhag', dzongkhag);
@@ -95,6 +102,51 @@ class VenueRepository {
         .from(photoBucket)
         .uploadBinary(path, bytes, fileOptions: FileOptions(contentType: contentType, upsert: false));
     return _client.storage.from(photoBucket).getPublicUrl(path);
+  }
+
+  /// Where everyone can watch the clip at [path] (Venue.promoVideo).
+  String? promoVideoUrl(String? path) =>
+      path == null || path.isEmpty ? null : _client.storage.from(videoBucket).getPublicUrl(path);
+
+  /// Uploads [bytes] as the venue's promotional video, in place of the one
+  /// it had: a venue keeps one clip, so the old file is removed (and any
+  /// left behind by an upload that didn't finish). Returns its path.
+  Future<String> setPromoVideo(String venueId, Uint8List bytes, {required String contentType}) async {
+    if (bytes.length > maxPromoVideoBytes) throw StateError(promoVideoTooBig);
+    final ext = switch (contentType) { 'video/webm' => 'webm', 'video/quicktime' => 'mov', _ => 'mp4' };
+    final path = '$venueId/${DateTime.now().millisecondsSinceEpoch}.$ext';
+    final current = (await get(venueId))?.promoVideo;
+    final storage = _client.storage.from(videoBucket);
+    try {
+      await _removeVideosExcept(venueId, keep: current);
+      await storage.uploadBinary(path, bytes, fileOptions: FileOptions(contentType: contentType, upsert: false));
+    } on StorageException catch (e) {
+      throw StateError(e.statusCode == '413' ? promoVideoTooBig : 'The video could not be uploaded. Please try again.');
+    }
+    await _client.rpc('set_venue_promo_video', params: {'venue_id': venueId, 'path': path});
+    await _removeVideosExcept(venueId, keep: path);
+    return path;
+  }
+
+  /// Takes the venue's promotional video away, and its file.
+  Future<void> removePromoVideo(String venueId) async {
+    await _client.rpc('set_venue_promo_video', params: {'venue_id': venueId, 'path': null});
+    await _removeVideosExcept(venueId, keep: null);
+  }
+
+  static const promoVideoTooBig = 'That video is too big. Choose one of up to 20 MB.';
+
+  /// Removes the files in the venue's video folder, but for [keep].
+  Future<void> _removeVideosExcept(String venueId, {required String? keep}) async {
+    try {
+      final storage = _client.storage.from(videoBucket);
+      final files = await storage.list(path: venueId);
+      final old = [for (final f in files) '$venueId/${f.name}'].where((p) => p != keep).toList();
+      if (old.isNotEmpty) await storage.remove(old);
+    } catch (_) {
+      // A leftover file is harmless: the venue points at its clip, and the
+      // folder is tidied the next time one is uploaded.
+    }
   }
 
   /// Owners first, then the roles that come with Health Pro, then the rest;

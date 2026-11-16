@@ -1,12 +1,5 @@
 -- =====================================================================
--- Module 1: ground booking.
--- Grounds and tournaments still run on the ground booking website, with
--- its own database; SportsHub links to it, so this module has no tables
--- here yet. When ground booking moves into SportsHub (one domain), its
--- tables go in a new migration (prefixed ground_, linked to venues), its
--- venue types into venue_types, and its deposits into payments.
+-- Ground booking was module 1 here; it has been removed from Health Pro
+-- (see 20261116000001_remove_ground_booking.sql). This file stays, empty,
+-- because databases that already ran it have it in their migration history.
 -- =====================================================================
-
-insert into public.app_modules (key, name, is_enabled, sort_order)
-values ('ground_booking', 'Ground booking', true, 10)
-on conflict (key) do nothing;
