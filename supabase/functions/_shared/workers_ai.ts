@@ -1,5 +1,5 @@
 // Cloudflare Workers AI, in JSON mode: where ask-ai (a gym's staff) and
-// ask-sportshub (anyone) send questions. Its free daily allowance is shared
+// ask-health-pro (anyone) send questions. Its free daily allowance is shared
 // by both, and by every gym on Health Pro.
 //
 // Secrets: CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AI_TOKEN (an API token with

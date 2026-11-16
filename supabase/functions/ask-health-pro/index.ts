@@ -12,7 +12,7 @@
 // hash, for 30 days.
 //
 // Secrets: see _shared/workers_ai.ts.
-// Deploy: supabase functions deploy ask-sportshub (verify_jwt off: visitors)
+// Deploy: supabase functions deploy ask-health-pro (verify_jwt off: visitors)
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 import { AskError, askWorkersAi, cors, reply, workersAi } from '../_shared/workers_ai.ts';
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     return reply({ ...sanitize(raw), left }, 200);
   } catch (e) {
     if (e instanceof AskError) return reply({ error: e.message, left }, 502);
-    console.error('ask-sportshub failed', e);
+    console.error('ask-health-pro failed', e);
     return reply({ error: "The AI couldn't answer just now. Please try again, or tap a suggestion.", left }, 502);
   }
 });
@@ -65,6 +65,6 @@ async function visitorKey(req: Request, secret: string): Promise<string> {
     false,
     ['sign'],
   );
-  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`ask-sportshub:${address}`));
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`ask-health-pro:${address}`));
   return Array.from(new Uint8Array(mac), (b) => b.toString(16).padStart(2, '0')).join('');
 }

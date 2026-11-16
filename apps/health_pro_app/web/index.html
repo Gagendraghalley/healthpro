@@ -106,29 +106,66 @@
     // Install app (the sign-in page's button, InstallAppButton in
     // health_pro_core): the browser's offer to install comes once, often
     // before Flutter has started, so it's kept here until the button uses it.
+    // Installed from this browser (Chrome, Edge), it's remembered, so the
+    // button goes in a normal tab too; the browser offering again (after an
+    // uninstall) means it isn't installed any more.
     (function () {
       var offer = null;
       var listeners = [];
+      var installedKey = 'healthProInstalled';
       function changed() {
         listeners.forEach(function (listener) { try { listener(); } catch (e) {} });
+      }
+      function remembered() {
+        try { return window.localStorage.getItem(installedKey) === '1'; } catch (e) { return false; }
+      }
+      function remember(installed) {
+        try {
+          if (installed) window.localStorage.setItem(installedKey, '1');
+          else window.localStorage.removeItem(installedKey);
+        } catch (e) {}
+      }
+      function isIos() {
+        return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       }
       window.addEventListener('beforeinstallprompt', function (event) {
         event.preventDefault();
         offer = event;
+        remember(false);
         changed();
       });
       window.addEventListener('appinstalled', function () {
         offer = null;
+        remember(true);
         changed();
       });
       window.healthProPwa = {
         canPrompt: function () { return offer !== null; },
         isInstalled: function () {
-          return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+          return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true ||
+            (offer === null && remembered());
         },
-        isIos: function () {
-          return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        isIos: isIos,
+        // Which browser, for the steps to install by hand.
+        browser: function () {
+          var ua = navigator.userAgent;
+          if (isIos()) {
+            if (/CriOS\//.test(ua)) return 'ios-chrome';
+            if (/FxiOS\/|EdgiOS\/|OPiOS\//.test(ua)) return 'ios-other';
+            return 'ios';
+          }
+          if (/android/i.test(ua)) {
+            if (/SamsungBrowser/i.test(ua)) return 'samsung';
+            if (/Firefox/i.test(ua)) return 'android-firefox';
+            return 'android';
+          }
+          if (/Edg\//.test(ua)) return 'edge';
+          if (/Firefox\//.test(ua)) return 'firefox';
+          if (/OPR\//.test(ua)) return 'other';
+          if (/Chrome\//.test(ua)) return 'chrome';
+          if (/Macintosh/.test(ua) && /Safari\//.test(ua)) return 'mac-safari';
+          return 'other';
         },
         prompt: function () {
           if (!offer) return Promise.resolve('unavailable');

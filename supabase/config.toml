@@ -451,7 +451,7 @@ verify_jwt = true
 # Health Pro's assistant (the floating Ask AI button, for anyone): visitors
 # have no account, so no token is needed; the database counts questions by
 # a hash of their address instead.
-[functions.ask-sportshub]
+[functions.ask-health-pro]
 verify_jwt = false
 
 # Push notifications: the database calls it for each new notification

@@ -1,4 +1,4 @@
-package bt.sportshub.app
+package bt.healthpro.app
 
 import io.flutter.embedding.android.FlutterActivity
 

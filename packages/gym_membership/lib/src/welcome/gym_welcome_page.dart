@@ -2988,7 +2988,7 @@ class _Faq extends StatelessWidget {
 
   // As the gyms work today: ask to join in the app, or at the front desk
   // (no account needed there). Health Pro's assistant answers from the same
-  // facts (supabase/functions/ask-sportshub/reply.ts): change both together.
+  // facts (supabase/functions/ask-health-pro/reply.ts): change both together.
   static const questions = [
     (
       'How do I join a gym?',

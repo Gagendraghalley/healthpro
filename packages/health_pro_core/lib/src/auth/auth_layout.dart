@@ -889,7 +889,8 @@ class _CodeBoxesState extends State<CodeBoxes> {
                               AnimatedContainer(
                                 duration: Motion.of(context, Motion.hover),
                                 width: size,
-                                height: 60,
+                                // A little shorter when they're narrow (a phone).
+                                height: (size * 1.12).clamp(44.0, 60.0),
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
                                   color: brand.card,

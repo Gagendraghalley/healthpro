@@ -15,9 +15,9 @@ import '../widgets/motion.dart';
 import 'assistant_chat.dart';
 
 // Health Pro's assistant, for anyone, visitors included: what the floating
-// Ask AI button opens outside a module's own pages. The ask-sportshub Edge
+// Ask AI button opens outside a module's own pages. The ask-health-pro Edge
 // Function has Cloudflare Workers AI answer from a guide about Health Pro
-// (supabase/functions/ask-sportshub/reply.ts), or say "find gyms in Paro",
+// (supabase/functions/ask-health-pro/reply.ts), or say "find gyms in Paro",
 // which the app answers itself from the public list of verified venues.
 
 enum PublicAskKind { help, findVenues, other }
@@ -55,7 +55,7 @@ class PublicReply {
 
   const PublicReply._(this.kind, {this.answer, this.page, this.venueType = 'gym', this.dzongkhag, this.byAi = true});
 
-  /// The ask-sportshub function's answer; anything else is [PublicAskKind.other].
+  /// The ask-health-pro function's answer; anything else is [PublicAskKind.other].
   factory PublicReply.fromJson(Map<String, dynamic> json) {
     final answer = (json['answer'] as String?)?.trim();
     final hasAnswer = answer != null && answer.isNotEmpty;
@@ -136,7 +136,7 @@ class PublicAssistantRepository {
   /// [history] go along. And how many questions are left today.
   Future<({PublicReply reply, int? left})> ask(String question, List<({String question, PublicReply reply})> history) async {
     final recent = history.length > 3 ? history.sublist(history.length - 3) : history;
-    final data = await invokeAssistant(_ref.read(supabaseProvider), 'ask-sportshub', {
+    final data = await invokeAssistant(_ref.read(supabaseProvider), 'ask-health-pro', {
       'question': question,
       'history': [for (final t in recent) {'question': t.question, 'reply': t.reply.toJson()}],
     });

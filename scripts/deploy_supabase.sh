@@ -20,7 +20,7 @@
 #                        SUPABASE_DB_PASSWORD.
 # CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AI_TOKEN: optional. Turn on Ask AI
 #                        (Cloudflare Workers AI); they're stored as the
-#                        Edge Functions' secrets (ask-ai, ask-sportshub).
+#                        Edge Functions' secrets (ask-ai, ask-health-pro).
 #                        Once is enough.
 # VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY: optional. Turn on push
 #                        notifications (scripts/make_push_keys.ts makes them,

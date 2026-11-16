@@ -92,7 +92,7 @@ abstract class HealthProModule {
   bool hidesAssistantButton(String location) => false;
 
   /// Pages Health Pro's assistant may point people to, by the keys its guide
-  /// uses (supabase/functions/ask-sportshub/reply.ts), e.g. 'gyms'.
+  /// uses (supabase/functions/ask-health-pro/reply.ts), e.g. 'gyms'.
   Map<String, ModuleMenuItem> get assistantLinks => const {};
 
   /// A venue's public page, for Health Pro's assistant's lists of venues;

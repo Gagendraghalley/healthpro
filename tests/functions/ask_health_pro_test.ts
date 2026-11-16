@@ -1,8 +1,8 @@
-// What the ask-sportshub Edge Function (Health Pro's assistant for anyone)
+// What the ask-health-pro Edge Function (Health Pro's assistant for anyone)
 // lets through from the model and the browser.
 //
 //   deno test tests/functions/
-import { cleanHistory, messages, OTHER_ANSWER, sanitize, SYSTEM_PROMPT } from '../../supabase/functions/ask-sportshub/reply.ts';
+import { cleanHistory, messages, OTHER_ANSWER, sanitize, SYSTEM_PROMPT } from '../../supabase/functions/ask-health-pro/reply.ts';
 
 function same(actual: unknown, expected: unknown) {
   const a = JSON.stringify(actual);

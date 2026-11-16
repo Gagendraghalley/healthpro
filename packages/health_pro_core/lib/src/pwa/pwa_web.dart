@@ -11,6 +11,7 @@ extension type _Pwa._(JSObject _) implements JSObject {
   external bool canPrompt();
   external bool isInstalled();
   external bool isIos();
+  external String browser();
   external JSPromise<JSString> prompt();
   external void onChange(JSFunction listener);
 }
@@ -31,11 +32,17 @@ abstract final class PwaInstall {
   /// and Edge).
   static bool get canPrompt => _pwa?.canPrompt() ?? false;
 
-  /// Opened from the home screen: already installed.
+  /// Opened from the home screen, or installed from this browser: already
+  /// installed.
   static bool get isInstalled => _pwa?.isInstalled() ?? false;
 
   /// An iPhone or iPad: installed by hand, from the Share menu.
   static bool get isIos => _pwa?.isIos() ?? false;
+
+  /// Which browser, for the steps to install by hand: 'ios' (Safari),
+  /// 'ios-chrome', 'ios-other', 'android', 'samsung', 'android-firefox',
+  /// 'chrome', 'edge', 'mac-safari', 'firefox' or 'other'.
+  static String get browser => _pwa?.browser() ?? 'other';
 
   /// Shows the browser's install window: 'accepted', 'dismissed' or
   /// 'unavailable'.

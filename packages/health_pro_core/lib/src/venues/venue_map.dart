@@ -54,7 +54,7 @@ abstract final class MapTiles {
   static bool showTiles = true;
 
   static Widget layer() => showTiles
-      ? TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'bt.sportshub.app')
+      ? TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'bt.healthpro.app')
       : const SizedBox.shrink();
 
   static Widget attribution() => RichAttributionWidget(

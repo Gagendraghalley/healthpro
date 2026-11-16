@@ -171,6 +171,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       subtitle: 'Sign in to continue to your account',
       onBack: () => context.go(CoreRoutes.welcome),
       children: [
+        // First thing on the card, above the email (until it's installed).
+        const InstallAppButton(),
         Form(
           key: _form,
           child: AutofillGroup(
@@ -228,7 +230,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           action: 'Register here',
           onPressed: () => context.pushReplacement(CoreRoutes.signUpFor(widget.next)),
         ),
-        const InstallAppButton(),
       ],
     );
   }

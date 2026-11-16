@@ -8,5 +8,6 @@ abstract final class PwaInstall {
   static bool get canPrompt => false;
   static bool get isInstalled => true;
   static bool get isIos => false;
+  static String get browser => 'other';
   static Future<String> prompt() async => 'unavailable';
 }

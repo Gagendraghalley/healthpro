@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../router/app_router.dart';
 import '../theme/app_theme.dart';
+import '../theme/phone_size.dart';
 import '../theme/theme_mode.dart';
 import '../widgets/motion.dart';
 
@@ -25,10 +26,12 @@ class HealthProApp extends ConsumerWidget {
       themeAnimationDuration: lessMotion ? Duration.zero : Motion.theme,
       themeAnimationCurve: Motion.easeInOut,
       // Their own Reduce motion joins the device's: everything that asks
-      // reduceMotion(context) stands still.
+      // reduceMotion(context) stands still. On a phone, everything is a
+      // little smaller (PhoneSized).
       builder: (context, child) {
-        if (!lessMotion) return child!;
-        return MediaQuery(data: MediaQuery.of(context).copyWith(disableAnimations: true), child: child!);
+        final sized = PhoneSized(child: child!);
+        if (!lessMotion) return sized;
+        return MediaQuery(data: MediaQuery.of(context).copyWith(disableAnimations: true), child: sized);
       },
       routerConfig: ref.watch(appRouterProvider),
     );

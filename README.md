@@ -19,7 +19,7 @@ packages/health_pro_core/      accounts, profiles, venues and staff, payments, n
 packages/ground_booking/      module 1: links to the ground booking website
 packages/gym_membership/      module 2: gym plans, memberships, check-in, staff and owner pages
 supabase/migrations/          core, then one migration per module
-supabase/functions/           Edge Functions (delete-account, admin-users, ask-ai, ask-sportshub; _shared)
+supabase/functions/           Edge Functions (delete-account, admin-users, ask-ai, ask-health-pro; _shared)
 supabase/config.toml          auth settings (email codes) and function settings
 supabase/templates/code.html  the sign-in email, showing the 6-digit code
 supabase/test_users.sql       test accounts, one per role (test_users_remove.sql removes them)
@@ -285,7 +285,7 @@ A floating **Ask AI** button sits in the bottom-right corner of every page, for 
 | Where | Assistant | Who | Edge Function |
 |---|---|---|---|
 | A gym's staff pages | **Ask AI** for that gym: questions about its members, visits, packages and money, and how-tos. Its expand button opens it full size (`/gyms/<id>/manage/ask`). | That gym's staff | `ask-ai` |
-| Everywhere else | **Health Pro assistant**: what Health Pro is, finding and joining a gym, checking in, putting a gym on Health Pro, accounts. "Gyms in Paro?" lists the verified gyms there. | Anyone, no account needed | `ask-sportshub` |
+| Everywhere else | **Health Pro assistant**: what Health Pro is, finding and joining a gym, checking in, putting a gym on Health Pro, accounts. "Gyms in Paro?" lists the verified gyms there. | Anyone, no account needed | `ask-health-pro` |
 
 The button stays off pages it would get in the way of: the full Ask AI page, and pages with a Save bar along the bottom (the member form, the role editors). A module chooses this through `buildAssistant`, `hidesAssistantButton`, `assistantLinks` and `publicVenueRoute` on `HealthProModule`.
 
@@ -294,7 +294,7 @@ The AI never sees the gym's records. It only decides **which of the app's report
 1. The app sends the question, with the conversation's last three questions, to the Edge Function.
 2. The database counts it before the AI is asked:
    - `ai_take_question` (gym staff, as the person asking): they must work at that gym, 25 questions a person a Bhutan day. It keeps who asked, where and when (not what) for 90 days.
-   - `ai_take_public_question` (anyone, called by `ask-sportshub` with the service role): 15 a day from one address and 150 a day from everyone (about half the free allowance), so visitors can't use up the gyms' share. Addresses are kept only as a hash keyed with a secret, for 30 days.
+   - `ai_take_public_question` (anyone, called by `ask-health-pro` with the service role): 15 a day from one address and 150 a day from everyone (about half the free allowance), so visitors can't use up the gyms' share. Addresses are kept only as a hash keyed with a secret, for 30 days.
 3. The function asks Cloudflare Workers AI (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`, in JSON mode) and checks the reply against its lists of reports, pages and dzongkhags before passing it on.
 4. The app draws the chart or list from Health Pro's data.
 
@@ -314,7 +314,7 @@ CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_AI_TOKEN=... \
 SUPABASE_ACCESS_TOKEN=sbp_... SUPABASE_DB_PASSWORD=... scripts/deploy_supabase.sh
 ```
 
-Without them, both chats still work: the suggestions answer, and typed questions say it isn't set up yet. To try another Workers AI model (it must support JSON mode), set `CLOUDFLARE_AI_MODEL` the same way with `supabase secrets set`. The functions log each question's token use (Supabase → Edge Functions → ask-ai or ask-sportshub → Logs).
+Without them, both chats still work: the suggestions answer, and typed questions say it isn't set up yet. To try another Workers AI model (it must support JSON mode), set `CLOUDFLARE_AI_MODEL` the same way with `supabase secrets set`. The functions log each question's token use (Supabase → Edge Functions → ask-ai or ask-health-pro → Logs).
 
 ### Logo, splash and loader
 
@@ -364,8 +364,8 @@ When it moves to its own domain, add the domain to the Pages project (Custom dom
 ## Releasing
 
 - **Website**: see [Website on Cloudflare](#website-on-cloudflare). `scripts/build_web.sh` builds `apps/health_pro_app/build/web`, which any static host can serve; URLs use `/#/`, so no rewrites are needed.
-- **Android**: application id `bt.sportshub.app`. Add a release signing key before uploading to Google Play.
-- **iOS**: bundle id `bt.sportshub.app`. Set your team in Xcode (`ios/Runner.xcworkspace`).
+- **Android**: application id `bt.healthpro.app`. Add a release signing key before uploading to Google Play.
+- **iOS**: bundle id `bt.healthpro.app`. Set your team in Xcode (`ios/Runner.xcworkspace`).
 - App icons, launch screens and in-app logos are all made from the brand files in `packages/health_pro_core/tool/brand/` (kept out of `assets/` so they don't ship in the app): `logo-dark-new.png`, the transparent logo, and `logo-white-small.png`, the app icon (the mark on a white tile); `logo-white-new.png`, the logo on white, is for reference. To change the logo, replace those files and run `cd packages/health_pro_core && flutter test tool/brand_images.dart`; it makes the white-lettered version, lifts the mark off the icon's tile, and writes every image. If the logo's shape changes, update `HealthProLogo.aspectRatio`, `web/index.html` and `LaunchScreen.storyboard` to the size it prints.
 
 ## Tests
