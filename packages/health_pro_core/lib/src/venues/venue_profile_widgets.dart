@@ -208,8 +208,8 @@ class VenuePromoVideo extends ConsumerWidget {
   }
 }
 
-/// Plays the clip at [url]. Nothing is downloaded until they press play;
-/// then a tap pauses and plays, and the bar at the foot seeks.
+/// Prepares a still preview from the opening video frame, then plays inline.
+/// The landscape viewport stays the same size for portrait and landscape clips.
 class PromoVideoPlayer extends StatefulWidget {
   final String url;
 
@@ -224,12 +224,18 @@ class _PromoVideoPlayerState extends State<PromoVideoPlayer> {
   bool _failed = false;
 
   @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  @override
   void dispose() {
     _controller?.dispose();
     super.dispose();
   }
 
-  Future<void> _start() async {
+  Future<void> _initialize() async {
     final controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
     setState(() {
       _controller = controller;
@@ -237,11 +243,16 @@ class _PromoVideoPlayerState extends State<PromoVideoPlayer> {
     });
     try {
       await controller.initialize();
+      await controller.seekTo(Duration.zero);
+      if (!mounted || _controller != controller) {
+        await controller.dispose();
+        return;
+      }
       controller.addListener(_changed);
-      await controller.play();
+      setState(() {});
     } catch (_) {
       if (!mounted) return;
-      controller.dispose();
+      await controller.dispose();
       setState(() {
         _controller = null;
         _failed = true;
@@ -270,63 +281,92 @@ class _PromoVideoPlayerState extends State<PromoVideoPlayer> {
     final c = _controller;
     final ready = c != null && c.value.isInitialized;
     final playing = ready && c.value.isPlaying;
-    // Tall clips (shot on a phone) keep their shape, within reason.
-    final ratio = ready ? c.value.aspectRatio.clamp(9 / 16, 16 / 9).toDouble() : 16 / 9;
     return Align(
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 460),
-        child: AspectRatio(
-          aspectRatio: ratio,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: Semantics(
-              button: true,
-              label: playing ? 'Pause video' : 'Play video',
-              child: InkWell(
-                onTap: c == null ? _start : _toggle,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    const ColoredBox(color: Color(0xFF0B1220)),
-                    if (ready)
-                      FittedBox(
-                        fit: BoxFit.contain,
-                        child: SizedBox(width: c.value.size.width, height: c.value.size.height, child: VideoPlayer(c)),
-                      ),
-                    if (c != null && !ready)
-                      const Center(child: HealthProLoader(size: 44, semanticsLabel: 'Loading video'))
-                    else if (!playing)
-                      Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.play_circle_fill_rounded, size: 64, color: Colors.white),
-                            if (_failed) ...[
-                              const SizedBox(height: 6),
-                              const Text("The video couldn't be played. Tap to try again.",
-                                  textAlign: TextAlign.center, style: TextStyle(color: Colors.white)),
-                            ],
-                          ],
-                        ),
-                      ),
-                    if (ready)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: VideoProgressIndicator(
-                          c,
-                          allowScrubbing: true,
-                          padding: const EdgeInsets.only(top: 12),
-                          colors: VideoProgressColors(
-                            playedColor: context.colors.primary,
-                            bufferedColor: Colors.white38,
-                            backgroundColor: Colors.white24,
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: SizedBox(
+          width: double.infinity,
+          child: AspectRatio(
+            // Keep the player landscape at every stage. Portrait video is
+            // letterboxed within this frame so the full clip remains visible.
+            aspectRatio: 16 / 9,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Semantics(
+                button: true,
+                label: playing ? 'Pause video' : 'Play video',
+                child: InkWell(
+                  onTap: c == null || _failed ? _initialize : _toggle,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFF172846), Color(0xFF080F1E)],
                           ),
                         ),
                       ),
-                  ],
+                      if (ready)
+                        FittedBox(
+                          fit: BoxFit.contain,
+                          child: SizedBox(width: c.value.size.width, height: c.value.size.height, child: VideoPlayer(c)),
+                        ),
+                      if (c != null && !ready)
+                        const Center(child: HealthProLoader(size: 44, semanticsLabel: 'Loading video'))
+                      else if (!playing)
+                        Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 66,
+                                height: 66,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: .28),
+                                      blurRadius: 22,
+                                      offset: const Offset(0, 8),
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(Icons.play_arrow_rounded, size: 42, color: context.colors.primary),
+                              ),
+                              if (_failed) ...[
+                                const SizedBox(height: 6),
+                                const Text(
+                                  "The video couldn't be played. Tap to try again.",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      if (ready)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: VideoProgressIndicator(
+                            c,
+                            allowScrubbing: true,
+                            padding: const EdgeInsets.only(top: 12),
+                            colors: VideoProgressColors(
+                              playedColor: context.colors.primary,
+                              bufferedColor: Colors.white38,
+                              backgroundColor: Colors.white24,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
