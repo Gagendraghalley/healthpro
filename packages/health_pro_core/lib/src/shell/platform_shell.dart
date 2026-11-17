@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -9,6 +10,7 @@ import '../module/module_providers.dart';
 import '../module/health_pro_module.dart';
 import '../push/push_notifications.dart';
 import '../router/core_routes.dart';
+import '../search/global_search.dart';
 import '../theme/brand.dart';
 import '../utils/launch.dart';
 import '../widgets/logo.dart';
@@ -31,9 +33,10 @@ const sideMenuFoldedWidth = 84.0;
 /// The menu is made of services, not features: the platform's own pages
 /// (Overview, My services, Notifications), then a section per service, each
 /// with its icon, what it's working on (a gym of several) and its pages,
-/// then Administration for the Health Pro team, then the company. The
-/// section of the page being used opens; the others fold to one line, so
-/// twenty services stay one short list.
+/// then Administration for the Health Pro team, then the company. Every
+/// section starts closed, each one line, so twenty services stay one short
+/// list; once the person has opened one, the section of the page being used
+/// opens with it.
 class PlatformShell extends ConsumerStatefulWidget {
   /// The page's path, for the menu to mark it.
   final String location;
@@ -49,15 +52,26 @@ class _PlatformShellState extends ConsumerState<PlatformShell> {
   final _scaffold = GlobalKey<ScaffoldState>();
 
   /// A section opened (or closed, with null) by hand since the last page.
+  /// They all start closed.
   String? _opened;
-  bool _openedByHand = false;
+  bool _openedByHand = true;
+
+  /// Whether the person has opened or closed a section yet: until then, going
+  /// from page to page leaves them all closed.
+  bool _touched = false;
 
   /// The last service a page was in, kept open on the platform's own pages.
   String? _lastService;
 
+  /// What the search finds without asking the services: the menu's pages
+  /// and shortcuts, as of the last build.
+  List<SearchHit> _pages = const [];
+  bool _searching = false;
+
   @override
   void initState() {
     super.initState();
+    HardwareKeyboard.instance.addHandler(_onKey);
     // After signing in, not on first opening: notifications on this device?
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && PushNotifications.configured) PushNotifications.maybeAsk(context, ref);
@@ -65,9 +79,28 @@ class _PlatformShellState extends ConsumerState<PlatformShell> {
   }
 
   @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
+    super.dispose();
+  }
+
+  /// Ctrl K (⌘ K) opens the search, unless something is open over the page.
+  bool _onKey(KeyEvent event) {
+    if (!isSearchShortcut(event) || !mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return false;
+    _openSearch();
+    return true;
+  }
+
+  void _openSearch() {
+    if (_searching) return;
+    _searching = true;
+    showGlobalSearch(context, pages: _pages).whenComplete(() => _searching = false);
+  }
+
+  @override
   void didUpdateWidget(PlatformShell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.location != widget.location) _openedByHand = false;
+    if (oldWidget.location != widget.location && _touched) _openedByHand = false;
   }
 
   @override
@@ -96,6 +129,12 @@ class _PlatformShellState extends ConsumerState<PlatformShell> {
     final open = _openedByHand
         ? _opened
         : active?.key ?? _lastService ?? (services.length == 1 ? services.first.nav.key : null);
+    _pages = searchablePages(
+      platformPages: platformPages,
+      services: [for (final s in services) s.nav],
+      admin: admin,
+      memberItems: memberItems,
+    );
 
     final beside = MediaQuery.sizeOf(context).width >= sideMenuFrom;
     final folded = beside && ref.watch(sideMenuCollapsedProvider);
@@ -108,6 +147,7 @@ class _PlatformShellState extends ConsumerState<PlatformShell> {
           openSection: open,
           inDrawer: inDrawer,
           onToggleSection: (key) => setState(() {
+            _touched = true;
             _openedByHand = true;
             _opened = open == key ? null : key;
           }),
@@ -131,6 +171,7 @@ class _PlatformShellState extends ConsumerState<PlatformShell> {
           Expanded(
             child: AppShellScope(
               openMenu: beside ? null : () => _scaffold.currentState?.openDrawer(),
+              openSearch: _openSearch,
               service: active,
               // Each page fades up into place: quick enough not to wait for.
               child: FadeSlideIn(key: ValueKey(location), offset: 14, duration: Motion.page, child: widget.child),
@@ -564,7 +605,9 @@ class _SideNavTileState extends State<SideNavTile> {
     final folded = PlatformSidebar.isFolded(context);
     final selected = widget.selected;
     final text = selected ? ink.strong : (_hover ? ink.labelHover : ink.label);
-    final iconColor = selected ? widget.accent : text;
+    // The brand's orange (a service's colour) shows as the colour they picked.
+    final accent = context.brand.themed(widget.accent);
+    final iconColor = selected ? accent : text;
     final badgeColor = context.brand.accent;
     final badge = widget.badge;
     final Widget content;
@@ -618,7 +661,7 @@ class _SideNavTileState extends State<SideNavTile> {
         duration: const Duration(milliseconds: 160),
         curve: Curves.easeOut,
         decoration: BoxDecoration(
-          color: selected ? ink.selected(widget.accent) : (_hover ? ink.hover : ink.hover.withValues(alpha: 0)),
+          color: selected ? ink.selected(accent) : (_hover ? ink.hover : ink.hover.withValues(alpha: 0)),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Material(
@@ -640,7 +683,7 @@ class _SideNavTileState extends State<SideNavTile> {
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     width: selected ? 3 : 0,
-                    decoration: BoxDecoration(color: widget.accent, borderRadius: BorderRadius.circular(3)),
+                    decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(3)),
                   ),
                 ),
               ],
@@ -688,6 +731,10 @@ class ServiceSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final active = nav.isOpenAt(location);
     if (PlatformSidebar.isFolded(context)) return _foldedTile(context, active);
+    final ink = SideInk.of(context);
+    final scope = nav.scope;
+    // Each line's place as the section opens: they come in one after another.
+    var line = 0;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Column(
@@ -697,35 +744,42 @@ class ServiceSection extends StatelessWidget {
           Collapsible(
             open: open,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 0, 6),
+              padding: const EdgeInsets.fromLTRB(8, 6, 0, 6),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (nav.scope != null) _ScopeSwitcher(scope: nav.scope!, color: nav.color, onOpen: onOpen),
+                  if (scope != null)
+                    CollapsibleItem(index: line++, child: _ScopeSwitcher(scope: scope, color: nav.color, onOpen: onOpen)),
                   for (final s in nav.sections) ...[
                     if (s.title != null)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-                        child: Text(
-                          s.title!,
-                          style: TextStyle(
-                            color: SideInk.of(context).dark ? Colors.white.withValues(alpha: 0.4) : SideInk.of(context).heading,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.6,
+                      CollapsibleItem(
+                        index: line++,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                          child: Text(
+                            s.title!,
+                            style: TextStyle(
+                              color: ink.dark ? Colors.white.withValues(alpha: 0.4) : ink.heading,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.6,
+                            ),
                           ),
                         ),
                       ),
                     for (final d in s.items)
-                      SideNavTile(
-                        icon: d.icon,
-                        label: d.label,
-                        nested: true,
-                        external: d.isExternal,
-                        badge: d.badge,
-                        accent: nav.color,
-                        selected: d.isOpenAt(location),
-                        onTap: () => _go(d),
+                      CollapsibleItem(
+                        index: line++,
+                        child: SideNavTile(
+                          icon: d.icon,
+                          label: d.label,
+                          nested: true,
+                          external: d.isExternal,
+                          badge: d.badge,
+                          accent: nav.color,
+                          selected: d.isOpenAt(location),
+                          onTap: () => _go(d),
+                        ),
                       ),
                   ],
                 ],
@@ -880,11 +934,23 @@ class _ServiceHeaderState extends State<_ServiceHeader> {
                         ],
                       ),
                     ),
-                    AnimatedRotation(
-                      turns: widget.open ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.easeOutCubic,
-                      child: Icon(Icons.expand_more_rounded, color: ink.faint, size: 20),
+                    // The chevron, on a small white chip while it's open.
+                    AnimatedContainer(
+                      duration: Motion.of(context, Motion.hover),
+                      curve: Motion.ease,
+                      width: 26,
+                      height: 26,
+                      decoration: BoxDecoration(
+                        color: widget.open ? ink.well : ink.well.withValues(alpha: 0),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: widget.open ? ink.wellEdge : ink.wellEdge.withValues(alpha: 0)),
+                      ),
+                      child: AnimatedRotation(
+                        turns: widget.open ? 0.5 : 0,
+                        duration: Motion.of(context, Motion.dropdown),
+                        curve: Motion.ease,
+                        child: Icon(Icons.expand_more_rounded, color: widget.open || _hover ? ink.label : ink.faint, size: 19),
+                      ),
                     ),
                   ],
                 ),
@@ -984,8 +1050,10 @@ class _ScopeSwitcher extends StatelessWidget {
   }
 }
 
-/// A section's pages: they slide open and fold away. Folded, they're gone
-/// from the tree (not just hidden), once the fold has finished.
+/// A section's pages: they slide open and fold away. Opening, its lines
+/// ([CollapsibleItem]) come in one after another; closing, they fade
+/// together. Folded, they're gone from the tree (not just hidden), once the
+/// fold has finished.
 class Collapsible extends StatefulWidget {
   final bool open;
   final Widget child;
@@ -997,9 +1065,9 @@ class Collapsible extends StatefulWidget {
 }
 
 class _CollapsibleState extends State<Collapsible> with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 260), value: widget.open ? 1 : 0);
-  late final Animation<double> _t = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: Motion.card, reverseDuration: Motion.dropdown, value: widget.open ? 1 : 0);
+  late final Animation<double> _t = CurvedAnimation(parent: _c, curve: Motion.ease, reverseCurve: Motion.easeIn);
 
   @override
   void didUpdateWidget(Collapsible oldWidget) {
@@ -1022,18 +1090,57 @@ class _CollapsibleState extends State<Collapsible> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (context, child) => _c.isDismissed
-          ? const SizedBox.shrink()
-          : ClipRect(
-              child: Align(
-                alignment: Alignment.topCenter,
-                heightFactor: _t.value,
-                child: Opacity(opacity: _t.value, child: child),
+    return _Unfolding(
+      progress: _c,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, child) => _c.isDismissed
+            ? const SizedBox.shrink()
+            : ClipRect(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  heightFactor: _t.value,
+                  // Opening, each line fades in itself.
+                  child: Opacity(opacity: _c.status == AnimationStatus.forward ? 1 : _t.value, child: child),
+                ),
               ),
-            ),
-      child: widget.child,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+class _Unfolding extends InheritedWidget {
+  final Animation<double> progress;
+
+  const _Unfolding({required this.progress, required super.child});
+
+  @override
+  bool updateShouldNotify(_Unfolding oldWidget) => progress != oldWidget.progress;
+}
+
+/// A line of a [Collapsible]: as it opens, each comes in a moment after the
+/// one above, easing in from the left. Still when the section is already
+/// open, or when motion is reduced.
+class CollapsibleItem extends StatelessWidget {
+  final int index;
+  final Widget child;
+
+  const CollapsibleItem({super.key, required this.index, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = context.dependOnInheritedWidgetOfExactType<_Unfolding>()?.progress;
+    if (progress == null) return child;
+    final start = (index * 0.05).clamp(0.0, 0.4);
+    final curve = Interval(start, start + 0.6, curve: Motion.ease);
+    return AnimatedBuilder(
+      animation: progress,
+      builder: (context, child) {
+        final t = progress.status == AnimationStatus.forward ? curve.transform(progress.value) : 1.0;
+        return Opacity(opacity: t, child: Transform.translate(offset: Offset(-14 * (1 - t), 0), child: child));
+      },
+      child: child,
     );
   }
 }
@@ -1052,7 +1159,7 @@ class _Company extends StatelessWidget {
     final ink = SideInk.of(context);
     // The orange that reads as text on the white menu; the brand's on navy.
     final name = TextStyle(
-        color: ink.dark ? BrandColors.orange : LightColors.orangeText,
+        color: ink.dark ? context.brand.highlight : context.brand.accentText,
         fontWeight: FontWeight.w800,
         fontSize: 13,
         letterSpacing: 0.2);

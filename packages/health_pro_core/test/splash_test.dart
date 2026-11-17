@@ -16,17 +16,17 @@ void main() {
   group('the logo', () {
     testWidgets('navy lettering in light, white lettering in dark, no tile', (tester) async {
       await tester.pumpWidget(MaterialApp(theme: AppTheme.light, home: const HealthProLogo()));
-      expect(shownImage(tester), endsWith('/logo.png'));
+      expect(shownImage(tester), endsWith('/logo.webp'));
 
       await tester.pumpWidget(MaterialApp(theme: AppTheme.dark, home: const HealthProLogo(markOnly: true)));
       await tester.pumpAndSettle(); // the theme fades from light to dark
-      expect(shownImage(tester), endsWith('/mark_on_dark.png'));
+      expect(shownImage(tester), endsWith('/mark_on_dark.webp'));
       expect(find.byType(DecoratedBox), findsNothing);
     });
 
     testWidgets('places that are navy in both themes ask for the white one', (tester) async {
       await tester.pumpWidget(MaterialApp(theme: AppTheme.light, home: const HealthProLogo(onDark: true)));
-      expect(shownImage(tester), endsWith('/logo_on_dark.png'));
+      expect(shownImage(tester), endsWith('/logo_on_dark.webp'));
     });
 
     test('every version it can ask for is in the package', () {
@@ -65,7 +65,7 @@ void main() {
     testWidgets('white lettering on navy, in the light theme too, and it says it is loading', (tester) async {
       final semantics = tester.ensureSemantics();
       await showSplash(tester, const Size(390, 844), theme: AppTheme.light);
-      expect(shownImage(tester), endsWith('/logo_on_dark.png'));
+      expect(shownImage(tester), endsWith('/logo_on_dark.webp'));
       expect(find.bySemanticsLabel('Loading'), findsOneWidget);
       // The bar sits under the logo.
       final logo = tester.getRect(find.byType(Image));

@@ -822,7 +822,7 @@ class _ConsoleBarChartState extends State<ConsoleBarChart> {
   Widget build(BuildContext context) {
     final points = widget.points;
     final format = widget.format;
-    final color = widget.color;
+    final color = context.brand.themed(widget.color);
     final onTap = widget.onTap;
     final name = widget.name;
     final most = points.fold<num>(0, (m, p) => math.max(m, p.value));

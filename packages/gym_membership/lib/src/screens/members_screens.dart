@@ -1143,7 +1143,7 @@ class _FormSection extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: done ? success : BrandColors.orange.withValues(alpha: 0.12),
+                    color: done ? success : context.brand.highlight.withValues(alpha: 0.12),
                   ),
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 200),
@@ -1151,7 +1151,7 @@ class _FormSection extends StatelessWidget {
                         ? const Icon(Icons.check_rounded, key: ValueKey('done'), color: Colors.white, size: 20)
                         : Text('$number',
                             key: const ValueKey('n'),
-                            style: const TextStyle(color: BrandColors.orange, fontWeight: FontWeight.w800)),
+                            style: TextStyle(color: context.brand.highlight, fontWeight: FontWeight.w800)),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -1274,8 +1274,8 @@ class _RegisterSummary extends StatelessWidget {
               builder: (context, v, _) => LinearProgressIndicator(
                 value: v,
                 minHeight: 6,
-                color: BrandColors.orange,
-                backgroundColor: BrandColors.orange.withValues(alpha: 0.12),
+                color: context.brand.highlight,
+                backgroundColor: context.brand.highlight.withValues(alpha: 0.12),
               ),
             ),
           ),

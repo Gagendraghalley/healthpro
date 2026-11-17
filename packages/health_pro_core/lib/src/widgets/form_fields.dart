@@ -13,13 +13,17 @@ class DzongkhagField extends StatelessWidget {
   final bool required;
   final String label;
 
-  const DzongkhagField({super.key, required this.value, required this.onChanged, this.required = true, this.label = 'Dzongkhag'});
+  /// At the start of the field, as the others on its form have.
+  final IconData? icon;
+
+  const DzongkhagField(
+      {super.key, required this.value, required this.onChanged, this.required = true, this.label = 'Dzongkhag', this.icon});
 
   @override
   Widget build(BuildContext context) {
     return SearchableDropdown<String>(
       value: value,
-      decoration: InputDecoration(labelText: required ? '$label *' : label),
+      decoration: InputDecoration(labelText: required ? '$label *' : label, prefixIcon: icon == null ? null : Icon(icon)),
       options: [for (final d in dzongkhags) DropdownOption(d, d)],
       onChanged: onChanged,
       validator: required ? (v) => v == null ? 'Choose the dzongkhag' : null : null,

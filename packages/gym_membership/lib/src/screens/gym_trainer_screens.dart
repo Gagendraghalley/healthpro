@@ -52,8 +52,9 @@ class GymTrainersScreen extends ConsumerWidget {
               child: ListView(
                 padding: pagePadding(context),
                 children: [
-                  const InfoRow(
+                  _Notice(
                     icon: Icons.qr_code_scanner_rounded,
+                    color: context.brand.accent,
                     text: 'Attendance: scan a trainer\'s Health Pro QR code at Check-in when they arrive, as for members. '
                         'Each gym keeps its own record.',
                   ),
@@ -203,236 +204,461 @@ class _TrainerCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
     final p = trainer.profile;
-    final pending = trainer.status == TrainerStatus.pending;
+    final status = trainer.status;
+    final pending = status == TrainerStatus.pending;
+    final verified = status == TrainerStatus.verified;
+    final inactive = status == TrainerStatus.inactive;
+    final rejected = status == TrainerStatus.rejected;
     final today = BhutanTime.today();
     final recentAttendance = uniqueTrainerAttendanceEntries(trainer.attendance);
     final arrivedToday = recentAttendance.any((at) {
       final local = BhutanTime.toBhutan(at);
       return local.year == today.year && local.month == today.month && local.day == today.day;
     });
-    final contact = [if (trainer.phone != null) trainer.phone!, if (trainer.email != null) trainer.email!].join(' · ');
+    final statusChip = StatusChip(
+      label: status.label,
+      color: verified ? brand.success : pending ? brand.warning : brand.muted,
+      icon: verified
+          ? Icons.verified_rounded
+          : inactive
+              ? Icons.visibility_off_outlined
+              : Icons.schedule_rounded,
+    );
+    final line = Divider(height: 1, thickness: 1, color: brand.glassBorder);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: SectionCard(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TrainerAvatar(name: p.name, photoUrl: p.photoUrl, size: 58),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(p.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-                      if ((p.headline ?? '').trim().isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(p.headline!, maxLines: 2, overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: brand.muted)),
-                      ],
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 7,
-                        runSpacing: 6,
+        padding: EdgeInsets.zero,
+        child: LayoutBuilder(builder: (context, constraints) {
+          // The status sits top right when there's room, under the name on a phone.
+          final wide = constraints.maxWidth >= 480;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 18, 10, 16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TrainerAvatar(name: p.name, photoUrl: p.photoUrl, size: 56),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          StatusChip(
-                            label: trainer.status.label,
-                            color: trainer.status == TrainerStatus.verified
-                                ? brand.success
-                                : trainer.status == TrainerStatus.pending
-                                    ? brand.warning
-                                    : brand.muted,
-                            icon: trainer.status == TrainerStatus.verified
-                                ? Icons.verified_rounded
-                                : trainer.status == TrainerStatus.inactive
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.schedule_rounded,
+                          Text(p.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: brand.ink, fontSize: 17, height: 1.25, fontWeight: FontWeight.w800)),
+                          if ((p.headline ?? '').trim().isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(p.headline!,
+                                maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.muted, fontSize: 13.5)),
+                          ],
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 16,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              if (!wide) statusChip,
+                              if (p.ratingCount > 0)
+                                _Meta(
+                                  icon: Icons.star_rounded,
+                                  iconColor: BrandColors.amber,
+                                  text: '${p.ratingAverage!.toStringAsFixed(1)} (${p.ratingCount} '
+                                      '${p.ratingCount == 1 ? 'review' : 'reviews'})',
+                                ),
+                              if (p.experienceYears != null)
+                                _Meta(icon: Icons.workspace_premium_outlined, text: '${p.experienceYears} years experience'),
+                              if (trainer.addedByGym) const _Meta(icon: Icons.badge_outlined, text: 'Added by the gym'),
+                              if (trainer.phone != null) _Meta(icon: Icons.call_outlined, text: trainer.phone!),
+                              if (trainer.email != null) _Meta(icon: Icons.mail_outline_rounded, text: trainer.email!),
+                            ],
                           ),
-                          if (p.experienceYears != null)
-                            StatusChip(label: '${p.experienceYears} years experience', color: BrandColors.blue),
-                          if (p.ratingCount > 0)
-                            StatusChip(
-                              label: '★ ${p.ratingAverage!.toStringAsFixed(1)} · ${p.ratingCount}',
-                              color: BrandColors.amber,
-                            ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  tooltip: 'View trainer profile',
-                  onPressed: () => context.push(GymRoutes.trainerFor(p.userId, venueId: venueId)),
-                  icon: const Icon(Icons.open_in_new_rounded),
-                  style: IconButton.styleFrom(backgroundColor: brand.surfaceAlt),
-                ),
-              ],
-            ),
-            if (trainer.addedByGym || contact.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 10,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  if (trainer.addedByGym) StatusChip(label: 'Added by the gym', color: BrandColors.blue, icon: Icons.badge_outlined),
-                  if (contact.isNotEmpty) Text(contact, style: TextStyle(color: brand.muted, fontSize: 12.5)),
-                ],
-              ),
-            ],
-            if (trainer.message != null) ...[
-              const SizedBox(height: 8),
-              Text('"${trainer.message}"', style: TextStyle(color: brand.body, fontStyle: FontStyle.italic)),
-            ],
-            if (trainer.status == TrainerStatus.inactive)
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Text('Inactive at this gym. Their schedule and member assignments have been cleared.',
-                    style: TextStyle(color: brand.muted)),
-              ),
-            if (pending || trainer.status == TrainerStatus.rejected) ...[
-              const SizedBox(height: 10),
-              Text('Certificates', style: TextStyle(color: brand.muted, fontWeight: FontWeight.w700)),
-              if (trainer.certificates.isEmpty)
-                Text('None added yet.', style: TextStyle(color: brand.danger))
-              else
-                for (final c in trainer.certificates)
-                  InkWell(
-                    onTap: c.fileUrl == null ? null : () => openExternal(context, Uri.parse(c.fileUrl!)),
-                    child: InfoRow(
-                      icon: Icons.workspace_premium_rounded,
-                      text: [c.title, if (c.issuer != null) c.issuer!, if (c.issuedOn != null) '${c.issuedOn!.year}',
-                              if (c.fileUrl != null) '(see it)']
-                          .join(' · '),
                     ),
-                  ),
-            ],
-            if (trainer.decisionNote != null && trainer.status == TrainerStatus.rejected)
-              Text('You said: "${trainer.decisionNote}"', style: TextStyle(color: brand.muted)),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: brand.surfaceAlt,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.calendar_month_rounded, size: 18, color: brand.muted),
+                    const SizedBox(width: 8),
+                    if (wide) Padding(padding: const EdgeInsets.only(top: 2), child: statusChip),
+                    if (verified)
+                      PopupMenuButton<String>(
+                        tooltip: 'More',
+                        icon: Icon(Icons.more_vert_rounded, color: brand.muted),
+                        onSelected: (_) => _deactivate(context, ref),
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'inactive',
+                            child: Row(
+                              children: [
+                                Icon(Icons.person_off_outlined, size: 20, color: brand.danger),
+                                const SizedBox(width: 12),
+                                Text('Make inactive', style: TextStyle(color: brand.danger, fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      )
+                    else
                       const SizedBox(width: 8),
-                      Text(
-                          trainer.status == TrainerStatus.inactive
-                              ? 'Schedule at this gym'
-                              : pending
-                                  ? 'Requested weekly times'
-                                  : 'Weekly availability',
-                          style: TextStyle(color: brand.ink, fontWeight: FontWeight.w700)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  if (trainer.status == TrainerStatus.inactive)
-                    Text('No active times at this gym.', style: TextStyle(color: brand.muted))
-                  else
-                    WeekSlotsView(slots: trainer.slots),
-                ],
-              ),
-            ),
-            if (trainer.status == TrainerStatus.verified) ...[
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(child: _Figure(value: '${trainerAttendanceDaysLast30(trainer.attendance, today)}', label: 'attendance days · last 30')),
-                  Expanded(child: _Figure(value: '${trainer.members}', label: trainer.members == 1 ? 'member' : 'members')),
-                ],
-              ),
-            if (recentAttendance.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Text('Recent arrivals', style: TextStyle(color: brand.muted, fontSize: 12, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (final at in recentAttendance.take(3))
-                      Chip(
-                        avatar: const Icon(Icons.login_rounded, size: 15),
-                        visualDensity: VisualDensity.compact,
-                        label: Text('${formatShortDate(BhutanTime.toBhutan(at))} · ${formatTime(at)}'),
-                      ),
                   ],
                 ),
-              ] else
-                Text('No attendance here yet.', style: TextStyle(color: brand.muted, fontSize: 12.5)),
+              ),
+              line,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (trainer.message != null) ...[
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
+                        decoration: BoxDecoration(
+                          color: brand.surfaceAlt,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border(left: BorderSide(color: brand.accent, width: 3)),
+                        ),
+                        child: Text('"${trainer.message}"', style: TextStyle(color: brand.body, fontStyle: FontStyle.italic)),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (inactive) ...[
+                      _Notice(
+                        icon: Icons.info_outline_rounded,
+                        color: brand.muted,
+                        text: 'Inactive at this gym. Their schedule and member assignments have been cleared.',
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (pending || rejected) ...[
+                      const _Label(icon: Icons.workspace_premium_outlined, text: 'Certificates'),
+                      const SizedBox(height: 8),
+                      if (trainer.certificates.isEmpty)
+                        Text('None added yet.', style: TextStyle(color: brand.danger))
+                      else
+                        for (final c in trainer.certificates)
+                          _CertificateRow(
+                            text: [c.title, if (c.issuer != null) c.issuer!, if (c.issuedOn != null) '${c.issuedOn!.year}']
+                                .join(' · '),
+                            onOpen: c.fileUrl == null ? null : () => openExternal(context, Uri.parse(c.fileUrl!)),
+                          ),
+                      if (trainer.decisionNote != null && rejected) ...[
+                        const SizedBox(height: 6),
+                        Text('You said: "${trainer.decisionNote}"', style: TextStyle(color: brand.muted)),
+                      ],
+                      const SizedBox(height: 16),
+                    ],
+                    if (verified) ...[
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: brand.fieldBorder),
+                        ),
+                        child: IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                child: _Stat(
+                                    value: '${trainerAttendanceDaysLast30(trainer.attendance, today)}',
+                                    suffix: ' / 30',
+                                    label: 'Days attended'),
+                              ),
+                              VerticalDivider(width: 1, thickness: 1, color: brand.fieldBorder),
+                              Expanded(
+                                  child: _Stat(value: '${trainer.members}', label: trainer.members == 1 ? 'Member' : 'Members')),
+                              VerticalDivider(width: 1, thickness: 1, color: brand.fieldBorder),
+                              Expanded(
+                                child: _Stat(
+                                  value: arrivedToday ? 'Arrived' : 'Not yet',
+                                  label: 'Today',
+                                  color: arrivedToday ? brand.readable(brand.success) : brand.muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const _Label(icon: Icons.history_rounded, text: 'Recent arrivals'),
+                      const SizedBox(height: 8),
+                      if (recentAttendance.isEmpty)
+                        Text('No attendance here yet.', style: TextStyle(color: brand.muted, fontSize: 13))
+                      else
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final at in recentAttendance.take(3))
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(color: brand.surfaceAlt, borderRadius: BorderRadius.circular(8)),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.login_rounded, size: 14, color: brand.muted),
+                                    const SizedBox(width: 6),
+                                    Text('${formatShortDate(BhutanTime.toBhutan(at))} · ${formatTime(at)}',
+                                        style: TextStyle(color: brand.body, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      const SizedBox(height: 16),
+                    ],
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _Label(
+                            icon: Icons.calendar_month_outlined,
+                            text: inactive
+                                ? 'Schedule at this gym'
+                                : pending
+                                    ? 'Requested weekly times'
+                                    : 'Weekly availability',
+                          ),
+                        ),
+                        if (pending || verified)
+                          TextButton.icon(
+                            onPressed: () => _changeTimes(context, ref),
+                            icon: const Icon(Icons.edit_calendar_outlined, size: 16),
+                            label: const Text('Change times'),
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              textStyle: const TextStyle(fontFamily: brandFont, fontSize: 13.5, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    if (inactive)
+                      Text('No active times at this gym.', style: TextStyle(color: brand.muted))
+                    else
+                      WeekSlotsView(slots: trainer.slots),
+                  ],
+                ),
+              ),
+              line,
+              Container(
+                color: brand.subtle,
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+                child: _CompactButtons(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (pending || rejected)
+                        FilledButton.icon(
+                          onPressed: () => _decide(context, ref, approve: true),
+                          icon: const Icon(Icons.verified_rounded, size: 18),
+                          label: const Text('Verify'),
+                        ),
+                      if (pending)
+                        OutlinedButton(
+                          onPressed: () => _decide(context, ref, approve: false),
+                          child: const Text('Don\'t verify'),
+                        ),
+                      if (verified)
+                        FilledButton.icon(
+                          onPressed: arrivedToday ? null : () => _arrived(context, ref),
+                          icon: Icon(arrivedToday ? Icons.event_available_rounded : Icons.login_rounded, size: 18),
+                          label: Text(arrivedToday ? 'Already arrived today' : 'Mark arrived'),
+                        ),
+                      if (inactive)
+                        FilledButton.icon(
+                          onPressed: () => _reactivate(context, ref),
+                          icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                          label: const Text('Reactivate'),
+                        ),
+                      OutlinedButton.icon(
+                        onPressed: () => context.push(GymRoutes.trainerFor(p.userId, venueId: venueId)),
+                        icon: const Icon(Icons.person_outline_rounded, size: 18),
+                        label: const Text('View profile'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+          );
+        }),
+      ),
+    );
+  }
+}
+
+/// The app's filled and outlined buttons a size smaller, for a card's footer:
+/// two sit side by side even on a phone.
+class _CompactButtons extends StatelessWidget {
+  final Widget child;
+
+  const _CompactButtons({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const compact = ButtonStyle(
+      minimumSize: WidgetStatePropertyAll(Size(0, 42)),
+      padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 16)),
+      textStyle: WidgetStatePropertyAll(TextStyle(fontFamily: brandFont, fontSize: 14.5, fontWeight: FontWeight.w700)),
+    );
+    return Theme(
+      data: theme.copyWith(
+        filledButtonTheme: FilledButtonThemeData(style: compact.merge(theme.filledButtonTheme.style)),
+        outlinedButtonTheme: OutlinedButtonThemeData(style: compact.merge(theme.outlinedButtonTheme.style)),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// An icon and a short fact, in a trainer's header: rating, experience, phone.
+class _Meta extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color? iconColor;
+
+  const _Meta({required this.icon, required this.text, this.iconColor});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: iconColor ?? brand.muted),
+        const SizedBox(width: 5),
+        Flexible(
+          child: Text(text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: brand.body, fontSize: 13, fontWeight: FontWeight.w600)),
+        ),
+      ],
+    );
+  }
+}
+
+/// A part of the card's heading: a small icon and the name of what follows.
+class _Label extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _Label({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: brand.muted),
+        const SizedBox(width: 7),
+        Flexible(child: Text(text, style: TextStyle(color: brand.ink, fontSize: 13.5, fontWeight: FontWeight.w800))),
+      ],
+    );
+  }
+}
+
+/// One cell of the stats strip: the figure, and what it counts.
+class _Stat extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color? color;
+
+  /// After [value], smaller: what it's out of.
+  final String? suffix;
+
+  const _Stat({required this.value, required this.label, this.color, this.suffix});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text.rich(
+            TextSpan(text: value, children: [
+              if (suffix != null)
+                TextSpan(text: suffix, style: TextStyle(color: brand.muted, fontSize: 13, fontWeight: FontWeight.w600)),
+            ]),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: color ?? brand.ink, fontSize: 19, height: 1.2, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(color: brand.muted, fontSize: 12, height: 1.3)),
+        ],
+      ),
+    );
+  }
+}
+
+/// A certificate to check: what it is, and opening the file when there is one.
+class _CertificateRow extends StatelessWidget {
+  final String text;
+  final VoidCallback? onOpen;
+
+  const _CertificateRow({required this.text, this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
+        color: brand.surfaceAlt,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onOpen,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
               children: [
-                if (pending || trainer.status == TrainerStatus.rejected)
-                  FilledButton.icon(
-                    onPressed: () => _decide(context, ref, approve: true),
-                    icon: const Icon(Icons.verified_rounded, size: 18),
-                    label: const Text('Verify'),
-                  ),
-                if (trainer.status == TrainerStatus.verified)
-                  FilledButton.tonalIcon(
-                    onPressed: arrivedToday ? null : () => _arrived(context, ref),
-                    icon: Icon(arrivedToday ? Icons.event_available_rounded : Icons.login_rounded, size: 18),
-                    label: Text(arrivedToday ? 'Already arrived today' : 'Mark arrived'),
-                  ),
-                if (trainer.status == TrainerStatus.inactive)
-                  FilledButton.icon(
-                    onPressed: () => _reactivate(context, ref),
-                    icon: const Icon(Icons.restart_alt_rounded, size: 18),
-                    label: const Text('Reactivate'),
-                  ),
-                if (pending || trainer.status == TrainerStatus.verified)
-                  OutlinedButton.icon(
-                    onPressed: () => _changeTimes(context, ref),
-                    icon: const Icon(Icons.edit_calendar_outlined, size: 18),
-                    label: const Text('Change times'),
-                  ),
-                if (pending || trainer.status == TrainerStatus.verified)
-                  OutlinedButton(
-                    onPressed: pending
-                        ? () => _decide(context, ref, approve: false)
-                        : () => _deactivate(context, ref),
-                    child: Text(pending ? 'Don\'t verify' : 'Make inactive'),
-                  ),
+                Icon(Icons.description_outlined, size: 18, color: brand.readable(brand.accent)),
+                const SizedBox(width: 10),
+                Expanded(child: Text(text, style: TextStyle(color: brand.body, fontWeight: FontWeight.w600))),
+                if (onOpen != null) ...[
+                  const SizedBox(width: 8),
+                  Text('See it', style: TextStyle(color: brand.accentText, fontWeight: FontWeight.w700, fontSize: 13)),
+                  Icon(Icons.chevron_right_rounded, size: 18, color: brand.accentText),
+                ],
               ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _Figure extends StatelessWidget {
-  final String value;
-  final String label;
+/// A short note in a tinted box.
+class _Notice extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String text;
 
-  const _Figure({required this.value, required this.label});
+  const _Notice({required this.icon, required this.color, required this.text});
 
   @override
-  Widget build(BuildContext context) => Column(
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10)),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(value, style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-          Text(label, style: TextStyle(color: context.brand.muted, fontSize: 12.5)),
+          Icon(icon, size: 18, color: brand.readable(color)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text, style: TextStyle(color: brand.body, height: 1.4))),
         ],
-      );
+      ),
+    );
+  }
 }
 
 /// A member chooses their trainer at one of their gyms: its verified

@@ -439,7 +439,7 @@ class AssistantWelcome extends StatelessWidget {
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            gradient: LinearGradient(colors: [blue.withValues(alpha: 0.10), BrandColors.orange.withValues(alpha: 0.06)]),
+            gradient: LinearGradient(colors: [blue.withValues(alpha: 0.10), context.brand.highlight.withValues(alpha: 0.06)]),
             border: Border.all(color: blue.withValues(alpha: 0.2)),
           ),
           child: Column(
@@ -543,9 +543,10 @@ class AssistantPanel extends StatelessWidget {
                 Container(
                   width: 38,
                   height: 38,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: LinearGradient(colors: [BrandColors.orange, Color(0xFFFFA24D)]),
+                    gradient: LinearGradient(
+                        colors: [context.brand.highlight, context.brand.themedShade(const Color(0xFFFFA24D))]),
                   ),
                   child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 20),
                 ),
@@ -691,24 +692,27 @@ class AssistantFrame extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final modules = ref.watch(enabledModulesProvider).valueOrNull ?? const <HealthProModule>[];
-    if (_barPages.hasMatch(location) || modules.any((m) => m.hidesAssistantButton(location))) return child;
+    final hidden = _barPages.hasMatch(location) || modules.any((m) => m.hidesAssistantButton(location));
+    // The same Stack with the button or without, so the page (and the menu
+    // around it) isn't built afresh, losing what was open, on going between.
     return Stack(
       children: [
         Positioned.fill(child: child),
-        Positioned(
-          right: 16,
-          bottom: 16 + MediaQuery.paddingOf(context).bottom,
-          child: FadeSlideIn(
-            child: AssistantButton(onPressed: () {
-              Widget? panel;
-              for (final m in modules) {
-                panel = m.buildAssistant(context, location);
-                if (panel != null) break;
-              }
-              openAssistant(context, panel ?? const HealthProAssistantPanel());
-            }),
+        if (!hidden)
+          Positioned(
+            right: 16,
+            bottom: 16 + MediaQuery.paddingOf(context).bottom,
+            child: FadeSlideIn(
+              child: AssistantButton(onPressed: () {
+                Widget? panel;
+                for (final m in modules) {
+                  panel = m.buildAssistant(context, location);
+                  if (panel != null) break;
+                }
+                openAssistant(context, panel ?? const HealthProAssistantPanel());
+              }),
+            ),
           ),
-        ),
       ],
     );
   }

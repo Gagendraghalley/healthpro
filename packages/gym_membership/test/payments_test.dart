@@ -6,7 +6,7 @@ import 'package:gym_membership/src/data/online_payments.dart';
 import 'package:gym_membership/src/screens/payment_screens.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
-import 'gym_navigation_test.dart' as nav show frontDesk, gymId, inMenu, owner, person, showApp;
+import 'gym_navigation_test.dart' as nav show frontDesk, gymId, inMenu, openGym, owner, person, showApp;
 import 'gym_screens_test.dart' show day, overrides, show;
 
 // Paying online with a journal number, and the gym's settings (the database
@@ -28,7 +28,10 @@ PaymentClaim claim({String status = 'pending', int amount = 3000, int months = 2
 
 const peakAccount = PaymentAccount(bankName: 'Bank of Bhutan', accountNumber: '200123456789', accountName: 'Peak Fitness');
 
-MyGym myGym({MyClaim? claim, PaymentAccount? account = peakAccount}) => MyGym(
+/// Where the gym's bank-issued QR image is kept.
+const peakQr = 'https://example.test/gym-payment-qr/g1/qr.png';
+
+MyGym myGym({MyClaim? claim, PaymentAccount? account = peakAccount, String? qr = peakQr}) => MyGym(
       venueId: 'g1',
       venueName: 'Peak Fitness',
       place: 'Thimphu',
@@ -37,8 +40,19 @@ MyGym myGym({MyClaim? claim, PaymentAccount? account = peakAccount}) => MyGym(
       endDate: day(-10),
       gymMemberId: 'm1',
       paymentAccount: account,
+      paymentQrUrl: qr,
       claim: claim,
     );
+
+/// The bank-issued QR image of [accountName]'s account, as payers see it.
+Finder bankQr(String accountName) => find.byWidgetPredicate(
+    (w) => w is Image && w.semanticLabel == 'Bank-issued payment QR code for $accountName');
+
+/// Gives the bank-issued QR image's address, for screens that show it.
+class QrRepo extends Fake implements GymRepository {
+  @override
+  String? paymentQrUrl(String? path) => path == null || path.isEmpty ? null : 'https://example.test/gym-payment-qr/$path';
+}
 
 void main() {
   test('settings: the defaults before a gym saves any, and what it saved', () {
@@ -63,9 +77,10 @@ void main() {
     expect(PaymentAccount.fromJson({'bank_name': null, 'account_number': null}), isNull);
   });
 
-  test('a member pays online where they are registered, the gym has set up its account, and nothing waits', () {
+  test('a member pays online where they are registered, the gym has set up its account and QR, and nothing waits', () {
     expect(myGym().canPayOnline, isTrue);
     expect(myGym(account: null).canPayOnline, isFalse, reason: 'no bank account set up: at the desk');
+    expect(myGym(qr: null).canPayOnline, isFalse, reason: "the bank's QR not uploaded yet: at the desk");
     final waiting =
         MyClaim(id: 'c1', status: ClaimStatus.pending, planName: 'Gym', months: 1, amount: 1500, jrn: 'JRN1', createdAt: DateTime.now());
     expect(myGym(claim: waiting).canPayOnline, isFalse, reason: 'one waits already');
@@ -106,20 +121,27 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('Membership settings: the bank account, reminder days, who answers requests to join', (tester) async {
+  testWidgets('Membership settings: the bank account and its QR, reminder days, who answers requests to join', (tester) async {
     for (final size in [const Size(1440, 1000), const Size(390, 844)]) {
       await show(tester, const MembershipSettingsScreen(venueId: 'g1'), size: size, with_: [
         ...overrides(),
-        gymSettingsProvider.overrideWith(
-            (ref, id) async => const GymSettings(
-                venueId: 'g1', account: peakAccount, reminderDays: [7, 3], joinApproval: JoinApproval.managers)),
+        gymRepositoryProvider.overrideWithValue(QrRepo()),
+        gymSettingsProvider.overrideWith((ref, id) async => const GymSettings(
+            venueId: 'g1',
+            account: peakAccount,
+            paymentQrPath: 'g1/qr.png',
+            reminderDays: [7, 3],
+            joinApproval: JoinApproval.managers)),
       ]);
       await tester.pumpAndSettle();
       expect(find.text('Account number'), findsOneWidget);
       expect(find.widgetWithText(TextFormField, '200123456789'), findsOneWidget);
-      expect(find.text('Upload payment QR'), findsNothing, reason: 'no picture to upload any more');
+      await tester.scrollUntilVisible(find.text('Change QR code'), 200, scrollable: find.byType(Scrollable).first);
+      expect(find.text('Bank-issued payment QR'), findsOneWidget);
+      expect(find.text('Remove QR'), findsOneWidget, reason: 'the QR they uploaded');
       await tester.scrollUntilVisible(find.text('What payers see'), 200, scrollable: find.byType(Scrollable).first);
-      expect(find.text('2001 2345 6789'), findsOneWidget, reason: 'the QR code made from the account');
+      expect(find.text('2001 2345 6789'), findsOneWidget, reason: 'the account written out under the QR');
+      expect(bankQr('Peak Fitness'), findsOneWidget, reason: "the bank's QR they uploaded");
       await tester.scrollUntilVisible(find.text('Online payment gateway (RMA)'), 200, scrollable: find.byType(Scrollable).first);
       await tester.scrollUntilVisible(find.text('7 days'), 200, scrollable: find.byType(Scrollable).first);
       FilterChip chip(String label) => tester.widget<FilterChip>(find.widgetWithText(FilterChip, label));
@@ -168,6 +190,12 @@ void main() {
       expect(find.text('Peak Fitness takes payments at the front desk'), findsOneWidget);
     });
 
+    testWidgets("a gym with its account but not the bank's QR yet: at the desk", (tester) async {
+      await showPay(tester, MyMemberships(gyms: [myGym(qr: null)]));
+      await tester.pumpAndSettle();
+      expect(find.text('Peak Fitness takes payments at the front desk'), findsOneWidget);
+    });
+
     testWidgets('a payment waiting: nothing to pay again', (tester) async {
       final waiting = MyClaim(
           id: 'c1', status: ClaimStatus.pending, planName: 'Gym', months: 1, amount: 1500, jrn: 'JRN1', createdAt: DateTime.now());
@@ -193,6 +221,7 @@ void main() {
         gymWaitingRequestsProvider.overrideWith((ref, id) async => 0),
         gymSettingsProvider.overrideWith((ref, id) async => GymSettings.defaults(id)),
       ]);
+      await nav.openGym(tester);
       expect(nav.inMenu('Payments to confirm'), findsOneWidget);
       expect(nav.inMenu('Membership settings'), findsOneWidget);
       expect(nav.inMenu('Join requests'), findsOneWidget);
@@ -205,6 +234,7 @@ void main() {
         gymWaitingRequestsProvider.overrideWith((ref, id) async => 1),
         gymSettingsProvider.overrideWith((ref, id) async => GymSettings(venueId: id, joinApproval: JoinApproval.managers)),
       ], at: '/gyms/${nav.gymId}/manage');
+      await nav.openGym(tester);
       expect(nav.inMenu('Payments to confirm'), findsOneWidget, reason: 'they take payments');
       expect(nav.inMenu('Join requests'), findsNothing);
       expect(nav.inMenu('Membership settings'), findsNothing, reason: "they don't edit the gym");

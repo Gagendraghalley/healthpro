@@ -29,20 +29,24 @@ select public.add_venue_staff(:'gym', 'manager8@gym.bt', 'manager');
 
 -- ---- The gym's settings ---------------------------------------------------
 select t.eq((select count(*) from public.gym_settings where venue_id = :'gym')::int, 0, 'a new gym has the default settings');
-select public.gym_save_settings(:'gym', 'Bank of Bhutan', ' 2001-2345 6789 ', ' Peak  Fitness ', '{3,7,3}', 'desk');
+select public.gym_save_settings(:'gym', 'Bank of Bhutan', ' 2001-2345 6789 ', ' Peak  Fitness ', :'gym' || '/payment-qr.png', '{3,7,3}', 'desk');
 select t.eq((select reminder_days from public.gym_settings where venue_id = :'gym'), '{7,3}'::int[],
             'the owner sets reminders 7 and 3 days before the end');
 select t.eq((select account_number || ' ' || account_name from public.gym_settings where venue_id = :'gym'),
             '200123456789 Peak Fitness', '...and the bank account members pay into, tidied');
-select t.fails(format($$select public.gym_save_settings(%L, 'Bank of Bhutan', '200123456789', null, '{3}', 'desk')$$, :'gym'),
+select t.eq((select payment_qr_path from public.gym_settings where venue_id = :'gym'), :'gym' || '/payment-qr.png',
+            '...and the QR code members scan to pay');
+select t.fails(format($$select public.gym_save_settings(%L, 'Bank of Bhutan', '200123456789', 'Peak Fitness',
+                 '00000000-0000-0000-0000-000000000000/payment-qr.png', '{3}', 'desk')$$, :'gym'), 'QR image for this gym');
+select t.fails(format($$select public.gym_save_settings(%L, 'Bank of Bhutan', '200123456789', null, null, '{3}', 'desk')$$, :'gym'),
                'the account name');
-select t.fails(format($$select public.gym_save_settings(%L, 'Bank of Bhutan', '12AB', 'Peak Fitness', '{3}', 'desk')$$, :'gym'),
+select t.fails(format($$select public.gym_save_settings(%L, 'Bank of Bhutan', '12AB', 'Peak Fitness', null, '{3}', 'desk')$$, :'gym'),
                '6 to 20 digits');
-select t.fails(format($$select public.gym_save_settings(%L, null, null, null, '{0}', 'desk')$$, :'gym'), '1 to 60 days');
-select t.fails(format($$select public.gym_save_settings(%L, null, null, null, '{1,2,3,4,5,6}', 'desk')$$, :'gym'), 'up to 5');
-select t.fails(format($$select public.gym_save_settings(%L, null, null, null, '{3}', 'nobody')$$, :'gym'), 'who answers');
+select t.fails(format($$select public.gym_save_settings(%L, null, null, null, null, '{0}', 'desk')$$, :'gym'), '1 to 60 days');
+select t.fails(format($$select public.gym_save_settings(%L, null, null, null, null, '{1,2,3,4,5,6}', 'desk')$$, :'gym'), 'up to 5');
+select t.fails(format($$select public.gym_save_settings(%L, null, null, null, null, '{3}', 'nobody')$$, :'gym'), 'who answers');
 select t.as_user('00000000-0000-0000-0000-000000000802');
-select t.fails(format($$select public.gym_save_settings(%L, null, null, null, '{3}', 'desk')$$, :'gym'), 'Only those who edit');
+select t.fails(format($$select public.gym_save_settings(%L, null, null, null, null, '{3}', 'desk')$$, :'gym'), 'Only those who edit');
 select t.eq((select account_number from public.gym_settings where venue_id = :'gym'), '200123456789',
             'the front desk reads them');
 
@@ -111,7 +115,7 @@ select t.fails(format($$select public.gym_cancel_payment_claim(%L)$$, :'claim3')
 
 -- ---- Managers only answer requests to join ---------------------------------
 select t.as_user('00000000-0000-0000-0000-000000000801');
-select public.gym_save_settings(:'gym', 'Bank of Bhutan', '200123456789', 'Peak Fitness', '{7,3}', 'managers');
+select public.gym_save_settings(:'gym', 'Bank of Bhutan', '200123456789', 'Peak Fitness', null, '{7,3}', 'managers');
 select t.as_user('00000000-0000-0000-0000-000000000805');
 select public.gym_request_to_join(:'gym') as karma_req \gset
 select t.as_user('00000000-0000-0000-0000-000000000802');

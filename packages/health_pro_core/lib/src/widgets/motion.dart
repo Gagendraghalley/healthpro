@@ -111,7 +111,7 @@ class _ScrollProgressOverlayState extends State<ScrollProgressOverlay> {
                             child: Container(
                               height: 2,
                               decoration: BoxDecoration(
-                                color: BrandColors.orange.withValues(alpha: 0.18),
+                                color: context.brand.highlight.withValues(alpha: 0.18),
                                 borderRadius: BorderRadius.circular(2),
                               ),
                             ),
@@ -122,8 +122,11 @@ class _ScrollProgressOverlayState extends State<ScrollProgressOverlay> {
                               widthFactor: value,
                               child: Container(
                                 height: 3,
-                                decoration: const BoxDecoration(
-                                  gradient: LinearGradient(colors: [BrandColors.orange, Color(0xFFFFB16E)]),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(colors: [
+                                    context.brand.highlight,
+                                    context.brand.themedShade(const Color(0xFFFFB16E)),
+                                  ]),
                                   borderRadius: BorderRadius.horizontal(right: Radius.circular(4)),
                                 ),
                               ),
@@ -135,9 +138,9 @@ class _ScrollProgressOverlayState extends State<ScrollProgressOverlay> {
                               width: 8,
                               height: 8,
                               decoration: BoxDecoration(
-                                color: BrandColors.orange,
+                                color: context.brand.highlight,
                                 shape: BoxShape.circle,
-                                boxShadow: [BoxShadow(color: BrandColors.orange.withValues(alpha: 0.4), blurRadius: 8)],
+                                boxShadow: [BoxShadow(color: context.brand.highlight.withValues(alpha: 0.4), blurRadius: 8)],
                               ),
                             ),
                           ),

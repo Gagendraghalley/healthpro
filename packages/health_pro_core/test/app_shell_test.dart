@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -37,6 +38,14 @@ class _Service extends HealthProModule {
         ],
         actions: [ServiceAction(label: 'New $name order', icon: Icons.add_rounded, route: '/$key/orders')],
       );
+
+  /// One customer, Pema Dorji, for the search in the bar.
+  @override
+  Future<List<SearchHit>> search(Ref ref, String query) async => [
+        if (searchWords(query).every('pema dorji'.contains))
+          SearchHit(
+              title: 'Pema Dorji', subtitle: '$name customer', icon: Icons.person, route: '/$key/pema', group: 'Customers'),
+      ];
 }
 
 /// The platform's frame with [services], a stand-in page at every path.
@@ -65,6 +74,7 @@ Future<GoRouter> showShell(WidgetTester tester, List<HealthProModule> services,
       myProfileProvider.overrideWith((ref) async => Profile.fromJson({'id': 'u1', 'full_name': 'Pema Dorji'})),
       myAccessProvider.overrideWith((ref) async => PlatformAccess(isSuperAdmin: team, isActive: true, permissions: const {})),
       pendingVenuesProvider.overrideWith((ref) async => const []),
+      myVenuesProvider.overrideWith((ref) async => const []),
       unreadCountProvider.overrideWithValue(3),
     ],
     child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
@@ -116,14 +126,27 @@ void main() {
     expect(find.text('the page'), findsOneWidget);
   });
 
-  testWidgets("the open page's service is open, its page marked; the others fold to one line", (tester) async {
+  testWidgets("every service starts closed; opened, the page's is marked, and it follows the page", (tester) async {
     await showShell(tester, const [shop, cafe], at: '/cafe/orders');
+    expect(inMenu('Cafe orders'), findsNothing, reason: 'closed until opened');
+    await tester.tap(inMenu('Cafe'));
+    // Its lines come in one after another.
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(tester.takeException(), isNull);
+    }
+    await tester.pumpAndSettle();
     expect(selected(tester, 'Cafe orders'), isTrue);
     expect(selected(tester, 'Cafe home'), isFalse, reason: 'exact: the home is only its own page');
     expect(inMenu('Shop orders'), findsNothing, reason: 'folded away, not just hidden');
     // The page knows its service: its name over the title, its shortcuts.
     expect(find.text('Cafe'), findsWidgets);
     expect(find.text('New'), findsOneWidget);
+
+    // Once opened, going to another of its pages keeps it open.
+    await tester.tap(inMenu('Cafe home'));
+    await tester.pumpAndSettle();
+    expect(selected(tester, 'Cafe home'), isTrue);
   });
 
   testWidgets('a service opens from its line, and the one open closes', (tester) async {
@@ -141,6 +164,8 @@ void main() {
     final many = [for (var i = 1; i <= 20; i++) _Service('s$i', 'Service $i')];
     await showShell(tester, many, at: '/s7/orders');
     expect(find.text('20'), findsOneWidget, reason: 'how many, by the heading');
+    await tester.tap(inMenu('Service 7'));
+    await tester.pumpAndSettle();
     expect(inMenu('Service 7 orders'), findsOneWidget);
     expect(find.descendant(of: find.byType(PlatformSidebar), matching: find.textContaining('orders')), findsOneWidget,
         reason: "only the open service's pages");
@@ -169,6 +194,8 @@ void main() {
   testWidgets("the Health Pro team get Administration, as a section like a service's", (tester) async {
     await showShell(tester, const [shop], at: '/admin', team: true);
     expect(inMenu('ADMINISTRATION'), findsOneWidget);
+    await tester.tap(inMenu('Health Pro admin'));
+    await tester.pumpAndSettle();
     expect(selected(tester, 'Admin home'), isTrue);
     expect(inMenu('Users'), findsOneWidget);
   });
@@ -202,6 +229,8 @@ void main() {
     await showShell(tester, const [shop], at: '/shop', size: const Size(390, 844));
     expect(find.byType(PlatformSidebar), findsNothing);
     await tester.tap(find.byTooltip('Menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(inMenu('Shop'));
     await tester.pumpAndSettle();
     expect(inMenu('Shop orders'), findsOneWidget);
     await tester.tap(inMenu('Shop orders'));
@@ -244,6 +273,103 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(BackButton), findsOneWidget);
     expect(find.byTooltip('Menu'), findsNothing);
+  });
+
+  group('the search in the bar', () {
+    Finder results() => find.byType(GlobalSearchDialog);
+    Finder inResults(String text) => find.descendant(of: results(), matching: find.text(text, findRichText: true));
+
+    Future<void> type(WidgetTester tester, String text) async {
+      await tester.enterText(find.descendant(of: results(), matching: find.byType(TextField)), text);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets("finds the menu's pages and shortcuts, and opens one", (tester) async {
+      await showShell(tester, const [shop, cafe], at: '/shop');
+      final box = tester.getCenter(find.byType(GlobalSearchBox)).dx;
+      expect(box, closeTo(tester.getCenter(find.byType(AppBar)).dx, 1), reason: 'in the middle of the bar');
+      expect(box, greaterThan(tester.getCenter(find.text('Page /shop')).dx), reason: 'after the title');
+      expect(box, lessThan(tester.getCenter(find.text('New')).dx), reason: 'before New and the icons');
+      await tester.tap(find.text('Search anything…'));
+      await tester.pumpAndSettle();
+      expect(results(), findsOneWidget);
+      expect(inResults('New Shop order'), findsOneWidget, reason: 'with nothing typed, the shortcuts');
+      await type(tester, 'orders');
+      expect(inResults('Shop orders'), findsOneWidget);
+      expect(inResults('Cafe orders'), findsOneWidget);
+      expect(inResults('Users'), findsNothing);
+      await tester.tap(inResults('Cafe orders'));
+      await tester.pumpAndSettle();
+      expect(results(), findsNothing);
+      expect(find.text('Page /cafe/orders'), findsOneWidget);
+    });
+
+    testWidgets('finds what the services hold; the arrows choose and Enter opens', (tester) async {
+      await showShell(tester, const [shop], at: '/shop');
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(results(), findsOneWidget, reason: 'Ctrl K opens it');
+      await type(tester, 'dorji');
+      expect(inResults('CUSTOMERS'), findsOneWidget);
+      expect(inResults('Pema Dorji'), findsOneWidget);
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(find.text('Page /shop/pema'), findsOneWidget);
+
+      await tester.tap(find.text('Search anything…'));
+      await tester.pumpAndSettle();
+      await type(tester, 'shop');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(find.text('Page /shop/orders'), findsOneWidget, reason: 'the second: Shop home, then Shop orders');
+    });
+
+    testWidgets("the team find Administration's pages; nothing found says so", (tester) async {
+      await showShell(tester, const [shop], at: '/shop', team: true);
+      await tester.tap(find.text('Search anything…'));
+      await tester.pumpAndSettle();
+      await type(tester, 'roles');
+      expect(inResults('Roles & permissions'), findsOneWidget);
+      await type(tester, 'zzzz');
+      expect(inResults('Nothing found for "zzzz"'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(results(), findsNothing, reason: 'Esc closes it');
+    });
+
+    testWidgets("anyone else doesn't find Administration's pages", (tester) async {
+      await showShell(tester, const [shop], at: '/shop');
+      await tester.tap(find.text('Search anything…'));
+      await tester.pumpAndSettle();
+      await type(tester, 'roles');
+      expect(inResults('Roles & permissions'), findsNothing);
+      expect(inResults('Nothing found for "roles"'), findsOneWidget);
+    });
+
+    testWidgets('on a phone it is an icon in the bar', (tester) async {
+      await showShell(tester, const [shop], at: '/shop', size: const Size(390, 844));
+      expect(find.text('Search anything…'), findsNothing);
+      final icon = tester.getCenter(find.byTooltip('Search')).dx;
+      expect(icon, greaterThan(tester.getCenter(find.byTooltip('Menu')).dx), reason: 'after the menu button');
+      expect(icon, lessThan(tester.getCenter(find.text('Page /shop')).dx), reason: 'at the left, before the title');
+      await tester.tap(find.byTooltip('Search'));
+      await tester.pumpAndSettle();
+      expect(results(), findsOneWidget);
+    });
+
+    test('ranks the title starting with the words first; every word has to match', () {
+      SearchHit hit(String title, {String? subtitle}) =>
+          SearchHit(title: title, subtitle: subtitle, icon: Icons.circle, route: '/', group: 'Pages');
+      final hits = [hit('Payments & income'), hit('Payments to confirm'), hit('Income', subtitle: 'Gym'), hit('Members')];
+      expect(rankHits(hits, 'income').map((h) => h.title), ['Income', 'Payments & income']);
+      expect(rankHits(hits, 'income gym').map((h) => h.title), ['Income']);
+      expect(rankHits(hits, 'PAY').map((h) => h.title), ['Payments & income', 'Payments to confirm']);
+      expect(rankHits(hits, '   '), isEmpty);
+    });
   });
 
   test('a page is open at its route, under it, but not under what it excludes', () {

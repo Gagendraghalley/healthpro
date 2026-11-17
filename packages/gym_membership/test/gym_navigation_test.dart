@@ -85,6 +85,12 @@ Future<GoRouter> showApp(WidgetTester tester, Size size, List<Override> who,
 
 Finder inMenu(String label) => find.descendant(of: find.byType(PlatformSidebar), matching: find.text(label));
 
+/// The gym's section starts closed: open it from its line.
+Future<void> openGym(WidgetTester tester) async {
+  await tester.tap(inMenu('Gym management'));
+  await tester.pumpAndSettle();
+}
+
 bool selected(WidgetTester tester, String label) =>
     tester.widget<SideNavTile>(find.ancestor(of: inMenu(label), matching: find.byType(SideNavTile))).selected;
 
@@ -94,6 +100,7 @@ void main() {
 
   testWidgets("an owner's menu: Gym management with their gym and its pages, grouped", (tester) async {
     final router = await showApp(tester, computer, person(gyms: owner));
+    await openGym(tester);
     for (final label in ['Gym management', 'Druk Fitness Club']) {
       expect(inMenu(label), findsOneWidget, reason: label);
     }
@@ -127,22 +134,33 @@ void main() {
     // The page says whose it is: the service and the gym, over its title.
     expect(find.text('Gym management · Druk Fitness Club'), findsOneWidget);
     expect(find.byTooltip('Menu'), findsNothing);
+
+    // Still open on a page without the Ask AI button (the register form).
+    await tester.tap(inMenu('Register member'));
+    await tester.pumpAndSettle();
+    expect(selected(tester, 'Register member'), isTrue);
+    await tester.tap(inMenu('Check-in'));
+    await tester.pumpAndSettle();
+    expect(selected(tester, 'Check-in'), isTrue);
   });
 
   testWidgets("the core's pages for the gym (Staff, Gym settings) are the gym's in the menu", (tester) async {
     await showApp(tester, computer, person(gyms: owner), at: CoreRoutes.venueStaffFor(otherId));
+    await openGym(tester);
     expect(selected(tester, 'Staff'), isTrue);
     expect(inMenu('Paro Power Gym'), findsOneWidget, reason: 'the gym in the address');
   });
 
   testWidgets("its organisation's roles are the gym's page too", (tester) async {
     await showApp(tester, computer, person(gyms: owner), at: CoreRoutes.venueRolesFor(otherId));
+    await openGym(tester);
     expect(selected(tester, 'Roles & permissions'), isTrue);
     expect(inMenu('Paro Power Gym'), findsOneWidget, reason: 'the gym in the address');
   });
 
   testWidgets('the front desk sees only what its role allows', (tester) async {
     await showApp(tester, computer, person(gyms: frontDesk));
+    await openGym(tester);
     for (final label in ['Check-in', 'Members', 'Register member', 'Reports & analytics']) {
       expect(inMenu(label), findsOneWidget, reason: label);
     }
@@ -154,7 +172,8 @@ void main() {
 
   testWidgets('no gym yet: the service offers setting one up; the team get Administration', (tester) async {
     await showApp(tester, computer, person(team: true), at: CoreRoutes.home);
-    // The only service: open from the start.
+    expect(inMenu('Set up your gym'), findsNothing, reason: 'closed until opened');
+    await openGym(tester);
     expect(inMenu('Set up your gym'), findsOneWidget);
     expect(inMenu('Not set up yet'), findsOneWidget);
     expect(inMenu('Dashboard'), findsNothing);
@@ -175,6 +194,7 @@ void main() {
 
   testWidgets('switching gyms, and registering another, from the gym at the top of its section', (tester) async {
     final router = await showApp(tester, computer, person(gyms: owner));
+    await openGym(tester);
     await tester.tap(inMenu('Druk Fitness Club'));
     await tester.pumpAndSettle();
     expect(find.text('Register another gym'), findsOneWidget);
@@ -215,6 +235,7 @@ void main() {
     await tester.tap(find.byTooltip('Menu'));
     await tester.pumpAndSettle();
     expect(find.byTooltip('Collapse menu'), findsNothing);
+    await openGym(tester);
     await tester.tap(inMenu('Check-in'));
     await tester.pumpAndSettle();
     expect(find.text('Page: Check-in'), findsOneWidget);

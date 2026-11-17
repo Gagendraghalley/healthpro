@@ -21,6 +21,7 @@ import 'screens/reports_screen.dart';
 import 'screens/staff_screens.dart';
 import 'screens/trainer_screens.dart';
 import 'shell/gym_navigation.dart';
+import 'shell/gym_search.dart';
 import 'welcome/gym_welcome_page.dart';
 
 /// Gym management, the platform's first service. A gym's front desk
@@ -155,6 +156,9 @@ class GymModule extends HealthProModule {
   @override
   ServiceNav? navigation(WidgetRef ref, String location) =>
       gymNavigation(ref, location, name: name, icon: icon, color: color);
+
+  @override
+  Future<List<SearchHit>> search(Ref ref, String query) => searchGyms(ref, query, color: color);
 
   @override
   Widget? buildOverviewCard(BuildContext context) => GymOverviewCard(name: name, icon: icon, color: color);

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../router/core_routes.dart';
+import '../search/global_search.dart';
 import '../shell/service_nav.dart';
 import '../theme/brand.dart';
 import '../utils/launch.dart';
@@ -68,6 +69,12 @@ abstract class HealthProModule {
   ///
   /// Read providers with `ref.watch`, so the menu follows them.
   ServiceNav? navigation(WidgetRef ref, String location) => null;
+
+  /// What the search in the bar finds in this service for whoever is signed
+  /// in (members, packages...): only what their roles let them open. Its
+  /// pages are found from [navigation] already. [query] is two letters or
+  /// more; read providers with `ref.watch`.
+  Future<List<SearchHit>> search(Ref ref, String query) async => const [];
 
   /// The service's card on Overview and My services: how things stand for
   /// this person, and the way in. Null for a plain one from [name],

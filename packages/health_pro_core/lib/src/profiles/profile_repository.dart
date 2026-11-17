@@ -30,4 +30,15 @@ class ProfileRepository {
         'phone': phone,
         'dzongkhag': dzongkhag,
       }).eq('id', userId);
+
+  /// Their app colours on their account (Account -> Appearance): palette ids,
+  /// null for Health Pro's own. Null when there's no profile.
+  Future<({String? primary, String? accent})?> theme(String userId) async {
+    final row = await _client.from('profiles').select('theme_primary, theme_accent').eq('id', userId).maybeSingle();
+    if (row == null) return null;
+    return (primary: row['theme_primary'] as String?, accent: row['theme_accent'] as String?);
+  }
+
+  Future<void> setTheme(String userId, {String? primary, String? accent}) =>
+      _client.from('profiles').update({'theme_primary': primary, 'theme_accent': accent}).eq('id', userId);
 }

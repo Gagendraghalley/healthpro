@@ -589,12 +589,12 @@ class _PlanSheetState extends ConsumerState<_PlanSheet> {
                         margin: const EdgeInsets.only(top: 14),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: BrandColors.orange.withValues(alpha: 0.08),
+                          color: context.brand.highlight.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.sell_outlined, color: BrandColors.orange, size: 20),
+                            Icon(Icons.sell_outlined, color: context.brand.highlight, size: 20),
                             const SizedBox(width: 10),
                             Expanded(child: Text(preview, style: const TextStyle(fontWeight: FontWeight.w700))),
                           ],

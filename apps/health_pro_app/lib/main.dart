@@ -24,6 +24,9 @@ Future<void> main() async {
   await Supabase.initialize(url: Env.supabaseUrl, publishableKey: Env.supabaseAnonKey);
   final themeMode = await ThemeModeController.saved();
   final reduceMotion = await ReduceMotionController.saved();
+  // Whoever is still signed in opens in their own colours.
+  final signedIn = Supabase.instance.client.auth.currentUser?.id;
+  final themeColors = await ThemeColorsController.saved(signedIn);
   await splashLogo;
   runApp(
     ProviderScope(
@@ -31,6 +34,7 @@ Future<void> main() async {
         registeredModulesProvider.overrideWithValue(modules),
         themeModeProvider.overrideWith(() => ThemeModeController(themeMode)),
         reduceMotionProvider.overrideWith(() => ReduceMotionController(reduceMotion)),
+        themeColorsProvider.overrideWith(() => ThemeColorsController(themeColors, signedIn)),
       ],
       child: const HealthProApp(),
     ),

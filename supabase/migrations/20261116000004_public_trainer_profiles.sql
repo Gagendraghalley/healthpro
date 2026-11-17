@@ -52,6 +52,7 @@ create policy "gym_trainers: the trainer and the gym"
          or public.has_venue_permission(venue_id, 'gym.trainers'));
 
 drop policy if exists "trainer_reviews: everyone" on public.trainer_reviews;
+drop policy if exists "trainer_reviews: public trainers" on public.trainer_reviews;
 create policy "trainer_reviews: public trainers"
   on public.trainer_reviews for select to anon, authenticated
   using (public.trainer_is_public(trainer_id));

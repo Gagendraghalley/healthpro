@@ -87,7 +87,17 @@ class Brand extends ThemeExtension<Brand> {
   final Color ink;
   final Color body;
 
+  /// The primary colour they picked (Account -> Appearance), orange until
+  /// then, tuned for this theme: what's active, the main action, focus.
   final Color accent;
+
+  /// [accent] as text: on white, a shade deeper so it reads.
+  final Color accentText;
+
+  /// The brand's own bright orange (BrandColors.orange) as art, badges and
+  /// avatars use it, or the colour they picked instead. See [themed].
+  final Color highlight;
+
   final Color success;
   final Color warning;
   final Color danger;
@@ -107,6 +117,8 @@ class Brand extends ThemeExtension<Brand> {
     required this.ink,
     required this.body,
     required this.accent,
+    required this.accentText,
+    required this.highlight,
     required this.success,
     required this.warning,
     required this.danger,
@@ -131,6 +143,8 @@ class Brand extends ThemeExtension<Brand> {
     ink: LightColors.ink,
     body: LightColors.body,
     accent: LightColors.orange,
+    accentText: LightColors.orangeText,
+    highlight: BrandColors.orange,
     success: LightColors.success,
     warning: LightColors.warning,
     danger: LightColors.danger,
@@ -151,6 +165,8 @@ class Brand extends ThemeExtension<Brand> {
     ink: Colors.white,
     body: Color(0xFFC5CCDA),
     accent: BrandColors.orange,
+    accentText: BrandColors.orange,
+    highlight: BrandColors.orange,
     success: Color(0xFF4CC983),
     warning: Color(0xFFE8B04B),
     danger: Color(0xFFFF6B6B),
@@ -176,13 +192,34 @@ class Brand extends ThemeExtension<Brand> {
   /// deeper in the light, so amber and green stay readable on white.
   Color readable(Color color) => isLight ? Color.lerp(color, ink, 0.34)! : color;
 
+  /// [color] as it shows: the brand's orange (a service's colour, a default)
+  /// becomes the colour they picked; any other stays itself.
+  Color themed(Color color) => color == BrandColors.orange ? highlight : color;
+
+  /// [ofOrange], a lighter or deeper orange (a gradient's far end), as the
+  /// same step from the colour they picked.
+  Color themedShade(Color ofOrange) {
+    if (highlight == BrandColors.orange) return ofOrange;
+    final step = HSLColor.fromColor(ofOrange).lightness - HSLColor.fromColor(BrandColors.orange).lightness;
+    final mine = HSLColor.fromColor(highlight);
+    return mine.withLightness((mine.lightness + step).clamp(0.0, 1.0)).toColor();
+  }
+
   @override
-  Brand copyWith({Color? background, Color? glass, Color? card, Color? accent}) => Brand(
+  Brand copyWith(
+          {Color? background,
+          Color? glass,
+          Color? card,
+          Color? accent,
+          Color? accentText,
+          Color? highlight,
+          Color? glowB}) =>
+      Brand(
         background: background ?? this.background,
         surfaceAlt: surfaceAlt,
         subtle: subtle,
         glowA: glowA,
-        glowB: glowB,
+        glowB: glowB ?? this.glowB,
         glass: glass ?? this.glass,
         glassBorder: glassBorder,
         fieldBorder: fieldBorder,
@@ -191,6 +228,8 @@ class Brand extends ThemeExtension<Brand> {
         ink: ink,
         body: body,
         accent: accent ?? this.accent,
+        accentText: accentText ?? this.accentText,
+        highlight: highlight ?? this.highlight,
         success: success,
         warning: warning,
         danger: danger,
@@ -215,6 +254,8 @@ class Brand extends ThemeExtension<Brand> {
       ink: mix(ink, other.ink),
       body: mix(body, other.body),
       accent: mix(accent, other.accent),
+      accentText: mix(accentText, other.accentText),
+      highlight: mix(highlight, other.highlight),
       success: mix(success, other.success),
       warning: mix(warning, other.warning),
       danger: mix(danger, other.danger),

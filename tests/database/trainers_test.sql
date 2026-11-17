@@ -117,15 +117,16 @@ select t.eq(:'arrived'::jsonb ->> 'member_name', 'Tandin Wangchuk', '...by name'
 select t.eq((:'arrived'::jsonb ->> 'also_member')::boolean, false, '...not a member there');
 select t.as_user('00000000-0000-0000-0000-000000001003');
 select public.gym_check_in_member(:'eta', :'tandin_qr');
-select public.gym_check_in_member(:'eta', :'tandin_qr');
-select t.eq((select count(*) from public.trainer_check_ins)::int, 2, 'Eta''s desk sees only Eta''s record');
+select public.gym_check_in_member(:'eta', :'tandin_qr') as again \gset
+select t.eq((:'again'::jsonb ->> 'already_marked')::boolean, true, 'scanned again the same day: already marked');
+select t.eq((select count(*) from public.trainer_check_ins)::int, 1, 'Eta''s desk sees only Eta''s record, once a day');
 select t.as_user('00000000-0000-0000-0000-000000001002');
 select t.eq((select count(*) from public.trainer_check_ins)::int, 1, 'Zeta''s desk only Zeta''s');
 select t.eq((public.gym_trainers_overview(:'zeta') -> 0 ->> 'attendance_30_days')::int, 1, '...in its trainers'' list too');
 select t.as_user('00000000-0000-0000-0000-000000001004');
 select t.eq((select string_agg(g ->> 'venue_name' || ' ' || jsonb_array_length(g -> 'attendance'), ', ' order by g ->> 'venue_name')
              from jsonb_array_elements(public.my_trainer_overview() -> 'gyms') g),
-            'Eta Gym 2, Zeta Gym 1', 'Tandin sees all of it, gym by gym');
+            'Eta Gym 1, Zeta Gym 1', 'Tandin sees all of it, gym by gym');
 select t.as_user('00000000-0000-0000-0000-000000001005');
 select public.my_person() ->> 'qr_token' as ugyen_qr \gset
 select t.as_user('00000000-0000-0000-0000-000000001003');
@@ -182,7 +183,7 @@ select t.as_user('00000000-0000-0000-0000-000000001004');
 select public.trainer_leave_gym(:'eta');
 select t.eq((select count(*) from public.trainer_slots where venue_id = :'eta')::int, 0, 'leaving a gym takes his times there');
 select t.eq((select status from public.gym_trainers where venue_id = :'eta' and user_id = '00000000-0000-0000-0000-000000001004'),
-            'left', '...and he''s no longer its trainer');
+            'inactive', '...and he''s no longer its trainer (verified, so his history there stays)');
 
 -- ---- The gym adds a trainer itself ---------------------------------------------------
 select t.as_user('00000000-0000-0000-0000-000000001006');
@@ -239,7 +240,7 @@ select t.fails(format($$select public.gym_trainer_mark_arrived(%L, '00000000-000
 -- Someone who is a trainer already keeps their own profile; their times elsewhere hold.
 select t.as_user('00000000-0000-0000-0000-000000001003');
 select t.fails(format($$select public.gym_add_trainer(%L, '00000000-0000-0000-0000-000000001004',
-  '{"display_name":"Somebody Else","slots":[{"weekday":1,"starts":"11:30","ends":"12:30"}]}')$$, :'eta'), 'not available then');
+  '{"display_name":"Somebody Else","slots":[{"weekday":1,"starts":"11:30","ends":"12:30"}]}')$$, :'eta'), 'not available at that time');
 select t.eq((public.gym_add_trainer(:'eta', '00000000-0000-0000-0000-000000001004',
   '{"display_name":"Somebody Else","slots":[{"weekday":1,"starts":"14:00","ends":"15:00"}]}') ->> 'profile_made')::boolean, false,
   'a gym adds back a trainer who left');

@@ -5,7 +5,15 @@ import 'package:health_pro_core/health_pro_core.dart';
 
 /// Navy and orange bands sweeping up the right edge, over the photo.
 class GymStripesPainter extends CustomPainter {
-  const GymStripesPainter();
+  /// The orange band: the brand's, or the colour they picked
+  /// (Brand.highlight), lighter at its foot ([soft]).
+  final Color color;
+  final Color soft;
+
+  const GymStripesPainter({this.color = BrandColors.orange, this.soft = const Color(0xFFFF8A3D)});
+
+  GymStripesPainter.of(BuildContext context)
+      : this(color: context.brand.highlight, soft: context.brand.themedShade(const Color(0xFFFF8A3D)));
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -21,16 +29,16 @@ class GymStripesPainter extends CustomPainter {
     canvas.drawPath(
       band(0.78, 0.84, 0.46, 0.55),
       Paint()
-        ..shader = const LinearGradient(
+        ..shader = LinearGradient(
           begin: Alignment.bottomLeft,
           end: Alignment.topRight,
-          colors: [Color(0xFFFF8A3D), BrandColors.orange],
+          colors: [soft, color],
         ).createShader(Offset.zero & size),
     );
   }
 
   @override
-  bool shouldRepaint(GymStripesPainter oldDelegate) => false;
+  bool shouldRepaint(GymStripesPainter oldDelegate) => oldDelegate.color != color || oldDelegate.soft != soft;
 }
 
 /// A soft round light.

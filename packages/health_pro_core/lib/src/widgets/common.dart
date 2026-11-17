@@ -270,6 +270,61 @@ class MenuTile extends StatelessWidget {
   }
 }
 
+/// A setting in a card: its icon in a soft square of the theme's colour (or
+/// [color]), what it is, a line about it, and what's at the end (a switch, a
+/// chevron, a button). A Row, not a ListTile, for the reason in [MenuTile]:
+/// in a pair of equal-height cards a ListTile came out short and spilled when
+/// its subtitle wrapped.
+class SettingRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final Color? color;
+
+  const SettingRow(
+      {super.key, required this.icon, required this.title, this.subtitle, this.trailing, this.onTap, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final tone = color ?? brand.accent;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(color: tone.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(11)),
+              child: Icon(icon, size: 19, color: brand.readable(tone)),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(title, style: TextStyle(color: brand.ink, fontSize: 15, fontWeight: FontWeight.w700)),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(subtitle!, style: TextStyle(color: brand.muted, fontSize: 13, height: 1.35)),
+                  ],
+                ],
+              ),
+            ),
+            if (trailing != null) ...[const SizedBox(width: 12), trailing!],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// A number with its label, for dashboards.
 class StatTile extends StatelessWidget {
   final String label;

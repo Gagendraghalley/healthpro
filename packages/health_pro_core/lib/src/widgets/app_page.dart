@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../notifications/notifications_screen.dart';
+import '../search/global_search.dart';
 import '../shell/account_menu.dart';
 import '../shell/app_shell.dart';
 import '../shell/service_nav.dart';
@@ -69,18 +70,35 @@ class AppPage extends StatelessWidget {
             : service == null
                 ? Text(title!)
                 : _ServiceTitle(service: service, title: title!));
+    // The search: on a computer a field in the middle of the bar, after the
+    // title; on a phone an icon before the title (close beside the menu
+    // button). In the frame the bar's ends line up with the page's gutters
+    // (the account's avatar has 6 of its own at the right).
+    final openSearch = scope?.openSearch;
+    final searchField = openSearch != null && GlobalSearchBox.shows(context);
+    final gutter = pageGutter(context);
+    final wide = MediaQuery.sizeOf(context).width >= 700;
     return Scaffold(
       extendBodyBehindAppBar: true,
       extendBody: true,
       appBar: GlassAppBar(
-        title: heading,
+        title: openSearch == null || searchField ? heading : TitleWithSearch(heading: heading, onSearch: openSearch),
+        search: searchField ? GlobalSearchBox(onPressed: openSearch) : null,
+        titleSpacing: openSearch == null
+            ? null
+            : lead == null
+                ? gutter
+                : GlobalSearchBox.shows(context)
+                    ? null
+                    : 0,
+        endSpacing: scope == null ? 8 : gutter - 6,
         actions: [
           ...?actions,
           if (service != null && service.actions.isNotEmpty) ServiceActionsButton(service: service),
           if (scope != null) ...[
-            const SizedBox(width: 4),
-            const ThemeModeButton(),
-            const NotificationBell(),
+            SizedBox(width: wide ? 10 : 4),
+            const _BarTray(children: [ThemeModeButton(), NotificationBell()]),
+            if (wide) const _BarDivider(),
             const AccountButton(),
           ],
         ],
@@ -101,8 +119,9 @@ class AppPage extends StatelessWidget {
   }
 }
 
-/// A service page's title: the service's name small above it, by a dot of
-/// its colour.
+/// A service page's title: the service's name small above it. On a computer
+/// the service's icon on a tile of its colour leads; on a phone a dot of its
+/// colour.
 class _ServiceTitle extends StatelessWidget {
   final ServiceNav service;
   final String title;
@@ -111,33 +130,109 @@ class _ServiceTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final wide = MediaQuery.sizeOf(context).width >= 700;
+    final color = context.brand.themed(service.color);
+    final name = Text(
+      service.scope == null ? service.name : '${service.name} · ${service.scope!.label}',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: context.brand.muted, letterSpacing: 0.2),
+    );
+    final text = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(color: service.color, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                service.scope == null ? service.name : '${service.name} · ${service.scope!.label}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: context.brand.muted, letterSpacing: 0.2),
-              ),
-            ),
-          ],
-        ),
+        if (wide)
+          name
+        else
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+              const SizedBox(width: 6),
+              Flexible(child: name),
+            ],
+          ),
         Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
       ],
     );
+    if (!wide) return text;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withValues(alpha: 0.18)),
+          ),
+          child: Icon(service.icon, size: 19, color: color),
+        ),
+        const SizedBox(width: 12),
+        Flexible(child: text),
+      ],
+    );
   }
+}
+
+/// The bar's small buttons (light or dark, notifications): on a computer one
+/// rounded tray, a hairline between them, as tall as New; loose on a phone.
+class _BarTray extends StatelessWidget {
+  final List<Widget> children;
+
+  const _BarTray({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.sizeOf(context).width < 700) return Row(mainAxisSize: MainAxisSize.min, children: children);
+    final brand = context.brand;
+    final line = brand.pick(LightColors.border, brand.glassBorder);
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        color: brand.pick(LightColors.card, brand.surfaceAlt),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: line),
+      ),
+      child: IconButtonTheme(
+        // Smaller buttons, keeping the bar's icon colour.
+        data: IconButtonThemeData(
+          style: IconButton.styleFrom(
+            minimumSize: const Size(36, 34),
+            fixedSize: const Size(36, 34),
+            padding: EdgeInsets.zero,
+            iconSize: 20,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+          ).merge(IconButtonTheme.of(context).style),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (i, child) in children.indexed) ...[
+              if (i > 0) Container(width: 1, height: 18, margin: const EdgeInsets.symmetric(horizontal: 2), color: line),
+              child,
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A hairline in the bar, before the account.
+class _BarDivider extends StatelessWidget {
+  const _BarDivider();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 1,
+        height: 28,
+        margin: const EdgeInsets.only(left: 12, right: 6),
+        color: context.brand.pick(context.brand.fieldBorder, context.brand.glassBorder),
+      );
 }
 
 /// New: the shortcuts of the service the page belongs to (Register member,
@@ -160,7 +255,7 @@ class ServiceActionsButton extends StatelessWidget {
       menuChildren: [
         for (final a in service.actions)
           MenuItemButton(
-            leadingIcon: Icon(a.icon, size: 20, color: service.color),
+            leadingIcon: Icon(a.icon, size: 20, color: context.brand.themed(service.color)),
             onPressed: () => GoRouter.of(context).go(a.route),
             child: Padding(padding: const EdgeInsets.only(right: 16), child: Text(a.label)),
           ),
@@ -206,28 +301,85 @@ class ServiceActionsButton extends StatelessWidget {
 EdgeInsets pagePadding(BuildContext context, {double? horizontal, double top = 12, double bottom = 24}) {
   final insets = MediaQuery.paddingOf(context);
   final appBar = context.findAncestorWidgetOfExactType<AppPage>() == null ? kToolbarHeight : 0.0;
-  final gutter = horizontal ?? (MediaQuery.sizeOf(context).width >= 900 ? 28.0 : 16.0);
+  final gutter = horizontal ?? pageGutter(context);
   return EdgeInsets.fromLTRB(gutter, insets.top + appBar + top, gutter, insets.bottom + bottom);
 }
 
+/// The page's side gutter: 28 on a wide window, 16 on a phone.
+double pageGutter(BuildContext context) => MediaQuery.sizeOf(context).width >= 900 ? 28.0 : 16.0;
+
 /// A translucent app bar that blurs what scrolls under it.
+///
+/// With [search]: the title at the left, the search in the middle of the bar
+/// (moved aside only when the actions need the room), the actions at the
+/// right.
 class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Widget? title;
   final List<Widget>? actions;
   final Widget? leading;
 
-  const GlassAppBar({super.key, this.title, this.actions, this.leading});
+  /// The search field, centred in the bar.
+  final Widget? search;
+
+  /// Room between [leading] and [title]; the theme's when null.
+  final double? titleSpacing;
+
+  /// Room after the last action.
+  final double endSpacing;
+
+  const GlassAppBar(
+      {super.key, this.title, this.actions, this.leading, this.search, this.titleSpacing, this.endSpacing = 8});
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
   @override
   Widget build(BuildContext context) {
-    return AppBar(
-      title: title,
-      leading: leading,
-      actions: [...?actions, const SizedBox(width: 8)],
-      flexibleSpace: GlassBar(border: Border(bottom: BorderSide(color: context.brand.glassBorder))),
+    final glass = GlassBar(border: Border(bottom: BorderSide(color: context.brand.glassBorder)));
+    final trailing = [...?actions, SizedBox(width: endSpacing)];
+    if (search == null) {
+      return AppBar(title: title, leading: leading, titleSpacing: titleSpacing, actions: trailing, flexibleSpace: glass);
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final searchWidth = (width * 0.34).clamp(280.0, 460.0);
+        // The title has everything left of the search, less a gap.
+        final start = ((width - searchWidth) / 2 - 24).clamp(0.0, width);
+        // AppBar's own back button, as it would have put it.
+        final route = ModalRoute.of(context);
+        final lead = leading ??
+            (route?.impliesAppBarDismissal ?? false
+                ? (route is PageRoute && route.fullscreenDialog ? const CloseButton() : const BackButton())
+                : null);
+        final theme = Theme.of(context);
+        return AppBar(
+          automaticallyImplyLeading: false,
+          leadingWidth: start,
+          leading: Row(
+            children: [
+              if (lead != null) ...[SizedBox(width: kToolbarHeight, child: Center(child: lead)), const SizedBox(width: 4)]
+              else SizedBox(width: titleSpacing ?? NavigationToolbar.kMiddleSpacing),
+              if (title != null)
+                Expanded(
+                  child: Semantics(
+                    header: true,
+                    child: DefaultTextStyle(
+                      style: theme.appBarTheme.titleTextStyle ?? theme.textTheme.titleLarge!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      child: Align(alignment: AlignmentDirectional.centerStart, child: title),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          centerTitle: true,
+          title: SizedBox(width: searchWidth, child: search),
+          actions: trailing,
+          flexibleSpace: glass,
+        );
+      },
     );
   }
 }

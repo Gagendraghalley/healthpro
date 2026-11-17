@@ -8,6 +8,12 @@ import 'package:gym_membership/src/widgets/package_fields.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
+/// Gives the bank-issued QR image's address.
+class _QrRepo extends Fake implements GymRepository {
+  @override
+  String? paymentQrUrl(String? path) => path == null || path.isEmpty ? null : 'https://example.test/gym-payment-qr/$path';
+}
+
 final venue = Venue.fromJson({
   'id': 'g1',
   'type': gymVenueType,
@@ -115,15 +121,20 @@ void main() {
     expect(sale?.amount, 4500);
   });
 
-  testWidgets('the desk can show the gym QR with the amount while adding or renewing a package', (tester) async {
+  /// The package form at the desk, a package chosen and paid by bank
+  /// transfer; the gym's bank-issued QR uploaded at [qrPath], or none.
+  Future<void> payByTransfer(WidgetTester tester, {String? qrPath}) async {
     tester.view.physicalSize = const Size(900, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(ProviderScope(
       overrides: [
         gymPlansProvider.overrideWith((ref, q) async => plans),
-        gymSettingsProvider.overrideWith((ref, id) async => const GymSettings(
-            venueId: 'g1', account: PaymentAccount(bankName: 'Bank of Bhutan', accountNumber: '200123456789', accountName: 'Peak Fitness'))),
+        gymRepositoryProvider.overrideWithValue(_QrRepo()),
+        gymSettingsProvider.overrideWith((ref, id) async => GymSettings(
+            venueId: 'g1',
+            account: const PaymentAccount(bankName: 'Bank of Bhutan', accountNumber: '200123456789', accountName: 'Peak Fitness'),
+            paymentQrPath: qrPath)),
       ],
       child: MaterialApp(
         theme: AppTheme.light,
@@ -141,9 +152,21 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Bank transfer'));
     await tester.pumpAndSettle();
+  }
 
-    expect(find.byType(QrImageView), findsOneWidget);
+  testWidgets("the desk can show the gym's bank QR with the amount while adding or renewing a package", (tester) async {
+    await payByTransfer(tester, qrPath: 'g1/qr.png');
+    expect(
+        find.byWidgetPredicate((w) => w is Image && w.semanticLabel == 'Bank-issued payment QR code for Peak Fitness'),
+        findsOneWidget);
     expect(find.text('Nu. 1,500'), findsOneWidget);
+    expect(find.text('2001 2345 6789'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('no bank QR uploaded yet: the desk is told where to add it', (tester) async {
+    await payByTransfer(tester);
+    expect(find.textContaining('upload its bank-issued QR in Membership settings'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

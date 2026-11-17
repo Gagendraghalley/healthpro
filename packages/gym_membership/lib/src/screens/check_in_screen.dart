@@ -381,8 +381,9 @@ class _Waiting extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: BrandColors.orange.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),
-            child: const Icon(Icons.qr_code_2_rounded, color: BrandColors.orange, size: 28),
+            decoration:
+                BoxDecoration(color: context.brand.highlight.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),
+            child: Icon(Icons.qr_code_2_rounded, color: context.brand.highlight, size: 28),
           ),
           const SizedBox(width: 14),
           const Expanded(
@@ -453,7 +454,7 @@ class _ViewfinderState extends State<_Viewfinder> with SingleTickerProviderState
       _ScanState.ok => brand.success,
       _ScanState.refused => brand.danger,
       _ScanState.checking => BrandColors.blue,
-      _ScanState.ready => BrandColors.orange,
+      _ScanState.ready => brand.highlight,
     };
     final (IconData icon, String label) = switch (state) {
       _ScanState.ready => (Icons.qr_code_scanner_rounded, 'Ready to scan'),

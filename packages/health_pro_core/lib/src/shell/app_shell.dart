@@ -43,13 +43,17 @@ class AppShellScope extends InheritedWidget {
   /// title, its shortcuts in the bar.
   final ServiceNav? service;
 
-  const AppShellScope({super.key, required this.openMenu, this.service, required super.child});
+  /// Opens the search over the page (the search in the bar).
+  final VoidCallback? openSearch;
+
+  const AppShellScope({super.key, required this.openMenu, this.service, this.openSearch, required super.child});
 
   static AppShellScope? maybeOf(BuildContext context) => context.dependOnInheritedWidgetOfExactType<AppShellScope>();
 
   @override
   bool updateShouldNotify(AppShellScope oldWidget) =>
       (oldWidget.openMenu == null) != (openMenu == null) || oldWidget.service?.key != service?.key ||
+      (oldWidget.openSearch == null) != (openSearch == null) ||
       oldWidget.service?.actions.length != service?.actions.length;
 }
 

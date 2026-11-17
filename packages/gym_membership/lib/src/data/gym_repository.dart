@@ -374,6 +374,26 @@ class GymRepository {
     return rows.map(GymMember.fromJson).toList();
   }
 
+  /// A few members at [venueIds] with [search] in their name, phone, card
+  /// code or email, by name: the search in the bar's.
+  Future<List<GymMember>> searchMembers(List<String> venueIds, String search,
+      {int limit = 8}) async {
+    // A phone number typed with spaces or dashes, as it's kept: without.
+    final digits = search.replaceAll(RegExp(r'[\s-]'), '');
+    final pattern = userSearchPattern(
+        RegExp(r'^\+?\d{3,}$').hasMatch(digits) ? digits : search);
+    if (venueIds.isEmpty || pattern.isEmpty) return const [];
+    final rows = await _client
+        .from('gym_members')
+        .select(_gymMemberColumns)
+        .inFilter('venue_id', venueIds)
+        .or('full_name.ilike.%$pattern%,phone.ilike.%$pattern%,'
+            'code.ilike.%$pattern%,email.ilike.%$pattern%')
+        .order('full_name')
+        .limit(limit);
+    return rows.map(GymMember.fromJson).toList();
+  }
+
   Future<GymMember?> registeredMember(String id) async {
     final row = await _client
         .from('gym_members')

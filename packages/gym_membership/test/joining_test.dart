@@ -164,7 +164,7 @@ void main() {
     await show(tester, const GymQrScreen(venueId: 'g1'), size: const Size(390, 844), with_: overrides());
     await tester.pumpAndSettle();
     expect(find.text('Peak Fitness'), findsWidgets);
-    expect(find.text('Scan to join this gym'), findsOneWidget);
+    expect(find.text('SCAN TO JOIN'), findsOneWidget);
     expect(find.text('Download to print'), findsOneWidget);
     expect(gymJoinLink('g1'), endsWith('#/gyms/g1?join=1'));
     expect(tester.takeException(), isNull);

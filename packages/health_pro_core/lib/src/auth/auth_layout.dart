@@ -114,7 +114,7 @@ class AuthLayout extends StatelessWidget {
         // between them, and only the card changes.
         const Hero(tag: _Photo.heroTag, child: _Photo()),
         _Wash(side: side),
-        const CustomPaint(painter: _WavePainter()),
+        CustomPaint(painter: _WavePainter.of(context)),
         SafeArea(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -174,7 +174,7 @@ class AuthLayout extends StatelessWidget {
               children: [
                 const Hero(tag: _Photo.heroTag, child: _Photo()),
                 const _Wash(side: AuthSide.signIn, banner: true),
-                const CustomPaint(painter: _WavePainter(banner: true)),
+                CustomPaint(painter: _WavePainter.of(context, banner: true)),
                 Padding(
                   padding: EdgeInsets.fromLTRB(16, insets.top + 8, 16, 80),
                   child: const Center(child: FadeSlideIn(child: HealthProLogo(height: 112, onDark: true))),
@@ -298,7 +298,19 @@ class _Wash extends StatelessWidget {
 class _WavePainter extends CustomPainter {
   final bool banner;
 
-  const _WavePainter({this.banner = false});
+  /// The brand's orange, or the colour they picked (Brand.highlight).
+  final Color color;
+
+  /// The lighter middle of the wave.
+  final Color soft;
+
+  const _WavePainter({this.banner = false, this.color = BrandColors.orange, this.soft = const Color(0xFFFF8A3D)});
+
+  _WavePainter.of(BuildContext context, {bool banner = false})
+      : this(
+            banner: banner,
+            color: context.brand.highlight,
+            soft: context.brand.themedShade(const Color(0xFFFF8A3D)));
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -319,7 +331,7 @@ class _WavePainter extends CustomPainter {
       wave(0),
       Paint()
         ..shader = LinearGradient(
-          colors: [BrandColors.orange, const Color(0xFFFF8A3D), BrandColors.orange.withValues(alpha: 0.35)],
+          colors: [color, soft, color.withValues(alpha: 0.35)],
           stops: const [0, 0.5, 1],
         ).createShader(Offset.zero & size),
     );
@@ -327,7 +339,7 @@ class _WavePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_WavePainter old) => old.banner != banner;
+  bool shouldRepaint(_WavePainter old) => old.banner != banner || old.color != color || old.soft != soft;
 }
 
 /// The photo's side on a computer: the logo, and the perks.
@@ -471,10 +483,10 @@ class _JoinPitch extends StatelessWidget {
       children: staggered([
         _Slanted(
           child: Text.rich(
-            const TextSpan(
+            TextSpan(
               children: [
-                TextSpan(text: 'Join\nSports'),
-                TextSpan(text: 'Hub', style: TextStyle(color: Color(0xFFFF8A3D))),
+                const TextSpan(text: 'Join\nSports'),
+                TextSpan(text: 'Hub', style: TextStyle(color: context.brand.themedShade(const Color(0xFFFF8A3D)))),
               ],
             ),
             style: headline,
@@ -496,12 +508,12 @@ class _JoinPitch extends StatelessWidget {
                 Container(
                   width: 46,
                   height: 46,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [Color(0xFFFF8A3D), BrandColors.orange],
+                      colors: [context.brand.themedShade(const Color(0xFFFF8A3D)), context.brand.highlight],
                     ),
                   ),
                   child: Icon(icon, color: Colors.white, size: 23),
@@ -549,7 +561,8 @@ class _Motto extends StatelessWidget {
               height: 4,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(4),
-                gradient: LinearGradient(colors: [BrandColors.orange.withValues(alpha: 0), BrandColors.orange]),
+                gradient: LinearGradient(
+                    colors: [context.brand.highlight.withValues(alpha: 0), context.brand.highlight]),
               ),
             ),
           ),
@@ -611,7 +624,7 @@ class _AuthInputs extends StatelessWidget {
         inputDecorationTheme: theme.inputDecorationTheme.copyWith(
           fillColor: brand.card,
           prefixIconColor: WidgetStateColor.resolveWith(
-              (states) => states.contains(WidgetState.focused) && !dark ? LightColors.orangeText : brand.muted),
+              (states) => states.contains(WidgetState.focused) && !dark ? brand.accentText : brand.muted),
           suffixIconColor: brand.muted,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
           border: outline(edge),
@@ -622,7 +635,7 @@ class _AuthInputs extends StatelessWidget {
                     ? theme.colorScheme.error
                     : states.contains(WidgetState.focused)
                         // On white, the orange that reads as text.
-                        ? (dark ? brand.accent : LightColors.orangeText)
+                        ? brand.accentText
                         : brand.muted,
               )),
         ),
@@ -655,7 +668,7 @@ class AuthPrimaryButton extends StatelessWidget {
       child: DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(colors: [const Color(0xFFFF8A3D), accent]),
+        gradient: LinearGradient(colors: [context.brand.themedShade(const Color(0xFFFF8A3D)), accent]),
         boxShadow: [
           BoxShadow(
             color: accent.withValues(alpha: 0.38),

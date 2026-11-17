@@ -10,7 +10,8 @@
 // the reference; nothing is made from it.) If the logo's shape changes,
 // update HealthProLogo.aspectRatio and markAspectRatio, web/index.html and
 // LaunchScreen.storyboard to the sizes it prints. With PREVIEW=<folder>
-// set, it writes samples there and touches nothing else.
+// set, it writes samples there and touches nothing else. The in-app logos
+// and the web splash are WebP, made with cwebp (brew install webp).
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -217,6 +218,17 @@ Future<void> save(String path, ui.Image image, {bool opaque = false}) async {
   file.writeAsBytesSync(encodePng(Pixels(image.width, image.height, data), alpha: !opaque));
 }
 
+/// [image] as WebP: quality 90 with its transparency exact, a quarter of
+/// the PNG's size with no visible change. Through cwebp (brew install webp).
+Future<void> saveWebp(String path, ui.Image image) async {
+  final png = '$path.png';
+  await save(png, image);
+  final result = await Process.run(
+      'cwebp', ['-quiet', '-q', '90', '-alpha_q', '100', '-m', '6', '-sharp_yuv', png, '-o', path]);
+  File(png).deleteSync();
+  if (result.exitCode != 0) throw Exception('cwebp could not make $path: ${result.stderr}');
+}
+
 Uint8List encodePng(Pixels p, {bool alpha = true}) {
   final raw = BytesBuilder();
   for (var y = 0; y < p.height; y++) {
@@ -410,13 +422,13 @@ void main() {
 
       // In the app (HealthProLogo): the logo 1600 wide (150 tall at 3x), the
       // mark 512 square (it shows 54 tall at most).
-      await save('$images/logo.png', await logoAt(1600, logoImage));
-      await save('$images/logo_on_dark.png', await logoAt(1600, logoOnDarkImage));
-      await save('$images/mark.png', await markAt(512));
-      await save('$images/mark_on_dark.png', await markAt(512, image: markOnDarkImage));
+      await saveWebp('$images/logo.webp', await logoAt(1600, logoImage));
+      await saveWebp('$images/logo_on_dark.webp', await logoAt(1600, logoOnDarkImage));
+      await saveWebp('$images/mark.webp', await markAt(512));
+      await saveWebp('$images/mark_on_dark.webp', await markAt(512, image: markOnDarkImage));
 
       // Launch screens, on navy: the white-lettered logo, 240 wide.
-      await save('$app/web/splash/logo.png', await logoAt(720, logoOnDarkImage));
+      await saveWebp('$app/web/splash/logo.webp', await logoAt(720, logoOnDarkImage));
       for (final (dpi, scale) in [('mdpi', 1.0), ('hdpi', 1.5), ('xhdpi', 2.0), ('xxhdpi', 3.0), ('xxxhdpi', 4.0)]) {
         await save('$res/drawable-$dpi/splash_logo.png', await logoAt(240 * scale, logoOnDarkImage));
         // Android 12+: the mark in its 288dp icon, inside the 192dp circle.

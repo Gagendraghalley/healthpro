@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/gym_repository.dart';
+import '../data/online_payments.dart';
 import '../data/trainers.dart';
 import '../gym_permissions.dart';
 import '../gym_routes.dart';
@@ -14,6 +15,12 @@ import 'current_gym.dart';
 /// (`/manage/<id>/staff`, `/manage/<id>/edit`).
 String? gymIdInPath(String path) =>
     GymRoutes.gymIdIn(path) ?? RegExp(r'^/manage/([0-9a-fA-F-]{36})(/|$)').firstMatch(path)?.group(1);
+
+/// Whether [a] answers the gym's requests to join: whoever registers
+/// members, unless the gym ([settings]) leaves them to its owner and managers.
+bool answersJoinRequests(VenueAccess a, GymSettings? settings) =>
+    a.can(GymPermission.register) &&
+    (settings == null || !settings.managersAnswerJoins || VenueRole.hasEverything(a.role) || a.role == VenueRole.manager);
 
 /// Gym management's section of the side menu: the gym (with a switcher for
 /// someone at several), then its pages as their role there allows, under
@@ -47,9 +54,7 @@ ServiceNav gymNavigation(WidgetRef ref, String location,
   final register = GymRoutes.registerMemberFor(id);
   // Requests to join: whoever registers members, unless the gym leaves them
   // to its owner and managers.
-  final settings = ref.watch(gymSettingsProvider(id)).valueOrNull;
-  final answersJoins = a.can(GymPermission.register) &&
-      (settings == null || !settings.managersAnswerJoins || VenueRole.hasEverything(a.role) || a.role == VenueRole.manager);
+  final answersJoins = answersJoinRequests(a, ref.watch(gymSettingsProvider(id)).valueOrNull);
   final waiting = answersJoins ? ref.watch(gymWaitingRequestsProvider(id)).valueOrNull ?? 0 : 0;
   final toConfirm = a.can(GymPermission.payments) ? ref.watch(gymWaitingPaymentsProvider(id)).valueOrNull ?? 0 : 0;
   final trainersWaiting = a.can(GymPermission.trainers)

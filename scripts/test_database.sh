@@ -10,7 +10,8 @@
 # paying online, the gym's settings and reminders through payments_test.sql,
 # a venue's profile, prices and reviews through profile_test.sql, and
 # trainers (verification, timings, attendance, reviews) through trainers_test.sql,
-# and push notifications through push_test.sql.
+# and push notifications through push_test.sql, and each person's app colours
+# through theme_test.sql.
 # Needs PostgreSQL 14+ installed (brew install postgresql). Touches nothing else.
 #
 #   scripts/test_database.sh
@@ -44,5 +45,6 @@ db -f tests/database/profile_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | 
 db -f tests/database/trainers_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 db -f tests/database/push_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 db -f tests/database/ai_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
+db -f tests/database/theme_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 echo "Applying supabase/seed.sql (local test data)"
 db -f supabase/seed.sql

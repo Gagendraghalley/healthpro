@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../router/app_router.dart';
 import '../theme/app_theme.dart';
+import '../theme/theme_colors.dart';
 import '../theme/phone_size.dart';
 import '../theme/theme_mode.dart';
 import '../widgets/motion.dart';
@@ -15,11 +16,13 @@ class HealthProApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final lessMotion = ref.watch(reduceMotionProvider);
+    // The colours they picked (Account -> Appearance), in both themes.
+    final colors = ref.watch(themeColorsProvider);
     return MaterialApp.router(
       title: 'Health Pro',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
+      theme: AppTheme.lightWith(colors),
+      darkTheme: AppTheme.darkWith(colors),
       themeMode: ref.watch(themeModeProvider),
       // Light and dark cross-fade: every colour (and the side menu's and
       // cards' own, through Brand.darkness) glides to its other self.

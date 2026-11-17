@@ -26,7 +26,7 @@ class HealthProLogo extends StatelessWidget {
   /// The package the images are in, and the image for each version.
   static const package = 'health_pro_core';
   static String assetFor({required bool markOnly, required bool onDark}) =>
-      'assets/images/${markOnly ? 'mark' : 'logo'}${onDark ? '_on_dark' : ''}.png';
+      'assets/images/${markOnly ? 'mark' : 'logo'}${onDark ? '_on_dark' : ''}.webp';
 
   @override
   Widget build(BuildContext context) {

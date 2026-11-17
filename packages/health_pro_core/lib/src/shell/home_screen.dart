@@ -127,7 +127,7 @@ class _Overview extends ConsumerWidget {
                 delay: const Duration(milliseconds: 80),
                 child: _Tile(
                   icon: Icons.add_business_rounded,
-                  color: BrandColors.orange,
+                  color: context.brand.highlight,
                   title: 'Run another business on Health Pro',
                   message: 'Register a gym or another venue: each gets its own dashboard, staff and roles.',
                   action: 'Register a venue',
@@ -200,7 +200,7 @@ class _Welcome extends ConsumerWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
-                      colors: [BrandColors.orange.withValues(alpha: 0.35), BrandColors.orange.withValues(alpha: 0)]),
+                      colors: [context.brand.highlight.withValues(alpha: 0.35), context.brand.highlight.withValues(alpha: 0)]),
                 ),
               ),
             ),
@@ -224,7 +224,7 @@ class _Welcome extends ConsumerWidget {
                       FilledButton.icon(
                         onPressed: () => context.go(a.action.route),
                         style: FilledButton.styleFrom(
-                          backgroundColor: i == 0 ? BrandColors.orange : Colors.white.withValues(alpha: 0.12),
+                          backgroundColor: i == 0 ? context.brand.highlight : Colors.white.withValues(alpha: 0.12),
                           foregroundColor: Colors.white,
                           minimumSize: const Size(0, 46),
                           padding: const EdgeInsets.symmetric(horizontal: 18),
@@ -370,7 +370,7 @@ class DefaultServiceCard extends ConsumerWidget {
     final home = nav?.homeRoute;
     return ServiceCard(
       icon: module.icon,
-      color: module.color,
+      color: context.brand.themed(module.color),
       name: nav?.name ?? module.name,
       subtitle: nav?.tagline ?? module.description,
       onOpen: home == null ? null : () => context.go(home),

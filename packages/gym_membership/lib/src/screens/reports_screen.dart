@@ -375,7 +375,7 @@ class _Insights extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        gradient: LinearGradient(colors: [blue.withValues(alpha: 0.10), BrandColors.orange.withValues(alpha: 0.06)]),
+        gradient: LinearGradient(colors: [blue.withValues(alpha: 0.10), context.brand.highlight.withValues(alpha: 0.06)]),
         border: Border.all(color: blue.withValues(alpha: 0.2)),
       ),
       child: Row(

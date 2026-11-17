@@ -1,25 +1,40 @@
 import 'package:flutter/material.dart';
 
 import 'brand.dart';
+import 'theme_colors.dart';
 
 /// Light mode: white cards with soft edges on a cool grey page, navy for
 /// buttons and orange for the main action and what's active (LightColors).
-/// Dark mode: frosted glass on navy.
+/// Dark mode: frosted glass on navy. The orange and navy are the colours
+/// they pick in Account -> Appearance ([ThemeColors]); Health Pro's own until
+/// then.
 abstract final class AppTheme {
-  static ThemeData get light => _build(
-        Brand.light,
+  static ThemeData get light => lightWith(ThemeColors.standard);
+
+  static ThemeData get dark => darkWith(ThemeColors.standard);
+
+  static ThemeData lightWith(ThemeColors picked) {
+    final main = picked.primary;
+    final accent = picked.accent;
+    return _build(
+        Brand.light.copyWith(
+          accent: main.light,
+          accentText: main.text,
+          highlight: main == ThemePalette.orange ? BrandColors.orange : main.light,
+          glowB: main.light.withAlpha(0x08),
+        ),
         // Every role set by hand: a scheme from the seed alone tints the
         // surfaces lilac, which fights the navy and orange.
         ColorScheme.fromSeed(
           seedColor: LightColors.navy,
-          primary: LightColors.navy,
+          primary: accent.light,
           onPrimary: Colors.white,
-          primaryContainer: const Color(0xFFE6ECF6),
-          onPrimaryContainer: LightColors.navy,
-          secondary: LightColors.orange,
+          primaryContainer: accent.tint,
+          onPrimaryContainer: accent.onTint,
+          secondary: main.light,
           onSecondary: Colors.white,
-          secondaryContainer: const Color(0xFFFFEDDF),
-          onSecondaryContainer: const Color(0xFF9A3A0B),
+          secondaryContainer: main.tint,
+          onSecondaryContainer: main.onTint,
           tertiary: BrandColors.blue,
           onTertiary: Colors.white,
           tertiaryContainer: const Color(0xFFE3EDFB),
@@ -42,24 +57,38 @@ abstract final class AppTheme {
           outlineVariant: LightColors.border,
           inverseSurface: LightColors.ink,
           onInverseSurface: LightColors.background,
-          inversePrimary: const Color(0xFFFFB27A),
+          inversePrimary: main == ThemePalette.orange ? const Color(0xFFFFB27A) : Color.lerp(main.light, Colors.white, 0.45),
           surfaceTint: Colors.transparent,
         ),
       );
+  }
 
-  static ThemeData get dark => _build(
-        Brand.dark,
+  static ThemeData darkWith(ThemeColors picked) {
+    final main = picked.primary;
+    final accent = picked.accent;
+    // Navy keeps the seed's own containers, as the dark theme always had.
+    final ownAccent = accent != ThemePalette.navy;
+    return _build(
+        Brand.dark.copyWith(
+          accent: main.dark,
+          accentText: main.dark,
+          highlight: main.dark,
+          glowB: main.dark.withAlpha(0x1F),
+        ),
         ColorScheme.fromSeed(
           seedColor: BrandColors.navy,
           brightness: Brightness.dark,
-          primary: BrandColors.orange,
+          primary: main.dark,
           onPrimary: BrandColors.navy,
-          secondary: const Color(0xFF9CC2FF),
+          secondary: accent.dark,
           onSecondary: BrandColors.navy,
+          secondaryContainer: ownAccent ? Color.lerp(BrandColors.slateNavy, accent.dark, 0.3) : null,
+          onSecondaryContainer: ownAccent ? Color.lerp(accent.dark, Colors.white, 0.6) : null,
           tertiary: const Color(0xFF7FB0F5),
           surface: BrandColors.slateNavy,
         ),
       );
+  }
 
   static ThemeData _build(Brand brand, ColorScheme colors) {
     // What follows `light ?` is the light theme's own; the other side is what
@@ -144,7 +173,7 @@ abstract final class AppTheme {
                   color: states.contains(WidgetState.error)
                       ? colors.error
                       : states.contains(WidgetState.focused)
-                          ? LightColors.orangeText
+                          ? brand.accentText
                           : brand.muted,
                 ))
             : null,

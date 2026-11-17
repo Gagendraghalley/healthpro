@@ -11,7 +11,7 @@ import 'package:gym_membership/src/screens/trainer_screens.dart';
 import 'package:gym_membership/src/widgets/trainer_widgets.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
-import 'gym_navigation_test.dart' as nav show gymId, inMenu, owner, person, showApp;
+import 'gym_navigation_test.dart' as nav show gymId, inMenu, openGym, owner, person, showApp;
 import 'gym_screens_test.dart' show day, overrides, show;
 
 // Trainers: verified by each gym, their week, attendance taken at the desk,
@@ -114,10 +114,10 @@ void main() {
       expect(find.text('Verify'), findsOneWidget);
       expect(find.text("Don't verify"), findsOneWidget);
       await tester.scrollUntilVisible(find.text('Our trainers (1)'), 300, scrollable: find.byType(Scrollable).first);
-      await tester.scrollUntilVisible(find.text('days here, last 30'), 300, scrollable: find.byType(Scrollable).first);
+      await tester.scrollUntilVisible(find.text('Days attended'), 300, scrollable: find.byType(Scrollable).first);
       expect(find.text('2 pm–3 pm · Not available').evaluate().isNotEmpty || find.text('2–3 pm · Not available').evaluate().isNotEmpty,
           isTrue, reason: 'their time at another gym, unnamed');
-      expect(find.text('days here, last 30'), findsOneWidget);
+      expect(find.text('Days attended'), findsOneWidget);
       expect(find.text('Add trainer'), findsOneWidget, reason: 'the gym can add one itself');
       expect(tester.takeException(), isNull);
     }
@@ -131,9 +131,13 @@ void main() {
     ]);
     await tester.pumpAndSettle();
     expect(find.text('Added by the gym'), findsOneWidget);
-    expect(find.text('+97517100004 · tandin@x.bt'), findsOneWidget);
+    expect(find.text('+97517100004'), findsOneWidget);
+    expect(find.text('tandin@x.bt'), findsOneWidget);
     expect(find.text('Change times'), findsOneWidget);
     expect(find.text('Mark arrived'), findsOneWidget);
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    expect(find.text('Make inactive'), findsOneWidget, reason: 'in the card\'s menu');
     expect(tester.takeException(), isNull);
   });
 
@@ -239,11 +243,13 @@ void main() {
     }
   });
 
-  testWidgets('not a trainer yet: becoming one', (tester) async {
+  testWidgets("not a trainer yet: they apply from a gym's page", (tester) async {
     await show(tester, const TrainerHomeScreen(),
         with_: [...overrides(), myTrainingProvider.overrideWith((ref) async => const MyTraining())]);
     await tester.pumpAndSettle();
-    expect(find.text('Make my trainer profile'), findsOneWidget);
+    expect(find.text('No trainer profile yet'), findsOneWidget);
+    expect(find.textContaining('apply as a trainer'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('a trainer\'s public profile, seen from a gym: other gyms only Not available', (tester) async {
@@ -303,12 +309,24 @@ void main() {
     expect(find.text('Tandin Wangchuk'), findsOneWidget);
   });
 
-  testWidgets('the menu: Trainers for the owner, with those waiting; Trainer profile under Me', (tester) async {
+  testWidgets('the menu: Trainers for the owner, with those waiting; Trainer profile under Me for a trainer', (tester) async {
     await nav.showApp(tester, const Size(1440, 1000), [
       ...nav.person(gyms: nav.owner),
       gymTrainersProvider.overrideWith((ref, id) async => [gymTrainer(status: 'pending')]),
+      myTrainingProvider.overrideWith((ref) async => const MyTraining(profile: tandin, joinedPublicly: true)),
     ], at: '/gyms/${nav.gymId}/manage');
+    await nav.openGym(tester);
     expect(nav.inMenu('Trainers'), findsOneWidget);
     expect(nav.inMenu('Trainer profile'), findsOneWidget);
+  });
+
+  testWidgets('the menu: no trainer page for someone without a trainer profile', (tester) async {
+    await nav.showApp(tester, const Size(1440, 1000), [
+      ...nav.person(gyms: nav.owner),
+      gymTrainersProvider.overrideWith((ref, id) async => const <GymTrainer>[]),
+      myTrainingProvider.overrideWith((ref) async => const MyTraining()),
+    ], at: '/gyms/${nav.gymId}/manage');
+    expect(nav.inMenu('Trainer profile'), findsNothing);
+    expect(nav.inMenu('My training'), findsNothing);
   });
 }

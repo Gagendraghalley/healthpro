@@ -503,7 +503,7 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
         Text('One Platform.', style: headline),
         Text('Every Sport.', style: headline),
         Text('Endless Possibilities.',
-            style: headline.copyWith(color: ink.dark ? BrandColors.orange : LightColors.orangeText)),
+            style: headline.copyWith(color: context.brand.accentText)),
         Padding(
           padding: const EdgeInsets.only(top: 22, bottom: 34),
           child: ConstrainedBox(
@@ -595,7 +595,7 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-                  const IgnorePointer(child: CustomPaint(painter: GymStripesPainter())),
+                  IgnorePointer(child: CustomPaint(painter: GymStripesPainter.of(context))),
                 ],
               ),
             ),
@@ -672,7 +672,7 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
   Widget _narrow(BuildContext context, Widget words, Color bg, double top) {
     return Stack(
       children: [
-        Positioned(right: -160, top: -80, child: GymGlow(color: BrandColors.orange.withValues(alpha: 0.16), size: 420)),
+        Positioned(right: -160, top: -80, child: GymGlow(color: context.brand.highlight.withValues(alpha: 0.16), size: 420)),
         Padding(
           padding: EdgeInsets.only(top: top + 28, bottom: _Layout.overlap + 92),
           child: _Frame(
@@ -709,7 +709,7 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
                                   ),
                                 ),
                               ),
-                              const IgnorePointer(child: CustomPaint(painter: GymStripesPainter())),
+                              IgnorePointer(child: CustomPaint(painter: GymStripesPainter.of(context))),
                               Positioned(
                                 top: 8,
                                 left: 14,
@@ -1065,7 +1065,7 @@ class _SlideLayerView extends StatelessWidget {
                 child: image,
               ),
               if (covered > 0) IgnorePointer(child: ColoredBox(color: Colors.black.withValues(alpha: 0.3 * covered))),
-              if (shown > 0 && shown < 1) IgnorePointer(child: CustomPaint(painter: _SweepBandsPainter(shown))),
+              if (shown > 0 && shown < 1) IgnorePointer(child: CustomPaint(painter: _SweepBandsPainter(shown, context.brand.highlight))),
             ],
           );
         },
@@ -1115,7 +1115,10 @@ class _SweepBandsPainter extends CustomPainter {
 
   final double shown;
 
-  const _SweepBandsPainter(this.shown);
+  /// The orange band: the brand's, or the colour they picked.
+  final Color color;
+
+  const _SweepBandsPainter(this.shown, this.color);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1130,11 +1133,11 @@ class _SweepBandsPainter extends CustomPainter {
       ..close();
     canvas.drawPath(band(orange, width), Paint()..color = BrandColors.navy.withValues(alpha: 0.92));
     // A pixel over the photo's edge, so no seam shows between.
-    canvas.drawPath(band(-1, orange), Paint()..color = BrandColors.orange);
+    canvas.drawPath(band(-1, orange), Paint()..color = color);
   }
 
   @override
-  bool shouldRepaint(_SweepBandsPainter oldDelegate) => oldDelegate.shown != shown;
+  bool shouldRepaint(_SweepBandsPainter oldDelegate) => oldDelegate.shown != shown || oldDelegate.color != color;
 }
 
 /// Which sport is showing and the way between them, on polished glass under
@@ -1236,12 +1239,12 @@ class _SlideControls extends StatelessWidget {
         padding: const WidgetStatePropertyAll(EdgeInsets.zero),
         shape: const WidgetStatePropertyAll(CircleBorder()),
         side: WidgetStateProperty.resolveWith(
-            (states) => BorderSide(color: lit(states) ? BrandColors.orange.withValues(alpha: 0.7) : hairline)),
-        foregroundColor: WidgetStateProperty.resolveWith((states) => lit(states) ? BrandColors.orange : rest),
+            (states) => BorderSide(color: lit(states) ? context.brand.highlight.withValues(alpha: 0.7) : hairline)),
+        foregroundColor: WidgetStateProperty.resolveWith((states) => lit(states) ? context.brand.highlight : rest),
         backgroundColor: WidgetStateProperty.resolveWith((states) => lit(states)
-            ? BrandColors.orange.withValues(alpha: 0.08)
+            ? context.brand.highlight.withValues(alpha: 0.08)
             : Colors.white.withValues(alpha: ink.dark ? 0.04 : 0.35)),
-        overlayColor: WidgetStatePropertyAll(BrandColors.orange.withValues(alpha: 0.1)),
+        overlayColor: WidgetStatePropertyAll(context.brand.highlight.withValues(alpha: 0.1)),
       ),
     );
   }
@@ -1261,6 +1264,8 @@ class _SlideControls extends StatelessWidget {
               builder: (context, _) => CustomPaint(
                 painter: _RingPainter(
                   value: show.progress.value,
+                  color: context.brand.highlight,
+                  soft: context.brand.themedShade(_peach),
                   track: onPhoto
                       ? Colors.white.withValues(alpha: 0.28)
                       : ink.pick(LightColors.navy.withValues(alpha: 0.08), Colors.white.withValues(alpha: 0.12)),
@@ -1275,7 +1280,7 @@ class _SlideControls extends StatelessWidget {
           icon: Icon(show.playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: size * 0.38),
           style: IconButton.styleFrom(
             foregroundColor: onPhoto ? Colors.white : ink.heading.withValues(alpha: 0.85),
-            hoverColor: BrandColors.orange.withValues(alpha: 0.1),
+            hoverColor: context.brand.highlight.withValues(alpha: 0.1),
             fixedSize: Size.square(size),
             minimumSize: Size.square(size),
             padding: EdgeInsets.zero,
@@ -1563,7 +1568,11 @@ class _RingPainter extends CustomPainter {
   final double value;
   final Color track;
 
-  const _RingPainter({required this.value, required this.track});
+  /// The brand's orange or the colour they picked, from [soft] round to [color].
+  final Color color;
+  final Color soft;
+
+  const _RingPainter({required this.value, required this.track, required this.color, required this.soft});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1584,7 +1593,7 @@ class _RingPainter extends CustomPainter {
         ..strokeWidth = stroke
         ..strokeCap = StrokeCap.round
         ..shader = SweepGradient(
-          colors: const [_peach, BrandColors.orange],
+          colors: [soft, color],
           stops: [0, value.clamp(0.01, 1.0)],
           transform: const GradientRotation(-math.pi / 2),
         ).createShader(rect),
@@ -1592,7 +1601,8 @@ class _RingPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_RingPainter oldDelegate) => oldDelegate.value != value || oldDelegate.track != track;
+  bool shouldRepaint(_RingPainter oldDelegate) =>
+      oldDelegate.value != value || oldDelegate.track != track || oldDelegate.color != color || oldDelegate.soft != soft;
 }
 
 /// The showing sport's number, large and slanted like the headline and
@@ -1780,12 +1790,12 @@ class _SlideTrack extends StatelessWidget {
                         height: i == show.index ? 3 : 2,
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: i == show.index ? const [_peach, BrandColors.orange] : [rest, rest],
+                            colors: i == show.index ? [context.brand.themedShade(_peach), context.brand.highlight] : [rest, rest],
                           ),
                           borderRadius: BorderRadius.circular(2),
                           boxShadow: [
                             BoxShadow(
-                              color: BrandColors.orange.withValues(alpha: i == show.index ? 0.35 : 0),
+                              color: context.brand.highlight.withValues(alpha: i == show.index ? 0.35 : 0),
                               blurRadius: 10,
                             ),
                           ],
@@ -2394,7 +2404,7 @@ class _ServiceTileState extends State<_ServiceTile> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                       decoration: BoxDecoration(
-                        color: service.open ? BrandColors.orange : Colors.black.withValues(alpha: 0.38),
+                        color: service.open ? context.brand.highlight : Colors.black.withValues(alpha: 0.38),
                         borderRadius: BorderRadius.circular(20),
                         border: service.open ? null : Border.all(color: Colors.white.withValues(alpha: 0.25)),
                       ),
@@ -2575,7 +2585,7 @@ class _AboutArt extends StatelessWidget {
               right: 40,
               bottom: 30,
               child: DecoratedBox(
-                decoration: BoxDecoration(color: BrandColors.orange, borderRadius: BorderRadius.circular(32)),
+                decoration: BoxDecoration(color: context.brand.highlight, borderRadius: BorderRadius.circular(32)),
               ),
             ),
             Positioned.fill(
@@ -2610,7 +2620,7 @@ class _AboutArt extends StatelessWidget {
                         child: Transform.rotate(
                           angle: 0.6,
                           child: Container(
-                              width: 54, height: height * 1.2, color: BrandColors.orange.withValues(alpha: 0.9)),
+                              width: 54, height: height * 1.2, color: context.brand.highlight.withValues(alpha: 0.9)),
                         ),
                       ),
                     ],
@@ -2636,9 +2646,9 @@ class _Check extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(top: 1),
-          child: Icon(Icons.check_rounded, size: 19, color: BrandColors.orange),
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(Icons.check_rounded, size: 19, color: context.brand.highlight),
         ),
         const SizedBox(width: 8),
         Expanded(child: Text(text, style: TextStyle(fontSize: 14.5, height: 1.4, color: _Ink.of(context).body))),
@@ -2689,7 +2699,7 @@ class _Steps extends StatelessWidget {
                   // On the light page, the orange that reads as text.
                   TextSpan(
                       text: '5 Simple Steps',
-                      style: TextStyle(color: ink.dark ? BrandColors.orange : LightColors.orangeText)),
+                      style: TextStyle(color: context.brand.accentText)),
                 ],
               ),
               textAlign: TextAlign.center,
@@ -3072,7 +3082,7 @@ class _Faq extends StatelessWidget {
                 tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
                 childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
                 expandedAlignment: Alignment.centerLeft,
-                iconColor: BrandColors.orange,
+                iconColor: context.brand.highlight,
                 collapsedIconColor: ink.heading,
                 title: Text(
                   questions[i].$1,
@@ -3188,7 +3198,7 @@ class _LastCall extends StatelessWidget {
                   ),
                 ),
                 Positioned(
-                    right: -60, top: -120, child: GymGlow(color: BrandColors.orange.withValues(alpha: 0.3), size: 320)),
+                    right: -60, top: -120, child: GymGlow(color: context.brand.highlight.withValues(alpha: 0.3), size: 320)),
                 Padding(
                   padding: EdgeInsets.all(layout.wide ? 48 : 28),
                   child: layout.medium
@@ -3360,7 +3370,7 @@ class _Eyebrow extends StatelessWidget {
     final rule = Container(
       width: 34,
       height: 2.5,
-      decoration: BoxDecoration(color: BrandColors.orange, borderRadius: BorderRadius.circular(2)),
+      decoration: BoxDecoration(color: context.brand.highlight, borderRadius: BorderRadius.circular(2)),
     );
     return Row(
       mainAxisSize: MainAxisSize.min,

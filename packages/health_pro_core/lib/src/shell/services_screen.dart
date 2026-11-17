@@ -94,7 +94,7 @@ class _ServiceTile extends ConsumerWidget {
             : StatusChip(label: nav == null ? 'Available' : 'Not set up', color: context.colors.tertiary);
     return ServiceCard(
       icon: module.icon,
-      color: module.color,
+      color: brand.themed(module.color),
       name: nav?.name ?? module.name,
       subtitle: nav?.scope?.label ?? nav?.tagline,
       status: status,
@@ -128,7 +128,7 @@ class _ServiceTile extends ConsumerWidget {
                 for (final d in pages.take(6))
                   Chip(
                     visualDensity: VisualDensity.compact,
-                    avatar: Icon(d.icon, size: 16, color: module.color),
+                    avatar: Icon(d.icon, size: 16, color: brand.themed(module.color)),
                     label: Text(d.label, style: const TextStyle(fontSize: 12)),
                   ),
               ],
