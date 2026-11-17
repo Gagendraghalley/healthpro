@@ -20,6 +20,7 @@ import '../widgets/common.dart';
 import '../widgets/motion.dart';
 import '../widgets/responsive.dart';
 import '../widgets/service_cards.dart';
+import '../widgets/welcome_band.dart';
 import 'service_nav.dart';
 
 /// Overview, the platform's home: a welcome, every service's shortcuts,
@@ -169,76 +170,31 @@ class _Welcome extends ConsumerWidget {
     final unread = ref.watch(unreadCountProvider);
     final now = BhutanTime.now();
     const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    final wide = MediaQuery.sizeOf(context).width >= 700;
+    final name = profile?.fullName ?? '';
     final facts = [
-      '${weekdays[now.weekday - 1]}, ${formatDate(now)}',
       serviceCount == 1 ? '1 service' : '$serviceCount services',
       if (unread > 0) unread == 1 ? '1 new notification' : '$unread new notifications',
     ];
-    return Container(
-      padding: EdgeInsets.all(wide ? 28 : 20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF12306E), BrandColors.navy, BrandColors.night],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [BoxShadow(color: BrandColors.navy.withValues(alpha: 0.25), blurRadius: 30, offset: const Offset(0, 14))],
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // A soft orange glow in the corner.
-          Positioned(
-            right: -60,
-            top: -80,
-            child: IgnorePointer(
-              child: Container(
-                width: 260,
-                height: 260,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                      colors: [context.brand.highlight.withValues(alpha: 0.35), context.brand.highlight.withValues(alpha: 0)]),
-                ),
-              ),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${greeting(now)}, ${firstName(profile?.fullName ?? '')}',
-                style: TextStyle(color: Colors.white, fontSize: wide ? 30 : 24, fontWeight: FontWeight.w800, letterSpacing: -0.4),
-              ),
-              const SizedBox(height: 6),
-              Text(facts.join('  ·  '), style: TextStyle(color: Colors.white.withValues(alpha: 0.72), fontSize: 14)),
-              if (actions.isNotEmpty) ...[
-                const SizedBox(height: 20),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    for (final (i, a) in actions.take(2).indexed)
-                      FilledButton.icon(
-                        onPressed: () => context.go(a.action.route),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: i == 0 ? context.brand.highlight : Colors.white.withValues(alpha: 0.12),
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(0, 46),
-                          padding: const EdgeInsets.symmetric(horizontal: 18),
-                        ),
-                        icon: Icon(a.action.icon, size: 20),
-                        label: Text(a.action.label),
-                      ),
-                  ],
-                ),
+    return WelcomeBand(
+      eyebrow: '${weekdays[now.weekday - 1]}, ${formatDate(now)}',
+      title: '${greeting(now)}, ${firstName(name)}',
+      subtitle: facts.join('  ·  '),
+      leading: name.trim().isEmpty ? null : BandAvatar(initial: BandAvatar.initialOf(name)),
+      bottom: actions.isEmpty
+          ? null
+          : Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final (i, a) in actions.take(2).indexed)
+                  BandAction(
+                    icon: a.action.icon,
+                    label: a.action.label,
+                    main: i == 0,
+                    onPressed: () => context.go(a.action.route),
+                  ),
               ],
-            ],
-          ),
-        ],
-      ),
+            ),
     );
   }
 }

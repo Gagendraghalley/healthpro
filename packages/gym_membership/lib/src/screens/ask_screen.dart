@@ -177,8 +177,6 @@ class _HelpAnswer extends StatelessWidget {
   }
 }
 
-const _palette = [BrandColors.orange, BrandColors.blue, BrandColors.green, Color(0xFF7C4DFF), BrandColors.amber, Color(0xFF00A3A3)];
-
 IconData _iconOf(AskReport r) => switch (r) {
       AskReport.visitsOverTime => Icons.login_rounded,
       AskReport.busiestDays => Icons.calendar_view_week_rounded,
@@ -290,7 +288,7 @@ class _ReportAnswer extends ConsumerWidget {
                 : '${weekdayNames[best]}s are the busiest: ${_count(points[best].value.toInt(), 'check-in')} in $period.',
             note: capped,
             child: ConsoleBarChart(
-                name: 'Check-ins by day of the week', points: points, format: (v) => '${v.round()}', color: BrandColors.green),
+                name: 'Check-ins by day of the week', points: points, format: (v) => '${v.round()}', color: BrandColors.orange),
           );
         case AskReport.busiestHours:
           final points = checkInsByHour(visits);
@@ -333,7 +331,7 @@ class _ReportAnswer extends ConsumerWidget {
               name: 'Check-ins',
               points: [for (final p in visitSeries(visits, today, reply.period.range)) (label: p.label, value: p.amount)],
               format: (v) => '${v.round()}',
-              color: BrandColors.green,
+              color: BrandColors.orange,
             ),
           );
       }
@@ -364,7 +362,7 @@ class _ReportAnswer extends ConsumerWidget {
               : Column(children: [
                   for (final (i, m) in methods.indexed)
                     ConsoleShareRow(
-                        color: _palette[i % _palette.length], label: m.label, value: formatNu(m.amount), share: m.amount / total),
+                        color: chartColor(context, i), label: m.label, value: formatNu(m.amount), share: m.amount / total),
                 ]),
         );
       }
@@ -417,7 +415,7 @@ class _ReportAnswer extends ConsumerWidget {
                 : Column(children: [
                     for (final (i, p) in mix.indexed)
                       ConsoleShareRow(
-                          color: _palette[i % _palette.length], label: p.name, value: '${p.members}', share: p.members / total),
+                          color: chartColor(context, i), label: p.name, value: '${p.members}', share: p.members / total),
                   ]),
           );
         case AskReport.memberCounts:

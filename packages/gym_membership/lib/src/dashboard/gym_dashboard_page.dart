@@ -101,7 +101,6 @@ class _ConsoleState extends ConsumerState<_Console> {
     final registered = ref.watch(gymMembersProvider(_id)).valueOrNull;
     final newThisMonth =
         registered?.where((m) => m.joinedOn.year == today.year && m.joinedOn.month == today.month).length ?? 0;
-    final ink = ConsoleInk.of(context);
 
     // Getting started: what's left to do, from the gym's own records; gone
     // once it's all done (or nothing left is theirs to do).
@@ -275,21 +274,14 @@ class _ConsoleState extends ConsumerState<_Console> {
     return ListView(
       padding: pagePadding(context, horizontal: pad, top: 18, bottom: 40),
       children: [
-        Text(
-          '${greetingAt(BhutanTime.now())}, ${firstName(profile?.fullName ?? '')}',
-          style: TextStyle(
-              fontSize: contentWidth >= 640 ? 30 : 24,
-              fontWeight: FontWeight.w800,
-              color: ink.heading,
-              letterSpacing: -0.5),
+        FadeSlideIn(
+          child: WelcomeBand(
+            eyebrow: '${_weekdays[today.weekday - 1]}, ${formatShortDate(today)}',
+            title: '${greetingAt(BhutanTime.now())}, ${firstName(profile?.fullName ?? '')}',
+            subtitle: "Here's what's happening at ${venue.name} today.",
+            bottom: _QuickActions(access: access),
+          ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          "Here's what's happening at ${venue.name} today · ${_weekdays[today.weekday - 1]}, ${formatShortDate(today)}",
-          style: TextStyle(fontSize: 15, color: context.brand.muted),
-        ),
-        const SizedBox(height: 16),
-        FadeSlideIn(child: _QuickActions(access: access)),
         if (setup != null) ...[const SizedBox(height: 20), FadeSlideIn(child: setup)],
         if (alerts.isNotEmpty) ...[
           const SizedBox(height: 16),
@@ -359,36 +351,14 @@ class _QuickActions extends StatelessWidget {
       if (access.can(GymPermission.plans)) (Icons.add_card_rounded, 'New package', GymRoutes.newPlanFor(id)),
       if (access.can(VenuePermission.staff)) (Icons.group_add_outlined, 'Add staff', CoreRoutes.venueStaffFor(id)),
     ];
-    // The day's main action in orange, the rest quieter; each gives a
-    // little under the hand, and they arrive one after another.
-    const text = TextStyle(fontFamily: brandFont, fontWeight: FontWeight.w700, fontSize: 14.5);
+    // On the welcome band: the day's main action bright, the rest glassy;
+    // each gives a little under the hand, and they arrive one after another.
     return Wrap(
       spacing: 10,
       runSpacing: 10,
       children: staggered(offset: 8, step: const Duration(milliseconds: 45), [
         for (final (i, (icon, label, route)) in actions.indexed)
-          Pressable(
-            child: i == 0
-                ? FilledButton.icon(
-                    onPressed: () => context.push(route),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: context.brand.accent,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(0, 44),
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
-                      textStyle: text,
-                    ),
-                    icon: Icon(icon, size: 20),
-                    label: Text(label),
-                  )
-                : OutlinedButton.icon(
-                    onPressed: () => context.push(route),
-                    style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(0, 44), padding: const EdgeInsets.symmetric(horizontal: 16), textStyle: text),
-                    icon: Icon(icon, size: 20),
-                    label: Text(label),
-                  ),
-          ),
+          BandAction(icon: icon, label: label, main: i == 0, onPressed: () => context.push(route)),
       ]),
     );
   }
@@ -527,6 +497,7 @@ class _Alert extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final color = themeTone(context, this.color);
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 560),
       child: HoverLift(
@@ -589,7 +560,7 @@ class _CheckInsCard extends StatelessWidget {
           ConsoleBarChart(
             name: 'Check-ins, last 7 days',
             height: 180,
-            color: BrandColors.green,
+            color: BrandColors.blue,
             highlight: points.length - 1,
             points: [for (final p in points) (label: p.label, value: p.amount)],
             format: (v) => '${v.round()}',
@@ -723,7 +694,7 @@ class _StatusCard extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
-                  Container(width: 11, height: 11, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                  Container(width: 11, height: 11, decoration: BoxDecoration(color: themeTone(context, color), shape: BoxShape.circle)),
                   const SizedBox(width: 10),
                   Expanded(
                       child: Text(name, style: TextStyle(fontSize: 14, color: ink.body, fontWeight: FontWeight.w600))),
@@ -788,7 +759,7 @@ class _ActivityCard extends StatelessWidget {
                         Container(
                           width: 9,
                           height: 9,
-                          decoration: BoxDecoration(color: _kinds[a.kind]!.$2, shape: BoxShape.circle),
+                          decoration: BoxDecoration(color: themeTone(context, _kinds[a.kind]!.$2), shape: BoxShape.circle),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -803,13 +774,13 @@ class _ActivityCard extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                           decoration: BoxDecoration(
-                            color: _kinds[a.kind]!.$2.withValues(alpha: 0.12),
+                            color: themeTone(context, _kinds[a.kind]!.$2).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
                             _kinds[a.kind]!.$1,
                             style: TextStyle(
-                                fontSize: 11.5, fontWeight: FontWeight.w700, color: context.brand.readable(_kinds[a.kind]!.$2)),
+                                fontSize: 11.5, fontWeight: FontWeight.w700, color: context.brand.readable(themeTone(context, _kinds[a.kind]!.$2))),
                           ),
                         ),
                       ],
@@ -851,10 +822,10 @@ class _EndingCard extends StatelessWidget {
                       children: [
                         CircleAvatar(
                           radius: 18,
-                          backgroundColor: BrandColors.blue.withValues(alpha: 0.12),
+                          backgroundColor: themeTone(context, BrandColors.blue).withValues(alpha: 0.12),
                           child: Text(
                             s.memberDisplayName.characters.first.toUpperCase(),
-                            style: const TextStyle(color: BrandColors.blue, fontWeight: FontWeight.w800),
+                            style: TextStyle(color: themeTone(context, BrandColors.blue), fontWeight: FontWeight.w800),
                           ),
                         ),
                         const SizedBox(width: 12),

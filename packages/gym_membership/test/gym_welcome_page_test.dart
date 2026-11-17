@@ -23,8 +23,8 @@ void main() {
         // The whole page is laid out (it scrolls as one), so an overflow
         // anywhere on it fails here.
         expect(tester.takeException(), isNull);
-        expect(find.text('Choose Your\nPerfect Plan'), findsOneWidget);
-        expect(find.text('Have Questions?'), findsOneWidget);
+        expect(find.text('Perfect Plan'), findsOneWidget);
+        expect(find.text('Questions?'), findsOneWidget);
       });
     }
   }

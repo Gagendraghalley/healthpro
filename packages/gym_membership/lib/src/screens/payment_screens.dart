@@ -207,6 +207,17 @@ class PaymentsToConfirmScreen extends ConsumerWidget {
                 child: ListView(
                   padding: pagePadding(context),
                   children: [
+                    FadeSlideIn(
+                      child: WelcomeBand(
+                        eyebrow: access.venue.name,
+                        title: 'Payments to confirm',
+                        subtitle: waiting.isEmpty
+                            ? 'Nothing waiting. Online payments wait here with their journal number.'
+                            : '${waiting.length == 1 ? '1 payment is' : '${waiting.length} payments are'} waiting. '
+                                'Check each journal number with the bank.',
+                      ),
+                    ),
+                    const SizedBox(height: 20),
                     if (settings != null &&
                         settings.account == null &&
                         access.can(VenuePermission.edit))

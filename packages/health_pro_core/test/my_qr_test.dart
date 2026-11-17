@@ -44,7 +44,9 @@ void main() {
       for (final label in ['Enlarge', 'Copy', 'Share', 'Save', 'My details', 'sonam@x.bt', 'Not added']) {
         expect(find.text(label), findsWidgets, reason: label);
       }
-      expect(find.text('Latest updates · 1 new'), findsOneWidget);
+      expect(find.text('Latest updates'), findsOneWidget);
+      expect(find.text('1 new'), findsOneWidget, reason: 'beside the title');
+      expect(find.text('1 new update'), findsOneWidget, reason: 'on the welcome band');
       expect(find.text('Payment confirmed'), findsOneWidget);
       expect(find.textContaining(', Sonam'), findsOneWidget, reason: 'greeted by first name');
       expect(find.text('Get a new QR code'), findsOneWidget);

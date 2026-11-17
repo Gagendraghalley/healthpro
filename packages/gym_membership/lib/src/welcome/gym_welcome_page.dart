@@ -121,7 +121,7 @@ class _GymWelcomePageState extends ConsumerState<GymWelcomePage> {
                   _Reveal(child: _About(key: _aboutKey, layout: layout, onKnowMore: () => _scrollTo(_stepsKey))),
                   _Reveal(child: _Steps(key: _stepsKey, layout: layout)),
                   _Reveal(child: _Plans(key: _plansKey, layout: layout, onFindGym: _findGym)),
-                  _Reveal(child: _Faq(key: _faqKey, layout: layout)),
+                  _Reveal(child: _Faq(key: _faqKey, layout: layout, onFindGym: _findGym)),
                   _Reveal(child: _LastCall(layout: layout, onJoin: _signUp, onRegisterGym: _registerGym)),
                   _Footer(
                     layout: layout,
@@ -241,29 +241,6 @@ class _Frame extends StatelessWidget {
   }
 }
 
-/// [children] in [columns] equal columns, the last row centred.
-class _Grid extends StatelessWidget {
-  final int columns;
-  final double spacing;
-  final List<Widget> children;
-
-  const _Grid({required this.columns, required this.children, this.spacing = 14});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = ((constraints.maxWidth - spacing * (columns - 1)) / columns).floorToDouble();
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          alignment: WrapAlignment.center,
-          children: [for (final c in children) SizedBox(width: width, child: c)],
-        );
-      },
-    );
-  }
-}
 
 // ─── The bar ───────────────────────────────────────────────────────────────
 
@@ -485,57 +462,67 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
     final ink = _Ink.of(context);
     // Behind the words, and what the photo fades into.
     final bg = ink.pick(LightColors.backgroundAlt, BrandColors.navy);
-    final headlineSize = layout.wide ? 70.0 : (layout.medium ? 56.0 : 42.0);
+    // Large but measured: it grows with the window and never crowds the photos.
+    final headlineSize = layout.wide ? (layout.width * 0.046).clamp(52.0, 68.0) : (layout.medium ? 54.0 : 40.0);
     final headline = TextStyle(
       fontSize: headlineSize,
       fontWeight: FontWeight.w800,
       fontStyle: FontStyle.italic,
-      height: 1.05,
-      letterSpacing: -1.6,
+      height: 1.04,
+      letterSpacing: -headlineSize * 0.03,
       color: ink.heading,
     );
+    final accent = context.brand.accentText;
+    final buttons = [
+      _PillButton(label: 'Get Started', icon: Icons.arrow_forward_rounded, onPressed: widget.onGetStarted),
+      _PillButton(label: 'Explore Services', outlined: true, onPressed: widget.onExplore),
+    ];
     // The headline arrives a line at a time, then what it is, the buttons and
     // the facts: one short cascade on arrival, then still.
     final words = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: staggered(step: const Duration(milliseconds: 90), offset: 18, [
-        const Padding(padding: EdgeInsets.only(bottom: 18), child: _Eyebrow('SPORTS & FITNESS PLATFORM', lineAfter: true)),
+        const Padding(padding: EdgeInsets.only(bottom: 24), child: _HeroBadge('SPORTS & FITNESS PLATFORM')),
         Text('One Platform.', style: headline),
         Text('Every Sport.', style: headline),
-        Text('Endless Possibilities.',
-            style: headline.copyWith(color: context.brand.accentText)),
+        _AccentText('Endless Possibilities.', style: headline),
         Padding(
-          padding: const EdgeInsets.only(top: 22, bottom: 34),
+          padding: EdgeInsets.only(top: layout.wide ? 26 : 20, bottom: layout.wide ? 36 : 30),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 500),
+            constraints: const BoxConstraints(maxWidth: 470),
             child: Text(
               'Discover gyms, manage memberships and track visits in Health Pro. '
               'Connected sports services help bring facilities and activities across Bhutan together.',
-              style: TextStyle(fontSize: layout.wide ? 18.5 : 16.5, height: 1.6, color: ink.body),
+              style: TextStyle(fontSize: layout.wide ? 18 : 16, height: 1.65, color: ink.body),
             ),
           ),
         ),
-        Wrap(
-          spacing: 14,
-          runSpacing: 12,
-          children: [
-            _PillButton(label: 'Get Started', icon: Icons.arrow_forward_rounded, onPressed: widget.onGetStarted),
-            _PillButton(label: 'Explore Services', outlined: true, onPressed: widget.onExplore),
-          ],
-        ),
+        // Side by side; one over the other, the width of a phone.
+        if (layout.medium)
+          Wrap(spacing: 14, runSpacing: 12, children: buttons)
+        else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [buttons[0], const SizedBox(height: 12), buttons[1]],
+          ),
         Padding(
-          padding: const EdgeInsets.only(top: 30),
+          padding: EdgeInsets.only(top: layout.wide ? 34 : 28),
           child: Wrap(
             spacing: 22,
-            runSpacing: 10,
+            runSpacing: 12,
             children: [
               for (final point in const ['Made for Bhutan', 'Gym memberships live', 'Built for every sport'])
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.check_circle_rounded, size: 18, color: context.brand.accent),
-                    const SizedBox(width: 7),
-                    Text(point, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ink.body)),
+                    Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(color: context.brand.accent.withValues(alpha: 0.14), shape: BoxShape.circle),
+                      child: Icon(Icons.check_rounded, size: 13, color: accent),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(point, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: ink.body)),
                   ],
                 ),
             ],
@@ -553,11 +540,16 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
     );
   }
 
-  /// The slides fill the right of the window, fading into the words, with
-  /// the way between them on glass under the cards. The whole window, like
-  /// a stage (never shorter than what's on it).
+  /// The slides fill the right of the window behind a clean slanted edge
+  /// (leaning like the page's stripes, an orange rule along it), graded
+  /// towards navy so every sport sits in the brand's colours, with the way
+  /// between them on glass under the cards. The whole window, like a stage
+  /// (never shorter than what's on it).
   Widget _wide(BuildContext context, Widget words, Color bg, double top) {
-    final photoLeft = layout.width * 0.4;
+    // The edge's foot sits just inside the words' column; it leans away from
+    // them going up, where the headline is widest.
+    final inner = math.min(layout.width - layout.gutter * 2, _Layout.maxContent);
+    final photoLeft = (layout.width - inner) / 2 + (inner - 40) * 11 / 21 - 30;
     return ConstrainedBox(
       constraints: BoxConstraints(minHeight: MediaQuery.sizeOf(context).height.clamp(0.0, 1080.0)),
       child: Stack(
@@ -576,26 +568,18 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
               Stack(
                 fit: StackFit.expand,
                 children: [
-                  ClipRect(child: _parallax(context, _SlideStage(show: _show), zoom: 0.06)),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [bg, bg.withValues(alpha: 0.7), bg.withValues(alpha: 0)],
-                        stops: const [0, 0.16, 0.5],
-                      ),
+                  ClipPath(
+                    clipper: const _SlantClipper(),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _parallax(context, _SlideStage(show: _show), zoom: 0.06),
+                        const IgnorePointer(child: _PhotoGrade()),
+                        IgnorePointer(child: CustomPaint(painter: GymStripesPainter.of(context))),
+                      ],
                     ),
                   ),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [bg.withValues(alpha: 0), bg.withValues(alpha: 0.85)],
-                        stops: const [0.72, 1],
-                      ),
-                    ),
-                  ),
-                  IgnorePointer(child: CustomPaint(painter: GymStripesPainter.of(context))),
+                  IgnorePointer(child: CustomPaint(painter: _SlantRulePainter(context.brand.highlight))),
                 ],
               ),
             ),
@@ -615,7 +599,8 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          Positioned(left: 0, bottom: 10, child: _card(const _MiniCard(), order: 0)),
+                          // Across the photo's edge, half on the page.
+                          Positioned(left: -44, bottom: 10, child: _card(const _MiniCard(), order: 0)),
                           Positioned(
                             right: 10,
                             bottom: 30,
@@ -695,6 +680,7 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
                             fit: StackFit.expand,
                             children: [
                               _swipe(_SlideStage(show: _show)),
+                              const IgnorePointer(child: _PhotoGrade()),
                               // A shade under the ticks and the sport's name,
                               // so they read over any photo.
                               const IgnorePointer(
@@ -1830,81 +1816,241 @@ class _WaveClipper extends CustomClipper<Path> {
   bool shouldReclip(_WaveClipper oldClipper) => false;
 }
 
+/// How far the photos' edge leans across its foot, for the height of the top.
+const _slant = 0.24;
+
+/// The photos' side of the top: its left edge leans like the page's stripes.
+class _SlantClipper extends CustomClipper<Path> {
+  const _SlantClipper();
+
+  @override
+  Path getClip(Size size) => Path()
+    ..moveTo(size.height * _slant, 0)
+    ..lineTo(size.width, 0)
+    ..lineTo(size.width, size.height)
+    ..lineTo(0, size.height)
+    ..close();
+
+  @override
+  bool shouldReclip(_SlantClipper oldClipper) => false;
+}
+
+/// A slim rule of the brand's orange along the photos' slanted edge.
+class _SlantRulePainter extends CustomPainter {
+  final Color color;
+
+  const _SlantRulePainter(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawLine(
+      Offset(size.height * _slant, 0),
+      Offset(0, size.height),
+      Paint()
+        ..color = color
+        ..strokeWidth = 4
+        ..isAntiAlias = true,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_SlantRulePainter oldDelegate) => oldDelegate.color != color;
+}
+
+/// A quiet colour grade over the top's photos: navy settling in from the
+/// foot and the left, so each sport sits in the brand's colours and the
+/// cards and the way between them read over any photo.
+class _PhotoGrade extends StatelessWidget {
+  const _PhotoGrade();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Stack(
+      fit: StackFit.expand,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              colors: [Color(0x99081428), Color(0x33081428), Color(0x00081428)],
+              stops: [0, 0.35, 0.65],
+            ),
+          ),
+        ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0x4D081428), Color(0x00081428)],
+              stops: [0, 0.45],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The top's eyebrow: what Health Pro is in small capitals on a slim glass
+/// pill, after a dot of the brand's orange.
+class _HeroBadge extends StatelessWidget {
+  final String text;
+
+  const _HeroBadge(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = _Ink.of(context);
+    final dot = context.brand.highlight;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 7, 16, 7),
+      decoration: BoxDecoration(
+        color: ink.pick(Colors.white.withValues(alpha: 0.8), Colors.white.withValues(alpha: 0.06)),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: context.brand.glassBorder),
+        boxShadow: ink.dark ? null : ink.shadow(light: 0.06, blur: 18, dy: 6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: dot,
+              shape: BoxShape.circle,
+              boxShadow: [BoxShadow(color: dot.withValues(alpha: 0.28), spreadRadius: 3)],
+            ),
+          ),
+          const SizedBox(width: 11),
+          Flexible(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.6, color: ink.heading),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// An illustrative member card; its sample QR is not a real member credential.
+/// Set like a premium card: deep navy with a soft sheen and a warm light in
+/// its corner.
 class _MiniCard extends StatelessWidget {
   const _MiniCard();
 
   @override
   Widget build(BuildContext context) {
+    final glow = context.brand.highlight;
     return ExcludeSemantics(
       child: Container(
-        width: 330,
-        padding: const EdgeInsets.all(18),
+        width: 344,
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
           gradient: const LinearGradient(
-            colors: [Color(0xF20B1530), Color(0xF21F4FA8)],
+            colors: [Color(0xFA0B1530), Color(0xFA1B3F8A)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 36, offset: const Offset(0, 18))
-          ],
+          boxShadow: const [BoxShadow(color: Color(0x590B1530), blurRadius: 44, spreadRadius: -6, offset: Offset(0, 24))],
         ),
-        child: Row(
+        child: Stack(
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            Positioned(left: -70, bottom: -110, child: GymGlow(color: glow.withValues(alpha: 0.3), size: 240)),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Colors.white.withValues(alpha: 0.1), Colors.white.withValues(alpha: 0)],
+                    stops: const [0, 0.5],
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(18),
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      const Flexible(
-                        child: Text(
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'HEALTH PRO',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.6),
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.8,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                              ),
+                              child: const Text(
+                                'Sample',
+                                style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
                           'Example member card',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800),
+                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: -0.2),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(color: BrandColors.blue, borderRadius: BorderRadius.circular(20)),
-                        child: const Text(
-                          'Sample',
-                          style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w700),
+                        const SizedBox(height: 2),
+                        Text('Gym membership', style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12.5)),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Icon(Icons.qr_code_2_rounded, color: glow, size: 18),
+                            const SizedBox(width: 7),
+                            Flexible(
+                              child: Text(
+                                'QR check-in preview',
+                                style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.85), fontSize: 12.5, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 2),
-                  Text('Gym membership', style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12)),
-                  const SizedBox(height: 10),
-                  const Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Icon(Icons.qr_code_2_rounded, color: Colors.white, size: 25),
-                      SizedBox(width: 6),
-                      Flexible(
-                          child: Text('QR check-in preview', style: TextStyle(color: Colors.white70, fontSize: 13))),
-                    ],
+                  const SizedBox(width: 16),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+                    child: QrImageView(
+                      data: 'EXAMPLE ONLY',
+                      size: 80,
+                      padding: EdgeInsets.zero,
+                      eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: BrandColors.navy),
+                      dataModuleStyle:
+                          const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: BrandColors.navy),
+                    ),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-              child: QrImageView(
-                data: 'EXAMPLE ONLY',
-                size: 78,
-                padding: EdgeInsets.zero,
-                eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: BrandColors.navy),
-                dataModuleStyle:
-                    const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: BrandColors.navy),
               ),
             ),
           ],
@@ -2104,7 +2250,9 @@ class _Highlight {
   const _Highlight(this.icon, this.title, this.text);
 }
 
-/// What it does, on one card rising into the top's wave.
+/// What it does, on one card rising into the top's wave: numbered like an
+/// index, a thin orange light along its top edge. Side by side on a computer,
+/// a list on a tablet or a phone.
 class _Highlights extends StatelessWidget {
   final _Layout layout;
 
@@ -2123,8 +2271,31 @@ class _Highlights extends StatelessWidget {
     final ink = _Ink.of(context);
     final brand = context.brand;
     final cells = [
-      for (final (i, item) in items.indexed) _RevealItem(order: i + 2, child: _HighlightCell(item: item)),
+      for (final (i, item) in items.indexed)
+        _RevealItem(order: i + 2, child: _HighlightCell(item: item, number: i + 1, inRow: !layout.wide)),
     ];
+    final Widget content;
+    if (layout.wide) {
+      content = IntrinsicHeight(
+        child: Row(
+          children: [
+            for (var i = 0; i < cells.length; i++) ...[
+              if (i > 0) VerticalDivider(width: 1, color: brand.glassBorder, indent: 14, endIndent: 14),
+              Expanded(child: cells[i]),
+            ],
+          ],
+        ),
+      );
+    } else {
+      content = Column(
+        children: [
+          for (var i = 0; i < cells.length; i++) ...[
+            if (i > 0) Divider(height: 1, color: brand.glassBorder, indent: 14, endIndent: 14),
+            cells[i],
+          ],
+        ],
+      );
+    }
     return Transform.translate(
       offset: const Offset(0, -_Layout.overlap),
       child: _Frame(
@@ -2132,38 +2303,54 @@ class _Highlights extends StatelessWidget {
         child: FadeSlideIn(
           delay: const Duration(milliseconds: 200),
           child: Container(
-          padding: EdgeInsets.symmetric(vertical: 24, horizontal: layout.wide ? 8 : 16),
-          decoration: BoxDecoration(
-            color: ink.card,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: brand.glassBorder),
-            boxShadow: ink.shadow(light: 0.08, dark: 0.4, blur: 32, dy: 14),
-          ),
-          child: layout.wide
-              ? IntrinsicHeight(
-                  child: Row(
-                    children: [
-                      for (var i = 0; i < cells.length; i++) ...[
-                        if (i > 0) VerticalDivider(width: 1, color: brand.glassBorder, indent: 4, endIndent: 4),
-                        Expanded(child: cells[i]),
-                      ],
-                    ],
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: ink.card,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: brand.glassBorder),
+              boxShadow: ink.shadow(light: 0.1, dark: 0.4, blur: 48, dy: 20),
+            ),
+            child: Stack(
+              children: [
+                Padding(padding: EdgeInsets.all(layout.medium ? 10 : 6), child: content),
+                // A thin light of the brand's orange along the top edge,
+                // brightest in the middle.
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: 2,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          brand.highlight.withValues(alpha: 0),
+                          brand.highlight.withValues(alpha: 0.9),
+                          brand.highlight.withValues(alpha: 0),
+                        ],
+                      ),
+                    ),
                   ),
-                )
-              : _Grid(columns: layout.medium ? 3 : 2, spacing: 18, children: cells),
-        ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-/// What Health Pro does, one thing: under the mouse its icon's well warms to
-/// orange and lifts a little.
+/// What Health Pro does, one thing, numbered: its icon on a softly lit tile,
+/// then its name and what it means. Under the mouse the cell lifts onto a
+/// faint wash and the tile fills with the brand's orange. A row on a tablet
+/// or a phone ([inRow]): the tile beside the words.
 class _HighlightCell extends StatefulWidget {
   final _Highlight item;
+  final int number;
+  final bool inRow;
 
-  const _HighlightCell({required this.item});
+  const _HighlightCell({required this.item, required this.number, this.inRow = false});
 
   @override
   State<_HighlightCell> createState() => _HighlightCellState();
@@ -2176,41 +2363,80 @@ class _HighlightCellState extends State<_HighlightCell> {
   Widget build(BuildContext context) {
     final item = widget.item;
     final ink = _Ink.of(context);
-    final accent = context.brand.accent;
+    final brand = context.brand;
+    final accent = brand.accent;
     final hover = _hover && !reduceMotion(context);
+    final tile = AnimatedContainer(
+      duration: Motion.hover,
+      curve: Motion.ease,
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        color: hover ? accent : null,
+        gradient: hover
+            ? null
+            : LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [accent.withValues(alpha: 0.18), accent.withValues(alpha: 0.05)],
+              ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accent.withValues(alpha: hover ? 0 : 0.18)),
+      ),
+      child: Icon(item.icon, size: 23, color: hover ? BrandColors.navy : brand.accentText),
+    );
+    final number = Text(
+      widget.number.toString().padLeft(2, '0'),
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 1.2,
+        color: hover ? brand.accentText : brand.muted.withValues(alpha: 0.55),
+      ),
+    );
+    final title = Text(
+      item.title,
+      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: ink.heading, height: 1.25, letterSpacing: -0.3),
+    );
+    final text = Text(item.text, style: TextStyle(fontSize: 13, color: brand.muted, height: 1.45));
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
-      child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Column(
-        children: [
-          AnimatedContainer(
-            duration: Motion.hover,
-            curve: Motion.ease,
-            width: 52,
-            height: 52,
-            transform: Matrix4.translationValues(0, hover ? -3 : 0, 0),
-            decoration: BoxDecoration(
-              color: hover ? accent.withValues(alpha: 0.14) : ink.tint,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(item.icon, size: 26, color: accent),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            item.title,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: ink.heading, height: 1.25),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            item.text,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: context.brand.muted, height: 1.35),
-          ),
-        ],
-      ),
+      child: AnimatedContainer(
+        duration: Motion.hover,
+        curve: Motion.ease,
+        margin: const EdgeInsets.all(4),
+        padding: widget.inRow ? const EdgeInsets.fromLTRB(12, 14, 14, 14) : const EdgeInsets.fromLTRB(14, 16, 14, 18),
+        transform: Matrix4.translationValues(0, hover ? -2 : 0, 0),
+        decoration: BoxDecoration(
+          color: hover ? ink.tint.withValues(alpha: ink.tint.a * 0.7) : ink.tint.withValues(alpha: 0),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: widget.inRow
+            ? Row(
+                children: [
+                  tile,
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [title, const SizedBox(height: 2), text],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  number,
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [tile, const Spacer(), number]),
+                  const SizedBox(height: 18),
+                  title,
+                  const SizedBox(height: 5),
+                  text,
+                ],
+              ),
       ),
     );
   }
@@ -2252,56 +2478,61 @@ class _Services extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ink = _Ink.of(context);
+    final title = TextStyle(
+      fontSize: layout.titleSize,
+      fontWeight: FontWeight.w800,
+      height: 1.08,
+      letterSpacing: -layout.titleSize * 0.03,
+      color: ink.heading,
+    );
+    final buttons = [
+      _PillButton(label: 'Find a gym', icon: Icons.arrow_forward_rounded, onPressed: onFindGym),
+      _PillButton(
+        label: 'Gyms near me',
+        icon: Icons.near_me_outlined,
+        outlined: true,
+        onPressed: () => context.push(GymRoutes.gymsNearMe),
+      ),
+      for (final link in serviceLinks)
+        _PillButton(label: link.title, icon: link.icon, outlined: true, onPressed: () => link.open(context)),
+    ];
     final intro = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Eyebrow('OUR SERVICES', lineBefore: true),
-        const SizedBox(height: 14),
-        Text(
-          'Explore Sports & Services',
-          style: TextStyle(
-            fontSize: layout.titleSize,
-            fontWeight: FontWeight.w900,
-            height: 1.1,
-            letterSpacing: -0.8,
-            color: ink.heading,
+        const SizedBox(height: 16),
+        Text('Explore Sports', style: title),
+        _AccentText('& Services', style: title),
+        const SizedBox(height: 18),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 470),
+          child: Text(
+            serviceLinks.isEmpty
+                ? 'Manage gym memberships and check-ins in Health Pro. The platform is built to connect more sports and facilities across Bhutan.'
+                : 'Manage gym memberships and check-ins in Health Pro. Its other services open from here.',
+            style: TextStyle(fontSize: layout.wide ? 17 : 16, height: 1.65, color: ink.body),
           ),
         ),
-        const SizedBox(height: 16),
-        Text(
-          serviceLinks.isEmpty
-              ? 'Manage gym memberships and check-ins in Health Pro. The platform is built to connect more sports and facilities across Bhutan.'
-              : 'Manage gym memberships and check-ins in Health Pro. Its other services open from here.',
-          style: TextStyle(fontSize: 17, height: 1.55, color: ink.body),
-        ),
-        const SizedBox(height: 28),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            _PillButton(label: 'Find a gym', icon: Icons.arrow_forward_rounded, onPressed: onFindGym),
-            _PillButton(
-              label: 'Gyms near me',
-              icon: Icons.near_me_outlined,
-              outlined: true,
-              onPressed: () => context.push(GymRoutes.gymsNearMe),
-            ),
-            for (final link in serviceLinks)
-              _PillButton(
-                label: link.title,
-                icon: link.icon,
-                outlined: true,
-                onPressed: () => link.open(context),
-              ),
-          ],
-        ),
+        const SizedBox(height: 30),
+        // Side by side; one over the other, the width of a phone.
+        if (layout.medium)
+          Wrap(spacing: 12, runSpacing: 12, children: buttons)
+        else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < buttons.length; i++) ...[if (i > 0) const SizedBox(height: 12), buttons[i]],
+            ],
+          ),
       ],
     );
-    final tiles = _Grid(
-      columns: layout.medium ? 3 : 2,
-      children: [
-        for (final (i, s) in services.indexed)
-          _RevealItem(order: i, child: _ServiceTile(service: s, onTap: s.open ? onFindGym : null)),
+    // The service that's open first, large; the ones to come around it.
+    final ordered = [...services.where((s) => s.open), ...services.where((s) => !s.open)];
+    final tiles = _ServiceBento(
+      layout: layout,
+      tiles: [
+        for (final (i, s) in ordered.indexed)
+          _RevealItem(order: i, child: _ServiceTile(service: s, featured: i == 0, onTap: s.open ? onFindGym : null)),
       ],
     );
     return Padding(
@@ -2325,13 +2556,90 @@ class _Services extends StatelessWidget {
   }
 }
 
-/// A service on its photo, darkened at the foot for its name; the photo
-/// eases in a little under the pointer.
+/// The services as a bento: [tiles] first (the one open now) large, the
+/// rest around it. Three columns from a tablet up; on a phone two, the open
+/// one across the top and the last across the foot.
+class _ServiceBento extends StatelessWidget {
+  final _Layout layout;
+  final List<Widget> tiles;
+
+  const _ServiceBento({required this.layout, required this.tiles});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, box) {
+        final w = box.maxWidth;
+        Widget at(int i, double width, double height) =>
+            i < tiles.length ? SizedBox(width: width, height: height, child: tiles[i]) : SizedBox(width: width);
+        if (layout.medium) {
+          const gap = 14.0;
+          final cell = ((w - gap * 2) / 3).floorToDouble();
+          final h = (cell / 1.45).floorToDouble();
+          return Column(
+            children: [
+              Row(
+                children: [
+                  at(0, cell * 2 + gap, h * 2 + gap),
+                  const SizedBox(width: gap),
+                  Column(children: [at(1, cell, h), const SizedBox(height: gap), at(2, cell, h)]),
+                ],
+              ),
+              const SizedBox(height: gap),
+              Row(
+                children: [
+                  at(3, cell, h),
+                  const SizedBox(width: gap),
+                  at(4, cell, h),
+                  const SizedBox(width: gap),
+                  at(5, cell, h),
+                ],
+              ),
+            ],
+          );
+        }
+        const gap = 12.0;
+        final cell = ((w - gap) / 2).floorToDouble();
+        final h = (cell / 1.2).floorToDouble();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            at(0, w, (w / 1.15).floorToDouble()),
+            const SizedBox(height: gap),
+            Row(children: [at(1, cell, h), const SizedBox(width: gap), at(2, cell, h)]),
+            const SizedBox(height: gap),
+            Row(children: [at(3, cell, h), const SizedBox(width: gap), at(4, cell, h)]),
+            const SizedBox(height: gap),
+            at(5, w, h),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// A colour matrix keeping [s] of a photo's colour (1 all, 0 grey).
+List<double> _saturation(double s) {
+  const r = 0.2126, g = 0.7152, b = 0.0722;
+  final i = 1 - s;
+  return [
+    r * i + s, g * i, b * i, 0, 0, //
+    r * i, g * i + s, b * i, 0, 0,
+    r * i, g * i, b * i + s, 0, 0,
+    0, 0, 0, 1, 0,
+  ];
+}
+
+/// A service on its photo, graded to navy at the foot for its name. The one
+/// open now ([featured]) is large, with what it does and the way in; those
+/// still to come wait in muted colour, which warms under the pointer. Every
+/// photo eases in a little under the pointer.
 class _ServiceTile extends StatefulWidget {
   final _Service service;
   final VoidCallback? onTap;
+  final bool featured;
 
-  const _ServiceTile({required this.service, this.onTap});
+  const _ServiceTile({required this.service, this.onTap, this.featured = false});
 
   @override
   State<_ServiceTile> createState() => _ServiceTileState();
@@ -2343,11 +2651,28 @@ class _ServiceTileState extends State<_ServiceTile> {
   @override
   Widget build(BuildContext context) {
     final service = widget.service;
+    final featured = widget.featured;
     final badge = service.open ? 'Open now' : 'Coming soon';
     final ink = _Ink.of(context);
     final hover = _hover && !reduceMotion(context);
     // In the light, a navy haze under the photo rather than a grey smudge.
     final shade = ink.pick(LightColors.navy, Colors.black);
+    final radius = BorderRadius.circular(featured ? 24 : 20);
+    Widget photo = AnimatedScale(
+      scale: hover ? 1.06 : 1,
+      duration: const Duration(milliseconds: 600),
+      curve: Motion.ease,
+      child: GymPhoto(service.photo),
+    );
+    if (!service.open) {
+      photo = TweenAnimationBuilder<double>(
+        tween: Tween(end: hover ? 1 : 0.4),
+        duration: const Duration(milliseconds: 450),
+        curve: Motion.ease,
+        child: photo,
+        builder: (context, s, child) => ColorFiltered(colorFilter: ColorFilter.matrix(_saturation(s)), child: child),
+      );
+    }
     return Semantics(
       button: widget.onTap != null,
       label: '${service.name}, $badge',
@@ -2361,96 +2686,201 @@ class _ServiceTileState extends State<_ServiceTile> {
           curve: Motion.ease,
           transform: Matrix4.translationValues(0, hover ? -4 : 0, 0),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: radius,
             boxShadow: [
               BoxShadow(
-                color: shade.withValues(alpha: hover ? (ink.dark ? 0.28 : 0.2) : (ink.dark ? 0.14 : 0.1)),
-                blurRadius: hover ? 26 : 14,
-                spreadRadius: ink.dark ? 0 : -2,
-                offset: Offset(0, hover ? 14 : 6),
+                color: shade.withValues(alpha: hover ? (ink.dark ? 0.32 : 0.24) : (ink.dark ? 0.16 : 0.12)),
+                blurRadius: hover ? 34 : 20,
+                spreadRadius: ink.dark ? 0 : -4,
+                offset: Offset(0, hover ? 18 : 10),
               ),
             ],
           ),
-          child: AspectRatio(
-            aspectRatio: 1.5,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  AnimatedScale(
-                    scale: hover ? 1.07 : 1,
-                    duration: const Duration(milliseconds: 600),
-                    curve: Motion.ease,
-                    child: GymPhoto(service.photo),
-                  ),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.05),
-                          BrandColors.navy.withValues(alpha: 0.35),
-                          const Color(0xE6050B1C),
-                        ],
-                        stops: const [0, 0.45, 1],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: service.open ? context.brand.highlight : Colors.black.withValues(alpha: 0.38),
-                        borderRadius: BorderRadius.circular(20),
-                        border: service.open ? null : Border.all(color: Colors.white.withValues(alpha: 0.25)),
-                      ),
-                      child: Text(
-                        badge,
-                        style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ),
-                  AnimatedPositioned(
-                    duration: Motion.hover,
-                    curve: Motion.ease,
-                    left: 10,
-                    right: 10,
-                    bottom: hover ? 18 : 14,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(service.icon, size: 30, color: Colors.white),
-                        const SizedBox(height: 6),
-                        Text(
-                          service.name,
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.white, fontSize: 15.5, fontWeight: FontWeight.w800),
-                        ),
+          child: ClipRRect(
+            borderRadius: radius,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                photo,
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        const Color(0x00050B1C),
+                        BrandColors.navy.withValues(alpha: featured ? 0.4 : 0.45),
+                        const Color(0xF0050B1C),
                       ],
+                      stops: featured ? const [0.2, 0.55, 1] : const [0.15, 0.55, 1],
                     ),
                   ),
-                  if (widget.onTap != null)
-                    Material(type: MaterialType.transparency, child: InkWell(onTap: widget.onTap)),
-                ],
-              ),
+                ),
+                if (featured)
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: [Color(0x80050B1C), Color(0x00050B1C)], stops: [0, 0.6]),
+                    ),
+                  ),
+                // A hairline of light round the edge, like glass.
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  ),
+                ),
+                if (featured) ..._featured(context, hover) else ..._small(hover),
+                if (widget.onTap != null) Material(type: MaterialType.transparency, child: InkWell(onTap: widget.onTap)),
+              ],
             ),
           ),
         ),
       ),
     );
   }
+
+  /// The open service: its badge, then over the foot its icon, name, what it
+  /// does and the way in.
+  List<Widget> _featured(BuildContext context, bool hover) {
+    final service = widget.service;
+    return [
+      Positioned(
+        top: 18,
+        left: 18,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(10, 5, 12, 5),
+          decoration: BoxDecoration(color: context.brand.highlight, borderRadius: BorderRadius.circular(20)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(color: BrandColors.navy, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 7),
+              const Text(
+                'Open now',
+                style: TextStyle(color: BrandColors.navy, fontSize: 11.5, fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+        ),
+      ),
+      Positioned(
+        left: 22,
+        right: 22,
+        bottom: 22,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.14),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
+              ),
+              child: Icon(service.icon, size: 22, color: Colors.white),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              service.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.6),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Memberships, renewals and QR check-in at the desk.',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14, height: 1.45),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 9, 13, 9),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Find a gym',
+                    style: TextStyle(color: BrandColors.navy, fontSize: 13.5, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(width: 6),
+                  AnimatedSlide(
+                    offset: Offset(hover ? 0.25 : 0, 0),
+                    duration: Motion.hover,
+                    curve: Motion.ease,
+                    child: const Icon(Icons.arrow_forward_rounded, size: 16, color: BrandColors.navy),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  /// A service to come: over the foot its icon, name, and that it's coming.
+  List<Widget> _small(bool hover) {
+    final service = widget.service;
+    return [
+      AnimatedPositioned(
+        duration: Motion.hover,
+        curve: Motion.ease,
+        left: 16,
+        right: 16,
+        bottom: hover ? 17 : 14,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(service.icon, size: 22, color: Colors.white),
+            const SizedBox(height: 8),
+            Text(
+              service.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: -0.2),
+            ),
+            const SizedBox(height: 3),
+            Row(
+              children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.7), width: 1.4),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    'Coming soon',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.72), fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
 }
 
 // ─── About ─────────────────────────────────────────────────────────────────
 
-/// What Health Pro is, with what members get and three facts about it, on a
-/// tinted band.
+/// What Health Pro is, beside a gym's floor: what members get, three facts
+/// about it on a card, and the way to more, on a tinted band.
 class _About extends StatelessWidget {
   final _Layout layout;
   final VoidCallback onKnowMore;
@@ -2468,96 +2898,99 @@ class _About extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ink = _Ink.of(context);
+    final brand = context.brand;
+    final title = TextStyle(
+      fontSize: layout.titleSize,
+      fontWeight: FontWeight.w800,
+      height: 1.08,
+      letterSpacing: -layout.titleSize * 0.03,
+      color: ink.heading,
+    );
+    final cells = [
+      for (final (i, (icon, value, label)) in facts.indexed)
+        _RevealItem(order: i + 2, child: _AboutFact(icon: icon, value: value, label: label, inRow: !layout.medium)),
+    ];
+    // The facts on one card: side by side, or a list on a phone.
+    final factCard = Container(
+      decoration: BoxDecoration(
+        color: ink.card,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: brand.glassBorder),
+        boxShadow: ink.shadow(light: 0.07, dark: 0.3, blur: 32, dy: 14),
+      ),
+      child: layout.medium
+          ? IntrinsicHeight(
+              child: Row(
+                children: [
+                  for (var i = 0; i < cells.length; i++) ...[
+                    if (i > 0) VerticalDivider(width: 1, color: brand.glassBorder, indent: 16, endIndent: 16),
+                    Expanded(child: cells[i]),
+                  ],
+                ],
+              ),
+            )
+          : Column(
+              children: [
+                for (var i = 0; i < cells.length; i++) ...[
+                  if (i > 0) Divider(height: 1, color: brand.glassBorder, indent: 16, endIndent: 16),
+                  cells[i],
+                ],
+              ],
+            ),
+    );
+    // Navy in the light, blue in the dark; white words on either (they
+    // were navy on navy in the light, so the button read as empty).
+    final knowMore = _PillButton(
+      label: 'Know More',
+      icon: Icons.arrow_forward_rounded,
+      color: ink.dark ? BrandColors.blue : LightColors.navy,
+      foreground: ink.dark ? BrandColors.navy : Colors.white,
+      onPressed: onKnowMore,
+    );
     final words = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Eyebrow('ABOUT HEALTH PRO', lineBefore: true),
-        const SizedBox(height: 14),
-        Text(
-          'The Digital Home for\nSports & Fitness',
-          style: TextStyle(
-            fontSize: layout.titleSize,
-            fontWeight: FontWeight.w900,
-            height: 1.1,
-            letterSpacing: -0.8,
-            color: ink.heading,
+        const SizedBox(height: 16),
+        Text('The Digital Home', style: title),
+        _AccentText('for Sports & Fitness', style: title),
+        const SizedBox(height: 18),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Text(
+            'Health Pro connects people, facilities and sports services through one platform built for Bhutan. '
+            'Gym memberships are managed here, while enabled sports services connect members to their existing tools.',
+            style: TextStyle(fontSize: layout.wide ? 16.5 : 16, height: 1.65, color: ink.body),
           ),
         ),
-        const SizedBox(height: 16),
-        Text(
-          'Health Pro connects people, facilities and sports services through one platform built for Bhutan. '
-          'Gym memberships are managed here, while enabled sports services connect members to their existing tools.',
-          style: TextStyle(fontSize: 16, height: 1.55, color: ink.body),
-        ),
-        const SizedBox(height: 16),
-        for (final point in points)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _Check(point),
-          ),
-        const SizedBox(height: 16),
-        // Navy in the light, blue in the dark; white words on either (they
-        // were navy on navy in the light, so the button read as empty).
-        _PillButton(
-          label: 'Know More',
-          icon: Icons.arrow_forward_rounded,
-          color: ink.dark ? BrandColors.blue : LightColors.navy,
-          foreground: ink.dark ? BrandColors.navy : Colors.white,
-          onPressed: onKnowMore,
-        ),
-      ],
-    );
-    final factList = _Grid(
-      columns: layout.wide ? 1 : (layout.medium ? 3 : 1),
-      spacing: 22,
-      children: [
-        for (final (i, (icon, value, label)) in facts.indexed)
-          _RevealItem(
-            order: i + 2,
-            child: Row(
-            children: [
-              Icon(icon, size: 32, color: context.brand.accent),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: ink.heading)),
-                    Text(label, style: TextStyle(fontSize: 13, color: context.brand.muted)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          ),
+        const SizedBox(height: 22),
+        Wrap(spacing: 10, runSpacing: 10, children: [for (final point in points) _AboutPoint(point)]),
+        const SizedBox(height: 28),
+        factCard,
+        const SizedBox(height: 30),
+        if (layout.medium) knowMore else SizedBox(width: double.infinity, child: knowMore),
       ],
     );
     return Container(
       margin: EdgeInsets.only(bottom: layout.section),
-      padding: EdgeInsets.symmetric(vertical: layout.section * 0.75),
+      padding: EdgeInsets.symmetric(vertical: layout.section * 0.9),
       color: ink.pick(LightColors.backgroundAlt, Colors.white.withValues(alpha: 0.03)),
       child: _Frame(
         layout: layout,
         child: layout.wide
             ? Row(
                 children: [
-                  const Expanded(flex: 5, child: _AboutArt(height: 300)),
-                  const SizedBox(width: 48),
-                  Expanded(flex: 5, child: words),
-                  const SizedBox(width: 32),
-                  Container(width: 1, height: 220, color: context.brand.glassBorder),
-                  const SizedBox(width: 32),
-                  Expanded(flex: 3, child: factList),
+                  const Expanded(flex: 10, child: _AboutArt(height: 540)),
+                  const SizedBox(width: 72),
+                  Expanded(flex: 11, child: words),
                 ],
               )
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _AboutArt(height: layout.medium ? 260 : 200),
-                  const SizedBox(height: 32),
+                  _AboutArt(height: layout.medium ? 360 : 250, compact: !layout.medium),
+                  SizedBox(height: layout.medium ? 48 : 40),
                   words,
-                  const SizedBox(height: 32),
-                  factList,
                 ],
               ),
       ),
@@ -2565,14 +2998,111 @@ class _About extends StatelessWidget {
   }
 }
 
-/// A gym's floor on an orange shape, with an orange band across a corner.
-class _AboutArt extends StatelessWidget {
-  final double height;
+/// What members get, on a slim pill after a soft orange tick.
+class _AboutPoint extends StatelessWidget {
+  final String text;
 
-  const _AboutArt({required this.height});
+  const _AboutPoint(this.text);
 
   @override
   Widget build(BuildContext context) {
+    final ink = _Ink.of(context);
+    final brand = context.brand;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(7, 7, 14, 7),
+      decoration: BoxDecoration(
+        color: ink.card,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: brand.glassBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(color: brand.accent.withValues(alpha: 0.14), shape: BoxShape.circle),
+            child: Icon(Icons.check_rounded, size: 14, color: brand.accentText),
+          ),
+          const SizedBox(width: 9),
+          Flexible(
+            child: Text(text, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: ink.heading)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One fact about Health Pro: its icon on a softly lit tile, the fact, and
+/// what it means. Beside the words on a phone ([inRow]).
+class _AboutFact extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+  final bool inRow;
+
+  const _AboutFact({required this.icon, required this.value, required this.label, this.inRow = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = _Ink.of(context);
+    final brand = context.brand;
+    final tile = Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [brand.accent.withValues(alpha: 0.18), brand.accent.withValues(alpha: 0.05)],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: brand.accent.withValues(alpha: 0.18)),
+      ),
+      child: Icon(icon, size: 21, color: brand.accentText),
+    );
+    final words = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(value,
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, height: 1.25, letterSpacing: -0.3, color: ink.heading)),
+        const SizedBox(height: 2),
+        Text(label, style: TextStyle(fontSize: 12.5, height: 1.4, color: brand.muted)),
+      ],
+    );
+    if (inRow) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(children: [tile, const SizedBox(width: 14), Expanded(child: words)]),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [tile, const SizedBox(height: 14), words],
+      ),
+    );
+  }
+}
+
+/// A gym's floor in a rounded frame, graded to navy at its foot with the
+/// page's stripes over its corner; a slim orange outline set off behind it,
+/// and Health Pro's promise floating over its edge. Smaller on a phone
+/// ([compact]).
+class _AboutArt extends StatelessWidget {
+  final double height;
+  final bool compact;
+
+  const _AboutArt({required this.height, this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = _Ink.of(context);
+    final brand = context.brand;
+    const radius = 28.0;
     return ExcludeSemantics(
       child: SizedBox(
         height: height,
@@ -2580,48 +3110,91 @@ class _AboutArt extends StatelessWidget {
           clipBehavior: Clip.none,
           children: [
             Positioned(
-              left: -10,
-              top: -10,
-              right: 40,
-              bottom: 30,
+              left: compact ? -10 : -18,
+              top: compact ? 14 : 22,
+              right: compact ? 14 : 22,
+              bottom: compact ? -10 : -18,
               child: DecoratedBox(
-                decoration: BoxDecoration(color: context.brand.highlight, borderRadius: BorderRadius.circular(32)),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(radius + 4),
+                  border: Border.all(color: brand.highlight.withValues(alpha: 0.85), width: 2),
+                ),
               ),
             ),
             Positioned.fill(
-              left: 6,
-              top: 6,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(radius),
                   boxShadow: [
                     BoxShadow(
-                        color: BrandColors.navy.withValues(alpha: 0.25), blurRadius: 30, offset: const Offset(0, 16)),
+                      color: ink.pick(LightColors.navy.withValues(alpha: 0.22), Colors.black.withValues(alpha: 0.4)),
+                      blurRadius: 44,
+                      spreadRadius: -6,
+                      offset: const Offset(0, 22),
+                    ),
                   ],
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(radius),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
                       const GymPhoto('about'),
-                      DecoratedBox(
+                      const DecoratedBox(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [Colors.transparent, BrandColors.navy.withValues(alpha: 0.35)],
+                            colors: [Color(0x00081428), Color(0x8C081428)],
+                            stops: [0.4, 1],
                           ),
                         ),
                       ),
-                      Positioned(
-                        right: -40,
-                        bottom: -height * 0.5,
-                        child: Transform.rotate(
-                          angle: 0.6,
-                          child: Container(
-                              width: 54, height: height * 1.2, color: context.brand.highlight.withValues(alpha: 0.9)),
+                      CustomPaint(painter: GymStripesPainter.of(context)),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(radius),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                         ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: compact ? 14 : 28,
+              bottom: compact ? 16 : 30,
+              child: GentleFloat(
+                phase: 0.3,
+                distance: 5,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 18, 10),
+                  decoration: BoxDecoration(
+                    color: ink.dark ? const Color(0xF216213C) : const Color(0xF7FFFFFF),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: brand.glassBorder),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: ink.dark ? 0.4 : 0.18),
+                        blurRadius: 28,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      HealthProLogo(markOnly: true, height: compact ? 30 : 36),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Health Pro',
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: ink.heading)),
+                          Text('Your Health. Our Priority.', style: TextStyle(fontSize: 12, color: brand.muted)),
+                        ],
                       ),
                     ],
                   ),
@@ -2635,27 +3208,6 @@ class _AboutArt extends StatelessWidget {
   }
 }
 
-/// An orange tick and [text].
-class _Check extends StatelessWidget {
-  final String text;
-
-  const _Check(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 1),
-          child: Icon(Icons.check_rounded, size: 19, color: context.brand.highlight),
-        ),
-        const SizedBox(width: 8),
-        Expanded(child: Text(text, style: TextStyle(fontSize: 14.5, height: 1.4, color: _Ink.of(context).body))),
-      ],
-    );
-  }
-}
 
 // ─── How it works ──────────────────────────────────────────────────────────
 
@@ -2667,7 +3219,8 @@ class _Step {
   const _Step(this.icon, this.title, this.text);
 }
 
-/// Five steps from signing up to training.
+/// Five steps from signing up to training, on a line that warms towards the
+/// goal: side by side on a wide window, down the page on a narrow one.
 class _Steps extends StatelessWidget {
   final _Layout layout;
 
@@ -2684,6 +3237,14 @@ class _Steps extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ink = _Ink.of(context);
+    final title = TextStyle(
+      fontSize: layout.titleSize,
+      fontWeight: FontWeight.w800,
+      height: 1.12,
+      letterSpacing: -layout.titleSize * 0.03,
+      color: ink.heading,
+    );
+    final last = steps.length - 1;
     return Padding(
       padding: EdgeInsets.only(bottom: layout.section),
       child: _Frame(
@@ -2691,45 +3252,48 @@ class _Steps extends StatelessWidget {
         child: Column(
           children: [
             const _Eyebrow('HOW IT WORKS', lineBefore: true, lineAfter: true),
-            const SizedBox(height: 14),
-            Text.rich(
-              TextSpan(
-                children: [
-                  const TextSpan(text: 'Get Started in '),
-                  // On the light page, the orange that reads as text.
-                  TextSpan(
-                      text: '5 Simple Steps',
-                      style: TextStyle(color: context.brand.accentText)),
-                ],
-              ),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: layout.titleSize,
-                fontWeight: FontWeight.w900,
-                height: 1.15,
-                letterSpacing: -0.8,
-                color: ink.heading,
-              ),
+            const SizedBox(height: 16),
+            // Breaks between the two halves when it must, never mid-promise.
+            Wrap(
+              alignment: WrapAlignment.center,
+              children: [Text('Get Started in ', style: title), _AccentText('5 Simple Steps', style: title)],
             ),
-            SizedBox(height: layout.stepsInRow ? 52 : 36),
+            SizedBox(height: layout.stepsInRow ? 60 : 40),
             if (layout.stepsInRow)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Each step, then the arrow to the next, in turn: the
-                  // journey reads left to right as it arrives.
-                  for (var i = 0; i < steps.length; i++) ...[
-                    if (i > 0)
-                      _RevealItem(
-                        order: i * 2 - 1,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 28),
-                          child: Icon(Icons.arrow_forward_rounded, color: context.brand.accent, size: 22),
+              LayoutBuilder(
+                builder: (context, box) {
+                  final each = box.maxWidth / steps.length;
+                  final accent = context.brand.accent;
+                  return Stack(
+                    children: [
+                      // The line through the steps, from the first to the goal.
+                      Positioned(
+                        left: each / 2,
+                        right: each / 2,
+                        top: _StepColumn.circle / 2 - 1,
+                        height: 2,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(2),
+                            gradient: LinearGradient(colors: [accent.withValues(alpha: 0.18), accent.withValues(alpha: 0.85)]),
+                          ),
                         ),
                       ),
-                    Expanded(child: _RevealItem(order: i * 2, child: _StepColumn(number: i + 1, step: steps[i]))),
-                  ],
-                ],
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (var i = 0; i < steps.length; i++)
+                            Expanded(
+                              child: _RevealItem(
+                                order: i,
+                                child: _StepColumn(number: i + 1, step: steps[i], goal: i == last),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
               )
             else
               ConstrainedBox(
@@ -2737,7 +3301,7 @@ class _Steps extends StatelessWidget {
                 child: Column(
                   children: [
                     for (var i = 0; i < steps.length; i++)
-                      _RevealItem(order: i, child: _StepRow(number: i + 1, step: steps[i])),
+                      _RevealItem(order: i, child: _StepRow(number: i + 1, step: steps[i], goal: i == last)),
                   ],
                 ),
               ),
@@ -2748,84 +3312,189 @@ class _Steps extends StatelessWidget {
   }
 }
 
-class _StepIcon extends StatelessWidget {
+/// A step's icon in a ring: a soft orange disc in a card-coloured ring, or,
+/// for the [goal], filled with the brand's orange and glowing. Under the
+/// pointer ([hover]) it lifts and its ring warms.
+class _StepCircle extends StatelessWidget {
   final IconData icon;
   final double size;
+  final bool goal;
+  final bool hover;
 
-  const _StepIcon({required this.icon, required this.size});
+  const _StepCircle({required this.icon, required this.size, this.goal = false, this.hover = false});
 
   @override
   Widget build(BuildContext context) {
     final ink = _Ink.of(context);
-    return Container(
+    final brand = context.brand;
+    final accent = brand.accent;
+    return AnimatedContainer(
+      duration: Motion.hover,
+      curve: Motion.ease,
       width: size,
       height: size,
-      decoration: BoxDecoration(color: ink.tint, shape: BoxShape.circle),
-      child: Icon(icon, size: size * 0.42, color: ink.heading),
+      transform: Matrix4.translationValues(0, hover ? -3 : 0, 0),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: goal ? null : ink.card,
+        gradient: goal
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color.lerp(brand.highlight, Colors.white, 0.2)!, brand.highlight],
+              )
+            : null,
+        border: Border.all(
+          color: goal ? brand.highlight : (hover ? accent.withValues(alpha: 0.55) : brand.glassBorder),
+          width: 1.5,
+        ),
+        boxShadow: goal
+            ? [BoxShadow(color: brand.highlight.withValues(alpha: hover ? 0.5 : 0.35), blurRadius: 28, offset: const Offset(0, 10))]
+            : ink.shadow(light: hover ? 0.12 : 0.08, dark: 0.3, blur: 24, dy: 10),
+      ),
+      child: goal
+          ? Icon(icon, size: size * 0.4, color: BrandColors.navy)
+          : Container(
+              margin: EdgeInsets.all(size * 0.1),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [accent.withValues(alpha: 0.16), accent.withValues(alpha: 0.04)],
+                ),
+              ),
+              child: Icon(icon, size: size * 0.36, color: brand.accentText),
+            ),
     );
   }
 }
 
-/// A step under its icon, side by side with the others.
-class _StepColumn extends StatelessWidget {
+/// "STEP 01" in small orange capitals.
+class _StepLabel extends StatelessWidget {
+  final int number;
+
+  const _StepLabel(this.number);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'STEP ${number.toString().padLeft(2, '0')}',
+      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 1.6, color: context.brand.accentText),
+    );
+  }
+}
+
+/// A step under its circle, side by side with the others on the line.
+class _StepColumn extends StatefulWidget {
+  /// The circle's size; the line runs through its middle.
+  static const circle = 80.0;
+
   final int number;
   final _Step step;
+  final bool goal;
 
-  const _StepColumn({required this.number, required this.step});
+  const _StepColumn({required this.number, required this.step, this.goal = false});
+
+  @override
+  State<_StepColumn> createState() => _StepColumnState();
+}
+
+class _StepColumnState extends State<_StepColumn> {
+  bool _hover = false;
 
   @override
   Widget build(BuildContext context) {
     final ink = _Ink.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      child: Column(
-        children: [
-          _StepIcon(icon: step.icon, size: 78),
-          const SizedBox(height: 16),
-          Text(
-            '$number. ${step.title}',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: ink.heading),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            step.text,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, height: 1.4, color: context.brand.muted),
-          ),
-        ],
+    final step = widget.step;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Column(
+          children: [
+            _StepCircle(
+              icon: step.icon,
+              size: _StepColumn.circle,
+              goal: widget.goal,
+              hover: _hover && !reduceMotion(context),
+            ),
+            const SizedBox(height: 22),
+            _StepLabel(widget.number),
+            const SizedBox(height: 6),
+            Text(
+              step.title,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: -0.3, color: ink.heading),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              step.text,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13.5, height: 1.5, color: context.brand.muted),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// A step beside its icon, one under the other.
+/// A step beside its circle, one under the other, the line running down
+/// from each circle to the next.
 class _StepRow extends StatelessWidget {
   final int number;
   final _Step step;
+  final bool goal;
 
-  const _StepRow({required this.number, required this.step});
+  const _StepRow({required this.number, required this.step, this.goal = false});
 
   @override
   Widget build(BuildContext context) {
     final ink = _Ink.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
+    final accent = context.brand.accent;
+    return IntrinsicHeight(
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _StepIcon(icon: step.icon, size: 58),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$number. ${step.title}',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: ink.heading),
+          Column(
+            children: [
+              _StepCircle(icon: step.icon, size: 58, goal: goal),
+              if (!goal)
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    margin: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(2),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [accent.withValues(alpha: 0.2), accent.withValues(alpha: 0.5)],
+                      ),
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 3),
-                Text(step.text, style: TextStyle(fontSize: 14, height: 1.4, color: context.brand.muted)),
-              ],
+            ],
+          ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(top: 6, bottom: goal ? 0 : 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _StepLabel(number),
+                  const SizedBox(height: 4),
+                  Text(
+                    step.title,
+                    style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800, letterSpacing: -0.2, color: ink.heading),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(step.text, style: TextStyle(fontSize: 13.5, height: 1.45, color: context.brand.muted)),
+                ],
+              ),
             ),
           ),
         ],
@@ -2837,13 +3506,16 @@ class _StepRow extends StatelessWidget {
 // ─── Plans ─────────────────────────────────────────────────────────────────
 
 class _PlanKind {
+  final IconData icon;
   final String name;
   final String tagline;
+
+  /// The lengths gyms offer, " · " between them.
   final String lengths;
   final List<String> points;
   final bool featured;
 
-  const _PlanKind(this.name, this.tagline, this.lengths, this.points, {this.featured = false});
+  const _PlanKind(this.icon, this.name, this.tagline, this.lengths, this.points, {this.featured = false});
 }
 
 /// The plan lengths gyms offer. Each gym sets its own plans and prices, so
@@ -2855,48 +3527,58 @@ class _Plans extends StatelessWidget {
   const _Plans({super.key, required this.layout, required this.onFindGym});
 
   static const kinds = [
-    _PlanKind('Short Stay', 'Try a gym first', 'Day pass · 1 week', ['QR check-in from day one', 'No long commitment']),
+    _PlanKind(Icons.bolt_rounded, 'Short Stay', 'Try a gym first', 'Day pass · 1 week',
+        ['QR check-in from day one', 'No long commitment']),
     _PlanKind(
+      Icons.calendar_month_rounded,
       'Monthly',
       'The everyday choice',
       '1 month · 3 months',
       ['Reminder 3 days before the end', 'Renew without losing days'],
       featured: true,
     ),
-    _PlanKind('Long Term', 'For the committed', '6 months · 1 year',
+    _PlanKind(Icons.workspace_premium_rounded, 'Long Term', 'For the committed', '6 months · 1 year',
         ['Your card and visits in one place', 'Fewer renewals to think of']),
   ];
 
   @override
   Widget build(BuildContext context) {
     final ink = _Ink.of(context);
+    final title = TextStyle(
+      fontSize: layout.titleSize,
+      fontWeight: FontWeight.w800,
+      height: 1.08,
+      letterSpacing: -layout.titleSize * 0.03,
+      color: ink.heading,
+    );
+    final seePlans = _PillButton(label: 'See plans at gyms', icon: Icons.arrow_forward_rounded, onPressed: onFindGym);
     final intro = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Eyebrow('MEMBERSHIP PLANS', lineBefore: true),
-        const SizedBox(height: 14),
-        Text(
-          'Choose Your\nPerfect Plan',
-          style: TextStyle(
-            fontSize: layout.titleSize,
-            fontWeight: FontWeight.w900,
-            height: 1.1,
-            letterSpacing: -0.8,
-            color: ink.heading,
+        const SizedBox(height: 16),
+        Text('Choose Your', style: title),
+        _AccentText('Perfect Plan', style: title),
+        const SizedBox(height: 18),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 470),
+          child: Text(
+            'Flexible plans for every fitness goal. Each gym sets its own plans and prices in Ngultrum.',
+            style: TextStyle(fontSize: layout.wide ? 16.5 : 16, height: 1.65, color: ink.body),
           ),
         ),
-        const SizedBox(height: 16),
-        Text(
-          'Flexible plans for every fitness goal. Each gym sets its own plans and prices in Ngultrum.',
-          style: TextStyle(fontSize: 16, height: 1.55, color: ink.body),
-        ),
-        const SizedBox(height: 24),
-        _PillButton(label: 'See plans at gyms', icon: Icons.arrow_forward_rounded, onPressed: onFindGym),
+        const SizedBox(height: 28),
+        if (layout.medium) seePlans else SizedBox(width: double.infinity, child: seePlans),
       ],
     );
+    // Laid across where the cards stand one over another, but there's room.
+    final across = layout.medium && !layout.wide;
     final cards = [
       for (final (i, k) in kinds.indexed)
-        _RevealItem(order: i + 1, child: HoverLift(radius: 20, lift: 4, child: _PlanCard(kind: k, onFindGym: onFindGym))),
+        _RevealItem(
+          order: i + 1,
+          child: HoverLift(radius: 24, lift: 4, child: _PlanCard(kind: k, onFindGym: onFindGym, wide: across)),
+        ),
     ];
     return Padding(
       padding: EdgeInsets.only(bottom: layout.section),
@@ -2906,9 +3588,11 @@ class _Plans extends StatelessWidget {
             ? Row(
                 children: [
                   Expanded(flex: 3, child: intro),
-                  const SizedBox(width: 40),
+                  const SizedBox(width: 44),
+                  // Side by side the cards share a height, and the buttons
+                  // line up at the foot.
                   Expanded(
-                    flex: 8,
+                    flex: 9,
                     child: IntrinsicHeight(
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2927,8 +3611,8 @@ class _Plans extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   intro,
-                  const SizedBox(height: 32),
-                  _Grid(columns: layout.medium ? 3 : 1, spacing: 16, children: cards),
+                  const SizedBox(height: 36),
+                  for (var i = 0; i < cards.length; i++) ...[if (i > 0) const SizedBox(height: 16), cards[i]],
                 ],
               ),
       ),
@@ -2936,51 +3620,181 @@ class _Plans extends StatelessWidget {
   }
 }
 
+/// A kind of plan on its card: its icon, name and who it's for, the lengths
+/// gyms offer (each gym sets the prices), what it brings, and the way to a
+/// gym. The everyday choice ([_PlanKind.featured]) leads the row: deep navy
+/// with a warm light in the light, tinted orange and ringed in the dark.
+/// Laid across on a tablet ([wide]), where the cards stand one over another.
 class _PlanCard extends StatelessWidget {
   final _PlanKind kind;
   final VoidCallback onFindGym;
+  final bool wide;
 
-  const _PlanCard({required this.kind, required this.onFindGym});
+  const _PlanCard({required this.kind, required this.onFindGym, this.wide = false});
 
   @override
   Widget build(BuildContext context) {
     final ink = _Ink.of(context);
     final brand = context.brand;
-    final orangeTint = brand.accent.withValues(alpha: ink.dark ? 0.12 : 0.05);
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: kind.featured ? Color.alphaBlend(orangeTint, ink.card) : ink.card,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: kind.featured ? brand.accent : brand.glassBorder, width: kind.featured ? 1.6 : 1),
-        boxShadow: ink.shadow(light: kind.featured ? 0.1 : 0.06),
-      ),
-      // Side by side the cards share a height, and the buttons line up at
-      // the foot; stacked, each is as tall as it needs.
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(kind.name, style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: ink.heading)),
-              Text(kind.tagline, style: TextStyle(fontSize: 13, color: brand.muted)),
-              const SizedBox(height: 16),
-              Text(kind.lengths, style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900, color: ink.heading)),
-              Text('Prices set by each gym', style: TextStyle(fontSize: 12, color: brand.muted)),
-              const SizedBox(height: 16),
-              for (final point in kind.points)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _Check(point),
+    final featured = kind.featured;
+    final tinted = Color.alphaBlend(brand.accent.withValues(alpha: ink.dark ? 0.12 : 0.05), ink.card);
+    // On the navy card, white words in the light; the page's own in the dark.
+    Color on(Color navy, Color page) => featured ? ink.pick(navy, page) : page;
+    final heading = on(Colors.white, ink.heading);
+    final body = on(Colors.white.withValues(alpha: 0.88), ink.body);
+    final muted = on(Colors.white.withValues(alpha: 0.66), brand.muted);
+    final rule = on(Colors.white.withValues(alpha: 0.14), brand.glassBorder);
+    final orange = on(brand.highlight, brand.accentText);
+    final [first, ...rest] = kind.lengths.split(' · ');
+    // Its icon, name and who it's for, then the lengths gyms offer.
+    final about = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [brand.accent.withValues(alpha: featured ? 0.26 : 0.18), brand.accent.withValues(alpha: 0.05)],
                 ),
-              const SizedBox(height: 12),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: brand.accent.withValues(alpha: featured ? 0.3 : 0.18)),
+              ),
+              child: Icon(kind.icon, size: 22, color: orange),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(kind.name, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.3, color: heading)),
+                  Text(kind.tagline, style: TextStyle(fontSize: 12.5, color: muted)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        if (!wide) ...[Divider(height: 1, color: rule), const SizedBox(height: 20)],
+        Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: first),
+              for (final length in rest) ...[
+                TextSpan(text: ' · ', style: TextStyle(color: orange)),
+                TextSpan(text: length),
+              ],
             ],
           ),
-          SizedBox(
-            width: double.infinity,
-            child: _PillButton(label: 'Find a gym', compact: true, outlined: !kind.featured, onPressed: onFindGym),
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.4, height: 1.25, color: heading),
+        ),
+        const SizedBox(height: 4),
+        Text('Prices set by each gym', style: TextStyle(fontSize: 12.5, color: muted)),
+      ],
+    );
+    final points = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (i, point) in kind.points.indexed)
+          Padding(
+            padding: EdgeInsets.only(top: i > 0 ? 10 : 0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: brand.accent.withValues(alpha: featured ? (ink.dark ? 0.22 : 0.34) : 0.14),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.check_rounded, size: 13, color: orange),
+                ),
+                const SizedBox(width: 9),
+                Expanded(child: Text(_noWidow(point), style: TextStyle(fontSize: 13.5, height: 1.4, color: body))),
+              ],
+            ),
+          ),
+      ],
+    );
+    final button = SizedBox(
+      width: double.infinity,
+      child: featured
+          ? _PillButton(label: 'Find a gym', compact: true, onPressed: onFindGym)
+          : _PillButton(label: 'Find a gym', compact: true, outlined: true, onPressed: onFindGym),
+    );
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: featured ? null : ink.card,
+        gradient: featured
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [ink.pick(const Color(0xFF0B1530), tinted), ink.pick(const Color(0xFF1B3F8A), tinted)],
+              )
+            : null,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: featured ? ink.pick(Colors.white.withValues(alpha: 0.1), brand.accent) : brand.glassBorder,
+          width: featured && ink.dark ? 1.6 : 1,
+        ),
+        boxShadow: featured ? ink.shadow(light: 0.3, dark: 0.4, blur: 44, dy: 22) : ink.shadow(light: 0.07, blur: 32, dy: 14),
+      ),
+      child: Stack(
+        children: [
+          if (featured)
+            Positioned(
+              right: -70,
+              top: -90,
+              child: GymGlow(color: brand.highlight.withValues(alpha: ink.dark ? 0.12 : 0.3), size: 240),
+            ),
+          Padding(
+            padding: wide ? const EdgeInsets.all(26) : const EdgeInsets.fromLTRB(22, 24, 20, 22),
+            child: wide ? _across(rule, about, points, button) : _down(about, points, button),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// One part under the next, the button at the foot (side by side the
+  /// cards share a height, so the buttons line up).
+  Widget _down(Widget about, Widget points, Widget button) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [about, const SizedBox(height: 18), points, const SizedBox(height: 14)],
+        ),
+        button,
+      ],
+    );
+  }
+
+  /// The plan on the left; what it brings and the button on the right.
+  Widget _across(Color rule, Widget about, Widget points, Widget button) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(flex: 5, child: about),
+          const SizedBox(width: 26),
+          VerticalDivider(width: 1, color: rule),
+          const SizedBox(width: 26),
+          Expanded(
+            flex: 5,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [points, const SizedBox(height: 14), button],
+            ),
           ),
         ],
       ),
@@ -2990,11 +3804,13 @@ class _PlanCard extends StatelessWidget {
 
 // ─── Questions ─────────────────────────────────────────────────────────────
 
-/// What people ask, opening one at a time.
-class _Faq extends StatelessWidget {
+/// What people ask, opening one at a time, and where to turn when the answer
+/// isn't here: the front desk at a gym.
+class _Faq extends StatefulWidget {
   final _Layout layout;
+  final VoidCallback onFindGym;
 
-  const _Faq({super.key, required this.layout});
+  const _Faq({super.key, required this.layout, required this.onFindGym});
 
   // As the gyms work today: ask to join in the app, or at the front desk
   // (no account needed there). Health Pro's assistant answers from the same
@@ -3039,63 +3855,59 @@ class _Faq extends StatelessWidget {
   ];
 
   @override
+  State<_Faq> createState() => _FaqState();
+}
+
+class _FaqState extends State<_Faq> {
+  /// The question open, if one is.
+  int? _open;
+
+  @override
   Widget build(BuildContext context) {
+    final layout = widget.layout;
     final ink = _Ink.of(context);
-    final brand = context.brand;
+    final title = TextStyle(
+      fontSize: layout.titleSize,
+      fontWeight: FontWeight.w800,
+      height: 1.08,
+      letterSpacing: -layout.titleSize * 0.03,
+      color: ink.heading,
+    );
     final intro = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Eyebrow('FREQUENTLY ASKED QUESTIONS', lineBefore: true),
-        const SizedBox(height: 14),
-        Text(
-          'Have Questions?',
-          style: TextStyle(
-            fontSize: layout.titleSize,
-            fontWeight: FontWeight.w900,
-            height: 1.1,
-            letterSpacing: -0.8,
-            color: ink.heading,
-          ),
-        ),
         const SizedBox(height: 16),
-        Text(
-          'Answers about joining, paying and checking in.',
-          style: TextStyle(fontSize: 16, height: 1.55, color: ink.body),
+        Wrap(children: [Text('Have ', style: title), _AccentText('Questions?', style: title)]),
+        const SizedBox(height: 18),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 470),
+          child: Text(
+            _noWidow('Answers about joining, paying and checking in.'),
+            style: TextStyle(fontSize: layout.wide ? 16.5 : 16, height: 1.65, color: ink.body),
+          ),
         ),
       ],
     );
-    final list = Container(
-      decoration: BoxDecoration(
-        color: ink.card,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: brand.glassBorder),
-        boxShadow: ink.dark ? null : ink.shadow(light: 0.05, blur: 18, dy: 6),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: Column(
-          children: [
-            for (var i = 0; i < questions.length; i++) ...[
-              if (i > 0) Divider(height: 1, color: brand.glassBorder),
-              ExpansionTile(
-                tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-                childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-                expandedAlignment: Alignment.centerLeft,
-                iconColor: context.brand.highlight,
-                collapsedIconColor: ink.heading,
-                title: Text(
-                  questions[i].$1,
-                  style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: ink.heading),
-                ),
-                children: [
-                  Text(questions[i].$2, style: TextStyle(fontSize: 14.5, height: 1.55, color: ink.body)),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
+    final help = _FaqHelp(onFindGym: widget.onFindGym, compact: !layout.medium);
+    final list = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final (i, (question, answer)) in _Faq.questions.indexed) ...[
+          if (i > 0) const SizedBox(height: 12),
+          _RevealItem(
+            order: i + 1,
+            child: _Question(
+              number: i + 1,
+              question: question,
+              answer: answer,
+              open: _open == i,
+              compact: !layout.medium,
+              onTap: () => setState(() => _open = _open == i ? null : i),
+            ),
+          ),
+        ],
+      ],
     );
     return Padding(
       padding: EdgeInsets.only(bottom: layout.section),
@@ -3105,15 +3917,293 @@ class _Faq extends StatelessWidget {
             ? Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(flex: 4, child: intro),
-                  const SizedBox(width: 40),
+                  Expanded(
+                    flex: 4,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [intro, const SizedBox(height: 36), help],
+                    ),
+                  ),
+                  const SizedBox(width: 56),
                   Expanded(flex: 7, child: list),
                 ],
               )
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [intro, const SizedBox(height: 28), list],
+                children: [intro, const SizedBox(height: 32), list, const SizedBox(height: 24), help],
               ),
+      ),
+    );
+  }
+}
+
+/// One question on its own card: its number, the question and a round
+/// toggle. Open, the answer unfolds under it, the number fills orange and
+/// the plus turns to a cross.
+class _Question extends StatefulWidget {
+  final int number;
+  final String question;
+  final String answer;
+  final bool open;
+  final VoidCallback onTap;
+
+  /// Tighter, for a phone.
+  final bool compact;
+
+  const _Question({
+    required this.number,
+    required this.question,
+    required this.answer,
+    required this.open,
+    required this.onTap,
+    this.compact = false,
+  });
+
+  @override
+  State<_Question> createState() => _QuestionState();
+}
+
+class _QuestionState extends State<_Question> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = _Ink.of(context);
+    final brand = context.brand;
+    final accent = brand.accent;
+    final open = widget.open;
+    final hover = _hover && !reduceMotion(context);
+    final compact = widget.compact;
+    final pad = compact ? 16.0 : 20.0;
+    final tile = compact ? 34.0 : 38.0;
+    final gap = compact ? 12.0 : 16.0;
+    final unfold = Motion.of(context, Motion.page);
+    final number = AnimatedContainer(
+      duration: Motion.hover,
+      curve: Motion.ease,
+      width: tile,
+      height: tile,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: open ? brand.highlight : null,
+        gradient: open
+            ? null
+            : LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [accent.withValues(alpha: 0.18), accent.withValues(alpha: 0.05)],
+              ),
+        borderRadius: BorderRadius.circular(compact ? 11 : 12),
+        border: Border.all(color: accent.withValues(alpha: open ? 0 : 0.18)),
+      ),
+      child: Text(
+        widget.number.toString().padLeft(2, '0'),
+        style: TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.6,
+          color: open ? BrandColors.navy : brand.accentText,
+        ),
+      ),
+    );
+    final toggle = AnimatedContainer(
+      duration: Motion.hover,
+      curve: Motion.ease,
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: open ? accent : (hover ? accent.withValues(alpha: 0.16) : ink.tint),
+      ),
+      child: AnimatedRotation(
+        turns: open ? 0.125 : 0,
+        duration: unfold,
+        curve: Motion.ease,
+        child: Icon(
+          Icons.add_rounded,
+          size: 20,
+          color: open ? BrandColors.navy : (hover ? brand.accentText : ink.heading),
+        ),
+      ),
+    );
+    final header = Padding(
+      padding: EdgeInsets.fromLTRB(pad, compact ? 14 : 16, compact ? 14 : 18, compact ? 14 : 16),
+      child: Row(
+        children: [
+          number,
+          SizedBox(width: gap),
+          Expanded(
+            child: Text(
+              widget.question,
+              style: TextStyle(
+                fontSize: compact ? 15 : 16,
+                fontWeight: FontWeight.w700,
+                height: 1.35,
+                letterSpacing: -0.2,
+                color: ink.heading,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          toggle,
+        ],
+      ),
+    );
+    // Only there while open, so a closed question holds no hidden answer.
+    final answer = AnimatedSwitcher(
+      duration: unfold,
+      switchInCurve: Motion.ease,
+      switchOutCurve: Motion.ease,
+      layoutBuilder: (current, previous) =>
+          Stack(alignment: Alignment.topLeft, children: [...previous, if (current != null) current]),
+      transitionBuilder: (child, animation) => SizeTransition(
+        sizeFactor: animation,
+        axisAlignment: -1,
+        child: FadeTransition(opacity: animation, child: child),
+      ),
+      child: open
+          ? Padding(
+              key: const ValueKey(true),
+              padding: EdgeInsets.fromLTRB(pad + tile + gap, 0, compact ? 16 : 26, compact ? 16 : 20),
+              child: Text(
+                _noWidow(widget.answer),
+                style: TextStyle(fontSize: compact ? 14 : 14.5, height: 1.65, color: ink.body),
+              ),
+            )
+          : const SizedBox(key: ValueKey(false), width: double.infinity),
+    );
+    final warm = Color.alphaBlend(accent.withValues(alpha: ink.dark ? 0.08 : 0.04), ink.card);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: Motion.hover,
+        curve: Motion.ease,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: open ? warm : ink.card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: open
+                ? accent.withValues(alpha: 0.45)
+                : (hover ? accent.withValues(alpha: 0.3) : brand.glassBorder),
+          ),
+          boxShadow: open ? ink.shadow(light: 0.1, blur: 36, dy: 16) : ink.shadow(light: 0.05, blur: 22, dy: 8),
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Semantics(
+                button: true,
+                expanded: open,
+                child: InkWell(
+                  onTap: widget.onTap,
+                  hoverColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                  splashColor: accent.withValues(alpha: 0.08),
+                  focusColor: accent.withValues(alpha: 0.08),
+                  child: header,
+                ),
+              ),
+              answer,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Where to turn when the answer isn't here: the front desk at a gym. Deep
+/// navy with a warm light, like the everyday plan; on the page's card in the
+/// dark.
+class _FaqHelp extends StatelessWidget {
+  final VoidCallback onFindGym;
+
+  /// Its button the full width, for a phone.
+  final bool compact;
+
+  const _FaqHelp({required this.onFindGym, this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = _Ink.of(context);
+    final brand = context.brand;
+    final tinted = Color.alphaBlend(brand.accent.withValues(alpha: ink.dark ? 0.08 : 0.05), ink.card);
+    final button = _PillButton(label: 'Find a gym', icon: Icons.arrow_forward_rounded, compact: true, onPressed: onFindGym);
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [ink.pick(const Color(0xFF0B1530), tinted), ink.pick(const Color(0xFF1B3F8A), tinted)],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: ink.pick(Colors.white.withValues(alpha: 0.1), brand.glassBorder)),
+        boxShadow: ink.shadow(light: 0.24, dark: 0.35, blur: 40, dy: 18),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -80,
+            top: -100,
+            child: GymGlow(color: brand.highlight.withValues(alpha: ink.dark ? 0.1 : 0.28), size: 240),
+          ),
+          Padding(
+            padding: EdgeInsets.all(compact ? 22 : 26),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: ink.pick(Colors.white.withValues(alpha: 0.1), brand.accent.withValues(alpha: 0.14)),
+                        border: Border.all(
+                          color: ink.pick(Colors.white.withValues(alpha: 0.18), brand.accent.withValues(alpha: 0.25)),
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.support_agent_rounded,
+                        size: 22,
+                        color: ink.pick(brand.highlight, brand.accentText),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'Still have a question?',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                          color: ink.pick(Colors.white, ink.heading),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _noWidow('The front desk at your gym can help with packages, payments and your card.'),
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.6,
+                    color: ink.pick(Colors.white.withValues(alpha: 0.78), ink.body),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                if (compact) SizedBox(width: double.infinity, child: button) else button,
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -3356,6 +4446,34 @@ class _MountainsPainter extends CustomPainter {
 }
 
 // ─── Small parts ───────────────────────────────────────────────────────────
+
+/// [text] with its last two words held together, so a line that wraps never
+/// leaves one word alone.
+String _noWidow(String text) {
+  final at = text.lastIndexOf(' ');
+  return at < 0 ? text : '${text.substring(0, at)} ${text.substring(at + 1)}';
+}
+
+/// [text] in the brand's orange, warming along the line: the part of a title
+/// that promises.
+class _AccentText extends StatelessWidget {
+  final String text;
+  final TextStyle style;
+
+  const _AccentText(this.text, {required this.style});
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = context.brand.accentText;
+    return ShaderMask(
+      blendMode: BlendMode.srcIn,
+      shaderCallback: (bounds) => LinearGradient(
+        colors: [accent, Color.lerp(accent, context.brand.highlight, 0.5)!],
+      ).createShader(bounds),
+      child: Text(text, style: style),
+    );
+  }
+}
 
 /// Small capitals over a title, with orange rules before and/or after.
 class _Eyebrow extends StatelessWidget {

@@ -303,6 +303,20 @@ class _MyGymsBody extends StatelessWidget {
         mine.visits.where((v) => !BhutanTime.dateOnly(BhutanTime.toBhutan(v.at)).isBefore(weekStart)).length;
     final lastVisit = mine.visits.firstOrNull;
 
+    // Visits on each of the last 7 days, today last.
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final week = [
+      for (var i = 0; i < 7; i++)
+        (
+          label: weekdays[weekStart.add(Duration(days: i)).weekday - 1],
+          value: mine.visits
+              .where((v) => BhutanTime.dateOnly(BhutanTime.toBhutan(v.at)) == weekStart.add(Duration(days: i)))
+              .length as num,
+        ),
+    ];
+    final left = next == null ? 0 : _daysLeft(next.endDate!, today);
+    final length = next == null ? 0 : _daysLeft(next.endDate!, next.startDate!);
+
     final kpis = [
       ConsoleKpi(
         icon: Icons.fitness_center_rounded,
@@ -323,10 +337,12 @@ class _MyGymsBody extends StatelessWidget {
       ConsoleKpi(
         icon: Icons.hourglass_bottom_rounded,
         color: brand.warning,
-        value: next == null ? '–' : '${_daysLeft(next.endDate!, today)}',
-        count: next == null ? null : _daysLeft(next.endDate!, today),
+        value: next == null ? '–' : '$left',
+        count: next == null ? null : left,
         label: 'Days left',
         note: next == null ? 'No active package' : next.venueName,
+        // What's left of the package that ends first.
+        trailing: length <= 0 ? null : _Ring(share: (left / length).clamp(0.0, 1.0), color: brand.warning),
       ),
       ConsoleKpi(
         icon: Icons.login_rounded,
@@ -335,19 +351,12 @@ class _MyGymsBody extends StatelessWidget {
         count: thisWeek,
         label: 'Visits in 7 days',
         note: lastVisit == null ? 'No visits yet' : 'Last visit ${timeAgo(lastVisit.at)}',
+        trailing: thisWeek == 0
+            ? null
+            : _Reveal(
+                child: ConsoleSparkline(values: [for (final d in week) d.value], color: brand.accent, width: 66, height: 32),
+              ),
       ),
-    ];
-
-    // Visits on each of the last 7 days, today last.
-    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    final week = [
-      for (var i = 0; i < 7; i++)
-        (
-          label: weekdays[weekStart.add(Duration(days: i)).weekday - 1],
-          value: mine.visits
-              .where((v) => BhutanTime.dateOnly(BhutanTime.toBhutan(v.at)) == weekStart.add(Duration(days: i)))
-              .length as num,
-        ),
     ];
     final attention = _attention(context);
 
@@ -393,22 +402,38 @@ class _MyGymsBody extends StatelessWidget {
       children: [
         LayoutBuilder(
           builder: (context, constraints) =>
-              ConsoleCells(columns: constraints.maxWidth >= 760 ? 4 : 2, spacing: 14, children: kpis),
+              ConsoleCells(columns: constraints.maxWidth >= 760 ? 4 : 2, spacing: 14, children: staggered(kpis, offset: 14)),
         ),
         if (attention.isNotEmpty) ...[
           const SizedBox(height: 18),
           ConsoleCard(
             icon: Icons.priority_high_rounded,
             title: 'Needs your attention',
-            child: Material(type: MaterialType.transparency, child: Column(children: attention)),
+            child: Material(type: MaterialType.transparency, child: Column(children: staggered(attention, offset: 10))),
           ),
         ],
         Padding(
-          padding: const EdgeInsets.fromLTRB(2, 22, 2, 12),
+          padding: const EdgeInsets.fromLTRB(2, 24, 2, 12),
           child: Row(
             children: [
+              Container(
+                width: 4,
+                height: 20,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [brand.highlight, brand.themedShade(const Color(0xFFFFB066))],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
               Expanded(
-                child: Text('My gyms', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: ink.heading)),
+                child: Text(
+                  'My gyms',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: ink.heading, letterSpacing: -0.2),
+                ),
               ),
               ConsoleLink(label: 'Find a gym', onPressed: () => context.go(GymRoutes.gyms)),
             ],
@@ -425,10 +450,10 @@ class _MyGymsBody extends StatelessWidget {
               maxColumns: mine.gyms.length.clamp(1, 3),
               spacing: 16,
               runSpacing: 16,
-              children: [
+              children: staggered([
                 for (final g in mine.gyms)
                   _MyGymCard(gym: g, today: today, sideways: mine.gyms.length == 1 && constraints.maxWidth >= 660),
-              ],
+              ]),
             ),
           ),
         if (panels.isNotEmpty) ...[const SizedBox(height: 18), _Panels(panels: panels)],
@@ -486,8 +511,6 @@ class _HowToJoin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ink = ConsoleInk.of(context);
-    final brand = context.brand;
     const steps = [
       (Icons.search_rounded, 'Find a gym', 'See gyms near you, their packages, prices and trainers.'),
       (Icons.how_to_reg_rounded, 'Ask to join', 'Send a request, or show your QR code at its front desk.'),
@@ -502,41 +525,144 @@ class _HowToJoin extends StatelessWidget {
           ResponsiveGrid(
             minItemWidth: 200,
             maxColumns: 3,
-            equalHeight: false,
-            children: [
+            children: staggered(offset: 14, [
               for (final (i, (icon, title, text)) in steps.indexed)
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(color: ink.tint, borderRadius: BorderRadius.circular(14)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(icon, size: 20, color: brand.accent),
-                          const SizedBox(width: 8),
-                          Text('Step ${i + 1}',
-                              style: TextStyle(color: brand.muted, fontSize: 12, fontWeight: FontWeight.w700)),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(title, style: TextStyle(color: ink.heading, fontWeight: FontWeight.w800, fontSize: 15)),
-                      const SizedBox(height: 2),
-                      Text(text, style: TextStyle(color: ink.body, fontSize: 13, height: 1.35)),
-                    ],
-                  ),
-                ),
-            ],
+                _JoinStep(number: i + 1, icon: icon, title: title, text: text),
+            ]),
           ),
-          const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: () => context.go(GymRoutes.gyms),
-            iconAlignment: IconAlignment.end,
-            icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-            label: const Text('Find a gym'),
+          const SizedBox(height: 18),
+          IntrinsicWidth(
+            child: ConsoleGlowButton(label: 'Find a gym', onPressed: () => context.go(GymRoutes.gyms)),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A step to their first gym: its icon on a bright square, its number
+/// large and faint behind, what to do.
+class _JoinStep extends StatelessWidget {
+  final int number;
+  final IconData icon;
+  final String title;
+  final String text;
+
+  const _JoinStep({required this.number, required this.icon, required this.title, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = ConsoleInk.of(context);
+    final brand = context.brand;
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: ink.tint,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: brand.glassBorder),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: 12,
+            top: -2,
+            child: Text(
+              '0$number',
+              style: TextStyle(
+                fontSize: 46,
+                fontWeight: FontWeight.w800,
+                height: 1,
+                color: ink.heading.withValues(alpha: ink.dark ? 0.07 : 0.05),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [brand.themedShade(const Color(0xFFFFA24D)), brand.highlight],
+                    ),
+                    boxShadow: [
+                      BoxShadow(color: brand.highlight.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 5)),
+                    ],
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 20),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'STEP $number',
+                  style: TextStyle(
+                    color: ink.dark ? brand.accent : brand.accentText,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(title, style: TextStyle(color: ink.heading, fontWeight: FontWeight.w800, fontSize: 15.5)),
+                const SizedBox(height: 4),
+                Text(text, style: TextStyle(color: ink.body, fontSize: 13, height: 1.4)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A small ring of [share] (0 to 1) in [color], filling in when it shows.
+class _Ring extends StatelessWidget {
+  final double share;
+  final Color color;
+
+  const _Ring({required this.share, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: share),
+      duration: Motion.of(context, Motion.chart),
+      curve: Motion.ease,
+      builder: (context, v, _) => SizedBox(
+        width: 38,
+        height: 38,
+        child: CircularProgressIndicator(
+          value: v,
+          strokeWidth: 4.5,
+          strokeCap: StrokeCap.round,
+          color: color,
+          backgroundColor: color.withValues(alpha: 0.15),
+          semanticsLabel: 'Package left',
+        ),
+      ),
+    );
+  }
+}
+
+/// [child] drawn in from the left when it shows (a sparkline).
+class _Reveal extends StatelessWidget {
+  final Widget child;
+
+  const _Reveal({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Motion.of(context, Motion.chart),
+      curve: Motion.ease,
+      child: child,
+      builder: (context, t, child) => ClipRect(child: Align(alignment: Alignment.centerLeft, widthFactor: t, child: child)),
     );
   }
 }
@@ -671,6 +797,8 @@ class _MyGymCard extends ConsumerWidget {
     final left = active ? _daysLeft(gym.endDate!, today) : 0;
     final length = active ? _daysLeft(gym.endDate!, gym.startDate!) : 0;
     final initial = gym.venueName.trim().isEmpty ? 'G' : gym.venueName.trim().characters.first.toUpperCase();
+    // The theme's own deep colour in the light (navy unless picked).
+    final tone = themeTone(context, BrandColors.blue);
     return HoverLift(
       child: DecoratedBox(
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), boxShadow: ink.shadow),
@@ -695,7 +823,7 @@ class _MyGymCard extends ConsumerWidget {
                         height: 46,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: BrandColors.blue.withValues(alpha: ink.dark ? 0.18 : 0.1),
+                          color: tone.withValues(alpha: ink.dark ? 0.18 : 0.1),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Text(
@@ -703,7 +831,7 @@ class _MyGymCard extends ConsumerWidget {
                           style: TextStyle(
                             fontSize: 19,
                             fontWeight: FontWeight.w800,
-                            color: ink.dark ? Colors.white : BrandColors.blue,
+                            color: ink.dark ? Colors.white : tone,
                           ),
                         ),
                       ),
@@ -737,11 +865,17 @@ class _MyGymCard extends ConsumerWidget {
                       const SizedBox(height: 14),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(6),
-                        child: LinearProgressIndicator(
-                          value: length <= 0 ? 0 : ((length - left) / length).clamp(0.0, 1.0),
-                          minHeight: 6,
-                          backgroundColor: ink.tint,
-                          color: left <= 7 ? brand.warning : brand.success,
+                        // Fills to how much is used up when it shows.
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0, end: length <= 0 ? 0 : ((length - left) / length).clamp(0.0, 1.0)),
+                          duration: Motion.of(context, Motion.chart),
+                          curve: Motion.ease,
+                          builder: (context, v, _) => LinearProgressIndicator(
+                            value: v,
+                            minHeight: 6,
+                            backgroundColor: ink.tint,
+                            color: left <= 7 ? brand.warning : brand.success,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 6),

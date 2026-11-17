@@ -753,6 +753,14 @@ class _IncomeScreenState extends ConsumerState<IncomeScreen> {
               child: ListView(
                 padding: pagePadding(context, bottom: 40),
                 children: [
+                  FadeSlideIn(
+                    child: WelcomeBand(
+                      eyebrow: access.venue.name,
+                      title: 'Payments & income',
+                      subtitle: 'Every payment received: by day, by month or between dates.',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,

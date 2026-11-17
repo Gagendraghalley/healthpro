@@ -215,18 +215,6 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
         final canRegister = access.can(GymPermission.register);
         return AppPage(
           title: 'Members',
-          actions: [
-            if (canRegister && wide)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: OutlinedButton.icon(
-                  onPressed: () => context.go(GymRoutes.registerMemberFor(id)),
-                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
-                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 20),
-                  label: const Text('Register member'),
-                ),
-              ),
-          ],
           floatingActionButton: canRegister && !wide
               ? FloatingActionButton.extended(
                   onPressed: () => context.go(GymRoutes.registerMemberFor(id)),
@@ -249,11 +237,35 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
                     _Sort.expiry => (paidUntil(a.subs, today) ?? DateTime(9999))
                         .compareTo(paidUntil(b.subs, today) ?? DateTime(9999)),
                   });
+              final active = counts[_Filter.active]!;
               return RefreshIndicator(
                 onRefresh: () async => refreshGym(ref, id),
                 child: ListView(
                   padding: pagePadding(context, bottom: 96),
                   children: [
+                    // Registering is on the band where there's room; a phone
+                    // has the floating button instead.
+                    FadeSlideIn(
+                      child: WelcomeBand(
+                        eyebrow: access.venue.name,
+                        title: 'Members',
+                        subtitle: all.isEmpty
+                            ? 'No members yet.'
+                            : '${all.length} registered  ·  $active active now',
+                        bottom: canRegister && wide
+                            ? Align(
+                                alignment: Alignment.centerLeft,
+                                child: BandAction(
+                                  icon: Icons.person_add_alt_1_rounded,
+                                  label: 'Register member',
+                                  main: true,
+                                  onPressed: () => context.go(GymRoutes.registerMemberFor(id)),
+                                ),
+                              )
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
                     if (all.isEmpty)
                       EmptyState(
                         icon: Icons.groups_rounded,

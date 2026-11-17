@@ -128,9 +128,6 @@ String? videoContentType(Uint8List bytes) {
   return null;
 }
 
-/// A required field's label: 'Name *'.
-String requiredLabel(String label) => '$label *';
-
 /// Muted helper text under a form section.
 class FormHint extends StatelessWidget {
   final String text;

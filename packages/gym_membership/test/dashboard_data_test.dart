@@ -133,54 +133,12 @@ void main() {
         checkedInAt: bhutanMidnightUtc(day(offset)).add(const Duration(hours: 1)),
       );
 
-  test("a member's visits: by day, by 7-day stretch, and the days visited", () {
+  test("a member's visits by day and by week", () {
     final visits = [visit(0), visit(0), visit(-1), visit(-6), visit(-7), visit(-20), visit(-89), visit(-90)];
     final week = visitSeries(visits, today, RevenueRange.week);
     expect([for (final p in week) p.amount], [1, 0, 0, 0, 0, 1, 2]);
     final quarter = visitSeries(visits, today, RevenueRange.quarter);
     expect(quarter.fold<int>(0, (s, p) => s + p.amount), 7); // 90 days back is outside
-    // Oldest first: 21-27 days back, 14-20, 7-13, then the 7 days to today.
-    expect(weeklyVisits(visits, today, weeks: 4), [0, 1, 1, 4]);
-    expect(visitedDays(visits, today), [true, false, false, false, false, true, true]);
-  });
-
-  test('the streak runs to today, or to yesterday while today can keep it', () {
-    expect(visitStreak([visit(0), visit(-1), visit(-2), visit(-4)], today), 3);
-    expect(visitStreak([visit(-1), visit(-2)], today), 2);
-    expect(visitStreak([visit(-2), visit(-3)], today), 0);
-    expect(visitStreak(const [], today), 0);
-  });
-
-  test("a member's activity: newest first, at their gym, renewals told apart", () {
-    GymSubscription mine(String id, {required DateTime requested, DateTime? activated, String status = SubscriptionStatus.active}) =>
-        GymSubscription(
-          id: id,
-          venueId: 'g1',
-          memberId: 'me',
-          planName: 'Monthly',
-          durationDays: 30,
-          price: 1500,
-          status: status,
-          requestedAt: requested,
-          activatedAt: activated,
-          gymName: 'Druk Fitness Club',
-        );
-    final activity = myActivity(
-      subs: [
-        mine('s1', requested: DateTime.utc(2026, 9, 1), activated: DateTime.utc(2026, 9, 2)),
-        mine('s2', requested: DateTime.utc(2026, 10, 1), activated: DateTime.utc(2026, 10, 2)),
-        mine('s3', requested: DateTime.utc(2026, 11, 6), status: SubscriptionStatus.pending),
-      ],
-      checkIns: [visit(0)],
-      limit: 4,
-    );
-    expect([for (final a in activity) a.text], [
-      'Checked in at Druk Fitness Club',
-      'Asked to join Monthly at Druk Fitness Club',
-      'Renewed Monthly at Druk Fitness Club',
-      'Asked to join Monthly at Druk Fitness Club',
-    ]);
-    expect(activity[2].kind, GymActivityKind.renewed);
   });
 
   test('income this month against the same days of last month', () {

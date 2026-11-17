@@ -68,3 +68,4 @@ export 'src/widgets/responsive.dart';
 export 'src/widgets/searchable_dropdown.dart';
 export 'src/widgets/logo.dart';
 export 'src/widgets/splash.dart';
+export 'src/widgets/welcome_band.dart';

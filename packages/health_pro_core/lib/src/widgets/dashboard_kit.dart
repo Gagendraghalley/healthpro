@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../theme/brand.dart';
 import '../utils/bhutan_time.dart';
 import 'motion.dart';
+import 'welcome_band.dart';
 
 // The dashboard look every service shares: white (or dark) cards with an
 // icon and a title, numbers across the top that count up, a line chart
@@ -104,7 +105,8 @@ class ConsoleCells extends StatelessWidget {
   }
 }
 
-/// A white (or dark) card with an orange icon and a title. With [fill], its
+/// A white (or dark) card with its icon in a soft orange square and a
+/// title. With [fill], its
 /// [child] takes the height left (the card has one); without, its own.
 class ConsoleCard extends StatelessWidget {
   final IconData icon;
@@ -119,6 +121,24 @@ class ConsoleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ink = ConsoleInk.of(context);
+    final brand = context.brand;
+    // The icon in a soft tinted square.
+    final mark = Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            brand.accent.withValues(alpha: ink.dark ? 0.26 : 0.16),
+            brand.accent.withValues(alpha: ink.dark ? 0.10 : 0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Icon(icon, size: 19, color: ink.dark ? brand.accent : brand.accentText),
+    );
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -132,8 +152,8 @@ class ConsoleCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, size: 20, color: context.brand.accent),
-              const SizedBox(width: 9),
+              mark,
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   title,
@@ -178,9 +198,10 @@ class ConsoleLink extends StatelessWidget {
   }
 }
 
-/// A number at the top: its icon in a soft circle, the value, what it is and
-/// a note; [trailing] (a trend, say) beside it, or across from the icon in a
-/// narrow cell.
+/// A number at the top: its icon on a bright square (in the theme's
+/// colours, [themeTone]), the value counting up, what it is and a note, a
+/// soft glow of its colour in the corner; [trailing] (a trend, a ring, a
+/// sparkline) across from the icon.
 class ConsoleKpi extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -215,116 +236,140 @@ class ConsoleKpi extends StatelessWidget {
   }
 
   Widget _card(BuildContext context, ConsoleInk ink) {
+    final brand = context.brand;
+    final tone = themeTone(context, color);
+    final radius = BorderRadius.circular(20);
+    final numberStyle =
+        TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: ink.heading, height: 1.05, letterSpacing: -0.6);
     return DecoratedBox(
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), boxShadow: ink.shadow),
+      decoration: BoxDecoration(borderRadius: radius, boxShadow: ink.shadow),
       child: Material(
         color: ink.card,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: radius,
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
           child: Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: context.brand.glassBorder),
-            ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final narrow = constraints.maxWidth < 200;
-                // A paler well in the light, so the icon carries the colour.
-                final badge = Container(
-                  width: narrow ? 42 : 52,
-                  height: narrow ? 42 : 52,
-                  decoration: BoxDecoration(color: color.withValues(alpha: ink.dark ? 0.13 : 0.1), shape: BoxShape.circle),
-                  child: Icon(icon, color: color, size: narrow ? 21 : 25),
-                );
-                // The trend shrinks, rather than spill, where there's little
-                // room (a phone, large text).
-                final side = trailing == null
-                    ? null
-                    : FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.topRight, child: trailing);
-                final numberStyle =
-                    TextStyle(fontSize: narrow ? 24 : 27, fontWeight: FontWeight.w800, color: ink.heading, height: 1.1);
-                final number = FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: count == null
-                      ? Text(value, style: numberStyle)
-                      : AnimatedCount(value: count!, format: format ?? AnimatedCount.whole, style: numberStyle),
-                );
-                final under = [
-                  const SizedBox(height: 2),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: ink.body),
-                  ),
-                  Text(
-                    note,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: context.brand.muted),
-                  ),
-                ];
-                // The top line is one height, trend or none, so the numbers in
-                // a row of cells line up and the cells match.
-                const top = 50.0;
-                if (narrow) {
-                  // The icon over the number, the trend across from it.
-                  return Column(
+            foregroundDecoration: BoxDecoration(borderRadius: radius, border: Border.all(color: brand.glassBorder)),
+            child: Stack(
+              children: [
+                // A soft glow of its colour in the corner.
+                Positioned(
+                  right: -46,
+                  top: -56,
+                  child: SoftGlow(color: tone, size: 150, strength: ink.dark ? 0.22 : 0.13),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // The top line is one height, [trailing] or none, so the
+                      // numbers in a row of cells line up and the cells match.
                       SizedBox(
-                        height: top,
+                        height: 44,
                         child: Row(
                           children: [
-                            badge,
+                            ToneBadge(icon: icon, color: tone),
                             const SizedBox(width: 8),
-                            Expanded(child: Align(alignment: Alignment.topRight, child: side ?? const SizedBox())),
+                            // Shrinks, rather than spills, where there's little
+                            // room (a phone, large text).
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: trailing == null
+                                    ? null
+                                    : FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: trailing),
+                              ),
+                            ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      number,
-                      ...under,
-                    ],
-                  );
-                }
-                // The icon beside the number, the trend at the number's end.
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    badge,
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            height: top,
-                            child: Row(
-                              children: [
-                                Expanded(child: number),
-                                if (side != null) ...[
-                                  const SizedBox(width: 8),
-                                  ConstrainedBox(constraints: const BoxConstraints(maxWidth: 90), child: side),
-                                ],
-                              ],
-                            ),
-                          ),
-                          ...under,
-                        ],
+                      const SizedBox(height: 16),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: count == null
+                            ? Text(value, style: numberStyle)
+                            : AnimatedCount(value: count!, format: format ?? AnimatedCount.whole, style: numberStyle),
                       ),
-                    ),
-                  ],
-                );
-              },
+                      const SizedBox(height: 4),
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: ink.heading),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        note,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, color: brand.muted),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// [color] as the theme shows it: the brand's orange becomes their main
+/// colour, and the brand's blue the light theme's own deep colour (navy, or
+/// the one picked under Account -> Appearance); any other stays itself.
+Color themeTone(BuildContext context, Color color) {
+  final brand = context.brand;
+  if (color == BrandColors.blue) return brand.pick(Theme.of(context).colorScheme.primary, BrandColors.blue);
+  return brand.themed(color);
+}
+
+/// The [i]th colour of a chart of several parts (a package mix): the
+/// theme's main colour, its deep colour, a lighter step of each, then green
+/// and amber; round again after six.
+Color chartColor(BuildContext context, int i) {
+  final main = themeTone(context, BrandColors.orange);
+  final deep = themeTone(context, BrandColors.blue);
+  final palette = [
+    main,
+    deep,
+    Color.lerp(main, Colors.white, 0.42)!,
+    Color.lerp(deep, Colors.white, 0.42)!,
+    BrandColors.green,
+    BrandColors.amber,
+  ];
+  return palette[i % palette.length];
+}
+
+/// An icon, white, on a rounded square of [color] that brightens toward its
+/// top left and glows a little under it.
+class ToneBadge extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final double size;
+
+  const ToneBadge({super.key, required this.icon, required this.color, this.size = 44});
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = ConsoleInk.of(context).dark;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(size * 0.32),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color.lerp(color, Colors.white, 0.22)!, color],
+        ),
+        boxShadow: [BoxShadow(color: color.withValues(alpha: dark ? 0.4 : 0.3), blurRadius: 14, offset: const Offset(0, 6))],
+      ),
+      child: Icon(icon, color: Colors.white, size: size * 0.5),
     );
   }
 }
@@ -341,7 +386,7 @@ class ConsoleSparkline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ExcludeSemantics(
-      child: CustomPaint(size: Size(width, height), painter: _SparkPainter(values: values, color: color)),
+      child: CustomPaint(size: Size(width, height), painter: _SparkPainter(values: values, color: themeTone(context, color))),
     );
   }
 }
@@ -822,7 +867,7 @@ class _ConsoleBarChartState extends State<ConsoleBarChart> {
   Widget build(BuildContext context) {
     final points = widget.points;
     final format = widget.format;
-    final color = context.brand.themed(widget.color);
+    final color = themeTone(context, widget.color);
     final onTap = widget.onTap;
     final name = widget.name;
     final most = points.fold<num>(0, (m, p) => math.max(m, p.value));
@@ -947,6 +992,7 @@ class ConsoleShareRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ink = ConsoleInk.of(context);
+    final color = themeTone(context, this.color);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
       child: Column(
@@ -996,6 +1042,7 @@ class ConsoleRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final parts = [for (final (n, color) in this.parts) (n, themeTone(context, color))];
     CustomPaint ring(double t) => CustomPaint(
           size: Size.square(size),
           painter: _RingPainter(parts: parts, empty: context.brand.glassBorder, stroke: stroke, progress: t),
@@ -1158,7 +1205,7 @@ class ConsoleGlowButton extends StatelessWidget {
     return Pressable(
       child: DecoratedBox(
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [const Color(0xFFFF8A3D), accent]),
+        gradient: LinearGradient(colors: [context.brand.themedShade(const Color(0xFFFF8A3D)), accent]),
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(

@@ -245,79 +245,7 @@ List<GymActivity> recentActivity({
   return events.take(limit).toList();
 }
 
-// ─── A member's own: the signed-in home ────────────────────────────────────
-
 DateTime _bhutanDay(DateTime at) => BhutanTime.dateOnly(BhutanTime.toBhutan(at));
-
-/// Visits in each of the last [weeks] 7-day stretches, oldest first; the
-/// last is the 7 days to [today].
-List<int> weeklyVisits(Iterable<GymCheckIn> checkIns, DateTime today, {int weeks = 8}) {
-  final counts = List.filled(weeks, 0);
-  for (final c in checkIns) {
-    final back = today.difference(_bhutanDay(c.checkedInAt)).inDays;
-    if (back < 0) continue;
-    final week = back ~/ 7;
-    if (week < weeks) counts[weeks - 1 - week]++;
-  }
-  return counts;
-}
-
-/// Whether the member checked in on each of the last [days] days, oldest
-/// first; the last is [today].
-List<bool> visitedDays(Iterable<GymCheckIn> checkIns, DateTime today, {int days = 7}) {
-  final visited = {for (final c in checkIns) _bhutanDay(c.checkedInAt)};
-  return [for (var i = days - 1; i >= 0; i--) visited.contains(DateTime(today.year, today.month, today.day - i))];
-}
-
-/// Days in a row with a check-in, to today; or to yesterday, while today
-/// can still keep it going.
-int visitStreak(Iterable<GymCheckIn> checkIns, DateTime today) {
-  final visited = {for (final c in checkIns) _bhutanDay(c.checkedInAt)};
-  var day = visited.contains(today) ? today : DateTime(today.year, today.month, today.day - 1);
-  var streak = 0;
-  while (visited.contains(day)) {
-    streak++;
-    day = DateTime(day.year, day.month, day.day - 1);
-  }
-  return streak;
-}
-
-/// What the member did lately, newest first: check-ins, requests, and
-/// memberships started or renewed.
-List<GymActivity> myActivity({
-  required Iterable<GymSubscription> subs,
-  required Iterable<GymCheckIn> checkIns,
-  int limit = 5,
-}) {
-  final firstStart = <String, DateTime>{};
-  for (final s in subs) {
-    final at = s.activatedAt;
-    if (at != null && (firstStart[s.venueId] == null || at.isBefore(firstStart[s.venueId]!))) {
-      firstStart[s.venueId] = at;
-    }
-  }
-  final events = <GymActivity>[
-    for (final c in checkIns)
-      GymActivity(at: c.checkedInAt, kind: GymActivityKind.checkIn, text: 'Checked in at ${c.gymName ?? 'the gym'}'),
-    for (final s in subs) ...[
-      GymActivity(
-        at: s.requestedAt,
-        kind: GymActivityKind.request,
-        text: 'Asked to join ${s.planName} at ${s.gymName ?? 'a gym'}',
-      ),
-      if (s.activatedAt != null)
-        () {
-          final renewed = firstStart[s.venueId]!.isBefore(s.activatedAt!);
-          return GymActivity(
-            at: s.activatedAt!,
-            kind: renewed ? GymActivityKind.renewed : GymActivityKind.joined,
-            text: '${renewed ? 'Renewed' : 'Started'} ${s.planName} at ${s.gymName ?? 'your gym'}',
-          );
-        }(),
-    ],
-  ]..sort((a, b) => b.at.compareTo(a.at));
-  return events.take(limit).toList();
-}
 
 /// Good morning / afternoon / evening, by the hour in Bhutan.
 String greetingAt(DateTime bhutanNow) {

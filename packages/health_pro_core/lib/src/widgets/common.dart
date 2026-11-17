@@ -206,9 +206,13 @@ class SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final card = Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(onTap: onTap, child: Padding(padding: padding, child: child)),
+    // A soft shadow under it, as the dashboards' cards have.
+    final card = DecoratedBox(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), boxShadow: context.brand.cardShadow),
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(onTap: onTap, child: Padding(padding: padding, child: child)),
+      ),
     );
     // One that opens lifts under the mouse.
     return onTap == null ? card : HoverLift(radius: 16, child: card);

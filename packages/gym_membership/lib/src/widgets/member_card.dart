@@ -6,16 +6,15 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:clipboard/clipboard.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/gym_repository.dart';
 import '../data/member_qr.dart';
 import '../data/registered_member.dart';
 
-/// A registered member's card and what the desk does with it: download it
-/// (in a browser) or share it (on a phone, WhatsApp is in the share sheet),
-/// open their WhatsApp chat with a message ready, or give them a new card.
+/// A registered member's card and what the desk does with it: open their
+/// WhatsApp chat with a message ready, copy the QR to paste into it, or give
+/// them a new card.
 class MemberCardPanel extends ConsumerStatefulWidget {
   final String gymName;
   final GymMember member;
@@ -288,32 +287,8 @@ Future<Uint8List> cardPicture(GlobalKey repaintKey) async {
   }
 }
 
-/// 'Karma-Wangmo-4K7P9Q.png'.
-String cardFileName(GymMember member) =>
-    '${member.fullName.trim().replaceAll(RegExp(r'[^A-Za-z0-9]+'), '-')}-${member.code}.png';
-
 /// What the WhatsApp chat starts with: who, where, their code and package.
 String cardMessage({required GymMember member, required String gymName, String? validUntil}) =>
     'Kuzuzangpo ${firstName(member.fullName, fallback: 'la')}! Welcome to $gymName. '
     'Your member code is ${member.code}${validUntil == null ? '' : ' and your package is valid until $validUntil'}. '
     'Show the QR card we are sending you at the counter each time you come in.';
-
-/// Saves the card's picture as a file: a download in a browser.
-Future<void> downloadCard(Uint8List png, GymMember member) {
-  final name = cardFileName(member);
-  return XFile.fromData(png, mimeType: 'image/png', name: name).saveTo(name);
-}
-
-/// Shares the card's picture: the phone's share sheet (WhatsApp is in it),
-/// or a download on a computer whose browser can't share files.
-Future<void> shareCard(BuildContext context, Uint8List png, {required GymMember member, required String message}) async {
-  final box = context.findRenderObject() as RenderBox?;
-  final name = cardFileName(member);
-  await SharePlus.instance.share(ShareParams(
-    files: [XFile.fromData(png, mimeType: 'image/png', name: name)],
-    fileNameOverrides: [name],
-    text: message,
-    subject: 'Your member card',
-    sharePositionOrigin: box == null ? null : box.localToGlobal(Offset.zero) & box.size,
-  ));
-}

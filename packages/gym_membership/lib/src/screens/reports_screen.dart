@@ -102,8 +102,6 @@ class _Report extends ConsumerWidget {
     final revenue = payments?.where((p) => p.isCompleted).fold(0, (s, p) => s + p.amount);
     final ending = endingWithin(subs, today, 7).length;
     final notes = insights(byWeekday: byWeekday, byHour: byHour, renewal: renewal, endingSoon: ending);
-    const palette = [BrandColors.orange, BrandColors.blue, BrandColors.green, Color(0xFF7C4DFF), BrandColors.amber, Color(0xFF00A3A3)];
-
     return RefreshIndicator(
       onRefresh: () async {
         refreshGym(ref, id);
@@ -190,7 +188,7 @@ class _Report extends ConsumerWidget {
                       name: 'Check-ins by day of the week',
                       points: byWeekday,
                       format: (v) => '${v.round()}',
-                      color: BrandColors.green,
+                      color: BrandColors.orange,
                     ),
                   ),
                   ConsoleCard(
@@ -231,7 +229,7 @@ class _Report extends ConsumerWidget {
                               ConsoleRing(
                                 size: 140,
                                 stroke: 16,
-                                parts: [for (final (i, p) in mix.indexed) (p.members, palette[i % palette.length])],
+                                parts: [for (final (i, p) in mix.indexed) (p.members, chartColor(context, i))],
                                 center: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -250,7 +248,7 @@ class _Report extends ConsumerWidget {
                                   children: [
                                     for (final (i, p) in mix.take(6).indexed)
                                       ConsoleShareRow(
-                                        color: palette[i % palette.length],
+                                        color: chartColor(context, i),
                                         label: p.name,
                                         value: '${p.members}',
                                         share: p.members / mixTotal,
@@ -306,10 +304,10 @@ class _Report extends ConsumerWidget {
                                 ListTile(
                                   contentPadding: EdgeInsets.zero,
                                   leading: CircleAvatar(
-                                    backgroundColor: (i == 0 ? BrandColors.amber : BrandColors.blue).withValues(alpha: 0.14),
+                                    backgroundColor: (i == 0 ? BrandColors.amber : themeTone(context, BrandColors.blue)).withValues(alpha: 0.14),
                                     child: Text('${i + 1}',
                                         style: TextStyle(
-                                            fontWeight: FontWeight.w800, color: i == 0 ? BrandColors.amber : BrandColors.blue)),
+                                            fontWeight: FontWeight.w800, color: i == 0 ? BrandColors.amber : themeTone(context, BrandColors.blue))),
                                   ),
                                   title: Text(r.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                                   trailing: Text('${r.visits} visit${r.visits == 1 ? '' : 's'}',
