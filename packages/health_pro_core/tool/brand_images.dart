@@ -4,12 +4,17 @@
 //   cd packages/health_pro_core && flutter test tool/brand_images.dart
 //
 // The logo is logo-dark-new.png (already transparent, blue lettering); it
-// makes a white-lettered version of it for dark backgrounds. The mark (the
+// makes a white-lettered version of it for dark backgrounds. HealthProLogo
+// builds it from layers, so this splits it: the base (the mark and the
+// name), the heartbeat (which animates), and no tagline (the app draws that
+// as text, HealthProTagline). The launch screens get it whole, with that
+// same tagline drawn in. The mark (the
 // cross with the runner) and the app icons come from logo-white-small.png,
 // lifted off its white tile. (logo-white-new.png, the logo on white, is
 // the reference; nothing is made from it.) If the logo's shape changes,
-// update HealthProLogo.aspectRatio and markAspectRatio, web/index.html and
-// LaunchScreen.storyboard to the sizes it prints. With PREVIEW=<folder>
+// update HealthProLogo.aspectRatio, heartbeatBox and markAspectRatio,
+// web/index.html and LaunchScreen.storyboard to the sizes it prints (it
+// fails if the widget's boxes no longer match). With PREVIEW=<folder>
 // set, it writes samples there and touches nothing else. The in-app logos
 // and the web splash are WebP, made with cwebp (brew install webp).
 import 'dart:io';
@@ -18,7 +23,9 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:health_pro_core/health_pro_core.dart';
 
 const logoSource = 'tool/brand/logo-dark-new.png';
 const iconSource = 'tool/brand/logo-white-small.png';
@@ -353,9 +360,47 @@ void main() {
       final source = await load(logoSource);
       final logoMark = shapesWhere(source, (box) => box.center.dx < source.width * 0.28);
       final all = source.bounds();
-      final logoBox = all.inflate(all.height * 0.04);
-      final logo = source.crop(logoBox);
-      final logoOnDark = withShadow(whiteLettering(source, logoMark, (source.height * 0.68).round()).crop(logoBox));
+      final logoBox = Rect.fromLTWH(
+          (all.left - all.height * 0.04).roundToDouble(), (all.top - all.height * 0.04).roundToDouble(),
+          (all.width + all.height * 0.08).roundToDouble(), (all.height + all.height * 0.08).roundToDouble());
+
+      // The layers. The heartbeat: the green line over the name, up to the
+      // 'P' (about 42% to 80% across, above 40% down), with its specks. The
+      // tagline and its rules: everything right of the mark below 70% down;
+      // the app draws its own. The base: the rest.
+      final beatShapes = shapesWhere(source, (box) =>
+          box.left >= source.width * 0.41 && box.right <= source.width * 0.795 && box.bottom <= source.height * 0.4);
+      final taglineShapes =
+          shapesWhere(source, (box) => box.top >= source.height * 0.7 && box.left >= source.width * 0.27);
+      final beatSource = only(source, beatShapes).bounds();
+      final beatBox = Rect.fromLTRB(beatSource.left - 20, beatSource.top - 20, beatSource.right + 20, beatSource.bottom + 20);
+      final baseMask = Uint8List(source.width * source.height);
+      for (var q = 0; q < baseMask.length; q++) {
+        baseMask[q] = beatShapes[q] == 0 && taglineShapes[q] == 0 ? 1 : 0;
+      }
+      final base = only(source, baseMask).crop(logoBox);
+      final baseOnDark = withShadow(only(whiteLettering(source, logoMark, source.height), baseMask)).crop(logoBox);
+      final beat = only(source, beatShapes).crop(beatBox);
+      final beatOnDark = withShadow(only(source, beatShapes)).crop(beatBox);
+
+      // The widget places the heartbeat by these; they must match.
+      final heartbeatBox = Rect.fromLTWH((beatBox.left - logoBox.left) / logoBox.width, (beatBox.top - logoBox.top) / logoBox.height,
+          beatBox.width / logoBox.width, beatBox.height / logoBox.height);
+      // ignore: avoid_print
+      print('heartbeat box ${beatBox.left - logoBox.left}, ${beatBox.top - logoBox.top}, ${beatBox.width}, ${beatBox.height} '
+          'of ${logoBox.width} x ${logoBox.height}');
+      bool near(double a, double b) => (a - b).abs() < 1e-6;
+      final shown = HealthProLogo.heartbeatBox;
+      if (!near(shown.left, heartbeatBox.left) || !near(shown.top, heartbeatBox.top) ||
+          !near(shown.width, heartbeatBox.width) || !near(shown.height, heartbeatBox.height) ||
+          !near(HealthProLogo.aspectRatio, logoBox.width / logoBox.height)) {
+        throw Exception('Update HealthProLogo.heartbeatBox / aspectRatio to the numbers above.');
+      }
+
+      // The tagline is drawn in the brand font; tests have only a stand-in.
+      final font = FontLoader(brandFont)
+        ..addFont(Future.value(ByteData.sublistView(File('assets/fonts/PlusJakartaSans-Bold.ttf').readAsBytesSync())));
+      await font.load();
 
       // The mark, off the icon's white tile: the shapes well inside it (the
       // tile's edge and its shadow run round the outside).
@@ -369,17 +414,33 @@ void main() {
       final markOnDark = withShadow(markPixels);
 
       // ignore: avoid_print
-      print('logo ${logo.width}x${logo.height} (aspect ${(logo.width / logo.height).toStringAsFixed(4)}), '
+      print('logo ${base.width}x${base.height} (aspect ${(base.width / base.height).toStringAsFixed(4)}), '
           'mark ${markPixels.width}x${markPixels.height}');
 
-      final logoImage = await logo.toImage();
-      final logoOnDarkImage = await logoOnDark.toImage();
+      final baseImage = await base.toImage();
+      final baseOnDarkImage = await baseOnDark.toImage();
+      final beatImage = await beat.toImage();
+      final beatOnDarkImage = await beatOnDark.toImage();
       final markImage = await markPixels.toImage();
       final markOnDarkImage = await markOnDark.toImage();
 
-      Future<ui.Image> logoAt(double width, ui.Image image, {Color? background}) {
+      /// [image] scaled to [width].
+      Future<ui.Image> scaled(double width, ui.Image image) {
         final h = (width * image.height / image.width).round();
-        return render(width.round(), h, (c, s) => drawInto(c, image, Offset.zero & s), background: background);
+        return render(width.round(), h, (c, s) => drawInto(c, image, Offset.zero & s));
+      }
+
+      /// The whole logo [width] wide, as HealthProLogo shows it standing
+      /// still: the base, the heartbeat and the tagline.
+      Future<ui.Image> logoAt(double width, {required bool dark, Color? background}) {
+        final h = (width / HealthProLogo.aspectRatio).round();
+        return render(width.round(), h, (c, s) {
+          drawInto(c, dark ? baseOnDarkImage : baseImage, Offset.zero & s);
+          final b = HealthProLogo.heartbeatBox;
+          drawInto(c, dark ? beatOnDarkImage : beatImage,
+              Rect.fromLTWH(b.left * s.width, b.top * s.height, b.width * s.width, b.height * s.height));
+          HealthProTagline(onDark: dark).paint(c, s);
+        }, background: background);
       }
 
       /// The mark (or [image]) in a [size] square, [scale] of its side, on
@@ -394,16 +455,23 @@ void main() {
       if (preview != null) {
         final photoCodec = await ui.instantiateImageCodec(File('assets/auth/background.jpg').readAsBytesSync());
         final photo = (await photoCodec.getNextFrame()).image;
-        Future<ui.Image> onPhoto(double logoWidth) => render(1350, 560, (c, s) {
-              final crop = Rect.fromLTWH(0, 0, photo.width.toDouble(), photo.width * 560 / 1350);
-              c.drawImageRect(photo, crop, Offset.zero & s, Paint()..filterQuality = FilterQuality.high);
-              c.drawRect(Offset.zero & s, Paint()..color = navy.withValues(alpha: 0.35));
-              final h = logoWidth * logoOnDarkImage.height / logoOnDarkImage.width;
-              drawInto(c, logoOnDarkImage, Rect.fromLTWH(190, 95, logoWidth, h));
-            });
+        Future<ui.Image> onPhoto(double logoWidth) async {
+          final logo = await logoAt(logoWidth, dark: true);
+          return render(1350, 560, (c, s) {
+            final crop = Rect.fromLTWH(0, 0, photo.width.toDouble(), photo.width * 560 / 1350);
+            c.drawImageRect(photo, crop, Offset.zero & s, Paint()..filterQuality = FilterQuality.high);
+            c.drawRect(Offset.zero & s, Paint()..color = navy.withValues(alpha: 0.35));
+            c.drawImage(logo, const Offset(190, 95), Paint());
+          });
+        }
         await save('$preview/on_photo.png', await onPhoto(790));
-        await save('$preview/logo_light.png', await logoAt(900, logoImage, background: Colors.white));
-        await save('$preview/logo_dark.png', await logoAt(900, logoOnDarkImage, background: navy));
+        await save('$preview/logo_light.png', await logoAt(900, dark: false, background: Colors.white));
+        await save('$preview/logo_dark.png', await logoAt(900, dark: true, background: navy));
+        // The sizes the side menu shows it at (54 tall), at 1x and 2x.
+        await save('$preview/menu_1x.png', await logoAt(185, dark: false, background: Colors.white));
+        await save('$preview/menu_2x.png', await logoAt(370, dark: false, background: Colors.white));
+        await save('$preview/menu_dark_2x.png', await logoAt(370, dark: true, background: navy));
+        await save('$preview/beat.png', beatImage);
         await save('$preview/mark_dark.png', await markAt(256, background: navy));
         await save('$preview/app_icon.png', await markAt(512, scale: 0.84, background: Colors.white), opaque: true);
         // Close up: the cross's edge, 3x.
@@ -420,24 +488,28 @@ void main() {
       const res = '$app/android/app/src/main/res';
       const ios = '$app/ios/Runner/Assets.xcassets';
 
-      // In the app (HealthProLogo): the logo 1600 wide (150 tall at 3x), the
-      // mark 512 square (it shows 54 tall at most).
-      await saveWebp('$images/logo.webp', await logoAt(1600, logoImage));
-      await saveWebp('$images/logo_on_dark.webp', await logoAt(1600, logoOnDarkImage));
+      // In the app (HealthProLogo, the splash too): the base as for a logo
+      // 1600 wide (150 tall at 3x), the heartbeat at the same scale, the mark
+      // 512 square (it shows 54 tall at most).
+      await saveWebp('$images/logo_base.webp', await scaled(1600, baseImage));
+      await saveWebp('$images/logo_base_on_dark.webp', await scaled(1600, baseOnDarkImage));
+      final beatWidth = 1600 * HealthProLogo.heartbeatBox.width;
+      await saveWebp('$images/logo_heartbeat.webp', await scaled(beatWidth, beatImage));
+      await saveWebp('$images/logo_heartbeat_on_dark.webp', await scaled(beatWidth, beatOnDarkImage));
       await saveWebp('$images/mark.webp', await markAt(512));
       await saveWebp('$images/mark_on_dark.webp', await markAt(512, image: markOnDarkImage));
 
       // Launch screens, on navy: the white-lettered logo, 240 wide.
-      await saveWebp('$app/web/splash/logo.webp', await logoAt(720, logoOnDarkImage));
+      await saveWebp('$app/web/splash/logo.webp', await logoAt(720, dark: true));
       for (final (dpi, scale) in [('mdpi', 1.0), ('hdpi', 1.5), ('xhdpi', 2.0), ('xxhdpi', 3.0), ('xxxhdpi', 4.0)]) {
-        await save('$res/drawable-$dpi/splash_logo.png', await logoAt(240 * scale, logoOnDarkImage));
+        await save('$res/drawable-$dpi/splash_logo.png', await logoAt(240 * scale, dark: true));
         // Android 12+: the mark in its 288dp icon, inside the 192dp circle.
         await save('$res/drawable-$dpi/splash_icon.png', await markAt((288 * scale).round(), scale: 0.5));
         await save('$res/mipmap-$dpi/ic_launcher.png',
             await markAt((48 * scale).round(), scale: 0.86, background: Colors.white), opaque: true);
       }
       for (final (suffix, scale) in [('', 1), ('@2x', 2), ('@3x', 3)]) {
-        await save('$ios/LaunchImage.imageset/LaunchImage$suffix.png', await logoAt(240.0 * scale, logoOnDarkImage));
+        await save('$ios/LaunchImage.imageset/LaunchImage$suffix.png', await logoAt(240.0 * scale, dark: true));
       }
 
       // App icons: the mark on white. iOS rounds them itself and wants no

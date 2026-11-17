@@ -119,6 +119,7 @@ void main() {
       ]);
       await tester.pumpAndSettle();
       expect(find.text('Nu. 1,500 – 2,200'), findsOneWidget, reason: 'from its packages on sale');
+      expect(find.byTooltip('All gyms'), findsOneWidget, reason: 'opened straight, back leads to the list of gyms');
       expect(find.text('Ask for Sonam Tobgay'), findsOneWidget);
       expect(find.text('hello@peak.bt'), findsOneWidget);
       for (final heading in ['Facilities', 'Videos', 'Opening hours', 'Where it is']) {

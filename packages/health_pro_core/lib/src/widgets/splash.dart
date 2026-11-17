@@ -7,8 +7,9 @@ import '../theme/brand.dart';
 import 'logo.dart';
 
 /// The splash screen: the white-lettered logo in the middle of the side
-/// menu's navy, a slim green bar (the logo's green) running under it. Shown while the app gets
-/// ready (the modules load at start), in both themes.
+/// menu's navy, its heartbeat tracing, a slim green bar (the logo's green)
+/// running under it. Shown while the app gets ready (the modules load at
+/// start), in both themes.
 ///
 /// Before Flutter starts, the launch screens show the same logo at the same
 /// size and place, so the handover doesn't jump. Keep them in step:
@@ -25,26 +26,27 @@ class HealthProSplash extends StatelessWidget {
   /// From the logo's foot to the bar.
   static const barGap = 36.0;
 
-  static final _logo = AssetImage(
-    HealthProLogo.assetFor(markOnly: false, onDark: true),
-    package: HealthProLogo.package,
-  );
-
-  /// Reads the logo ahead of the first frame (main, before runApp), so the
-  /// splash shows it at once rather than blinking in after the launch
-  /// screen. Never takes more than a few seconds, and never fails.
+  /// Reads the logo's pictures ahead of the first frame (main, before
+  /// runApp), so the splash shows it at once rather than blinking in after
+  /// the launch screen. Never takes more than a few seconds, and never fails.
   static Future<void> precacheLogo() {
-    final done = Completer<void>();
-    final stream = _logo.resolve(ImageConfiguration.empty);
-    late final ImageStreamListener listener;
-    void finish() {
-      if (!done.isCompleted) done.complete();
-      stream.removeListener(listener);
+    Future<void> read(String part) {
+      final done = Completer<void>();
+      final image = AssetImage(HealthProLogo.assetFor(part, onDark: true), package: HealthProLogo.package);
+      final stream = image.resolve(ImageConfiguration.empty);
+      late final ImageStreamListener listener;
+      void finish() {
+        if (!done.isCompleted) done.complete();
+        stream.removeListener(listener);
+      }
+
+      listener = ImageStreamListener((_, __) => finish(), onError: (_, __) => finish());
+      stream.addListener(listener);
+      return done.future;
     }
 
-    listener = ImageStreamListener((_, __) => finish(), onError: (_, __) => finish());
-    stream.addListener(listener);
-    return done.future.timeout(const Duration(seconds: 3), onTimeout: () {});
+    return Future.wait([read('logo_base'), read('logo_heartbeat')])
+        .timeout(const Duration(seconds: 3), onTimeout: () => const []);
   }
 
   @override
@@ -64,13 +66,8 @@ class HealthProSplash extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, box) => Stack(
             children: [
-              Center(
-                child: SizedBox(
-                  width: width,
-                  height: height,
-                  child: Image(image: _logo, fit: BoxFit.contain, semanticLabel: 'Health Pro'),
-                ),
-              ),
+              // The heartbeat starts tracing at once: the splash is short.
+              Center(child: HealthProLogo(height: height, onDark: true, delay: Duration.zero)),
               Positioned(
                 left: 0,
                 right: 0,

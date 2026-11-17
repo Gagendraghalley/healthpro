@@ -33,6 +33,15 @@ class _GymWelcomePageState extends ConsumerState<GymWelcomePage> {
   final _faqKey = GlobalKey();
   bool _scrolled = false;
 
+  /// The page's beat (_Beat), counted by [_beat].
+  final _beats = ValueNotifier<int>(0);
+  Timer? _beat;
+
+  void _restartBeat() {
+    _beat?.cancel();
+    _beat = Timer.periodic(_Beat.interval, (_) => _beats.value++);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +53,8 @@ class _GymWelcomePageState extends ConsumerState<GymWelcomePage> {
 
   @override
   void dispose() {
+    _beat?.cancel();
+    _beats.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -76,11 +87,23 @@ class _GymWelcomePageState extends ConsumerState<GymWelcomePage> {
     for (final slide in _slides) {
       precacheImage(GymPhoto.provider(slide.photo), context);
     }
+    if (reduceMotion(context)) {
+      _beat?.cancel();
+      _beat = null;
+    } else if (_beat == null) {
+      _restartBeat();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return GymType(child: _page(_Layout(MediaQuery.sizeOf(context).width)));
+    return GymType(
+      child: _Beat(
+        beats: _beats,
+        restart: () => _beat == null ? null : _restartBeat(),
+        child: _page(_Layout(MediaQuery.sizeOf(context).width)),
+      ),
+    );
   }
 
   Widget _page(_Layout layout) {
@@ -2190,6 +2213,31 @@ class _Revealed extends InheritedWidget {
   bool updateShouldNotify(_Revealed old) => old.shown != shown;
 }
 
+/// The page's beat. On every one the lights on the page (what it does, how
+/// it works) move on together, and what they set moving is still again
+/// within [settle], so the page rests a moment before the next. It counts
+/// nothing when the device asks for less motion.
+class _Beat extends InheritedNotifier<ValueNotifier<int>> {
+  /// Starts the beat again from now.
+  final VoidCallback restart;
+
+  const _Beat({required ValueNotifier<int> beats, required this.restart, required super.child}) : super(notifier: beats);
+
+  static const interval = Duration(seconds: 2);
+
+  /// How long what moves on a beat may take.
+  static const settle = Duration(milliseconds: 1600);
+
+  /// The beats so far, from 0.
+  static int of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<_Beat>()?.notifier?.value ?? 0;
+
+  /// The beats so far, without listening for more (in a tap, say).
+  static int peek(BuildContext context) => context.getInheritedWidgetOfExactType<_Beat>()?.notifier?.value ?? 0;
+
+  /// Starts the page's beat again from now, as when someone picks a step.
+  static void restartOf(BuildContext context) => context.getInheritedWidgetOfExactType<_Beat>()?.restart();
+}
+
 /// One of a section's cards: it rises into place [order] beats after the
 /// section comes into view, so a row of cards arrives one after another.
 class _RevealItem extends StatefulWidget {
@@ -2253,7 +2301,15 @@ class _Highlight {
 /// What it does, on one card rising into the top's wave: numbered like an
 /// index, a thin orange light along its top edge. Side by side on a computer,
 /// a list on a tablet or a phone.
-class _Highlights extends StatelessWidget {
+///
+/// On every beat of the page (_Beat) the light moves on to the next item: a
+/// soft orange panel glides over to it, stretching as it goes (its leading
+/// edge first, the other catching up), the light along the top edge riding
+/// with it on a computer. As it arrives the item lights up: its tile fills
+/// with orange, sends out a ripple and breathes, its name turns orange, and a
+/// thin bar along the panel's foot fills while it stays. With less motion
+/// nothing moves; the mouse still lights an item.
+class _Highlights extends StatefulWidget {
   final _Layout layout;
 
   const _Highlights({required this.layout});
@@ -2267,17 +2323,122 @@ class _Highlights extends StatelessWidget {
   ];
 
   @override
+  State<_Highlights> createState() => _HighlightsState();
+}
+
+class _HighlightsState extends State<_Highlights> with TickerProviderStateMixin {
+  /// How the panel's leading edge moves, and how the other catches up.
+  static const _lead = Interval(0, 0.7, curve: Curves.easeOutCubic);
+  static const _trail = Interval(0.3, 1, curve: Curves.easeInOutCubic);
+
+  /// The lit item and the one before it; none when the device asks for less
+  /// motion.
+  int? _active;
+  int? _previous;
+
+  /// Back round to the first: the panel pops in there, rather than gliding
+  /// back across the whole card.
+  bool _popIn = false;
+
+  /// Where each item sits on the card, measured once it's laid out.
+  List<Rect>? _rects;
+  final _card = GlobalKey();
+  final _items = [for (final _ in _Highlights.items) GlobalKey()];
+
+  late final AnimationController _breath = AnimationController(vsync: this, duration: _Beat.settle);
+
+  /// The panel's glide from the item before to the lit one.
+  late final AnimationController _glide = AnimationController(vsync: this, duration: Motion.card, value: 1);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final beat = _Beat.of(context);
+    if (reduceMotion(context)) {
+      _active = _previous = null;
+      _popIn = false;
+      _breath.value = 0;
+      _glide.value = 1;
+      return;
+    }
+    final active = beat % _Highlights.items.length;
+    if (active == _active) return;
+    _popIn = _active != null && active < _active!;
+    _previous = _popIn ? null : _active;
+    _active = active;
+    _breath.forward(from: 0);
+    if (_previous == null && !_popIn) {
+      _glide.value = 1;
+    } else {
+      _glide.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _breath.dispose();
+    _glide.dispose();
+    super.dispose();
+  }
+
+  /// Measures where the items sit on the card, for the panel to glide between.
+  void _measure() {
+    if (!mounted) return;
+    final card = _card.currentContext?.findRenderObject();
+    if (card is! RenderBox || !card.hasSize) return;
+    final rects = <Rect>[];
+    for (final key in _items) {
+      final box = key.currentContext?.findRenderObject();
+      if (box is! RenderBox || !box.hasSize) return;
+      rects.add(box.localToGlobal(Offset.zero, ancestor: card) & box.size);
+    }
+    final old = _rects;
+    if (old != null && old.length == rects.length && [for (var i = 0; i < rects.length; i++) old[i] == rects[i]].every((same) => same)) {
+      return;
+    }
+    setState(() => _rects = rects);
+  }
+
+  /// Where the panel is [t] of the way through its glide: each edge moves on
+  /// its own, the leading one first, so it stretches and then catches up.
+  Rect _panel(List<Rect> rects, int active, double t) {
+    final to = rects[active].deflate(4);
+    final from = rects[_previous ?? active].deflate(4);
+    final forward = to.center.dx >= from.center.dx;
+    final down = to.center.dy >= from.center.dy;
+    double edge(double a, double b, bool leads) => a + (b - a) * (leads ? _lead : _trail).transform(t);
+    return Rect.fromLTRB(
+      edge(from.left, to.left, !forward),
+      edge(from.top, to.top, !down),
+      edge(from.right, to.right, forward),
+      edge(from.bottom, to.bottom, down),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
+    final layout = widget.layout;
+    const items = _Highlights.items;
+    final active = _active;
+    final rects = _rects;
     final ink = _Ink.of(context);
     final brand = context.brand;
     final cells = [
       for (final (i, item) in items.indexed)
-        _RevealItem(order: i + 2, child: _HighlightCell(item: item, number: i + 1, inRow: !layout.wide)),
+        SizedBox(
+          key: _items[i],
+          child: _RevealItem(
+            order: i + 2,
+            child: _HighlightCell(item: item, number: i + 1, inRow: !layout.wide, lit: i == active, breath: _breath),
+          ),
+        ),
     ];
     final Widget content;
     if (layout.wide) {
       content = IntrinsicHeight(
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             for (var i = 0; i < cells.length; i++) ...[
               if (i > 0) VerticalDivider(width: 1, color: brand.glassBorder, indent: 14, endIndent: 14),
@@ -2296,6 +2457,10 @@ class _Highlights extends StatelessWidget {
         ],
       );
     }
+    LinearGradient glow(double alpha) => LinearGradient(
+          colors: [brand.highlight.withValues(alpha: 0), brand.highlight.withValues(alpha: alpha), brand.highlight.withValues(alpha: 0)],
+        );
+    final moving = active != null && rects != null;
     return Transform.translate(
       offset: const Offset(0, -_Layout.overlap),
       child: _Frame(
@@ -2311,27 +2476,51 @@ class _Highlights extends StatelessWidget {
               boxShadow: ink.shadow(light: 0.1, dark: 0.4, blur: 48, dy: 20),
             ),
             child: Stack(
+              key: _card,
               children: [
+                if (moving)
+                  AnimatedBuilder(
+                    animation: Listenable.merge([_glide, _breath]),
+                    builder: (context, _) {
+                      final t = _glide.value;
+                      final panel = _HighlightPanel(turn: _breath.value);
+                      return Positioned.fromRect(
+                        rect: _panel(rects, active, t),
+                        child: _popIn
+                            ? Opacity(
+                                opacity: Motion.ease.transform(t),
+                                child: Transform.scale(scale: 0.9 + 0.1 * Motion.pop.transform(t), child: panel),
+                              )
+                            : panel,
+                      );
+                    },
+                  ),
                 Padding(padding: EdgeInsets.all(layout.medium ? 10 : 6), child: content),
                 // A thin light of the brand's orange along the top edge,
-                // brightest in the middle.
+                // brightest in the middle; on a computer, brightest over the
+                // lit item and riding along with the panel.
                 Positioned(
                   left: 0,
                   right: 0,
                   top: 0,
                   height: 2,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          brand.highlight.withValues(alpha: 0),
-                          brand.highlight.withValues(alpha: 0.9),
-                          brand.highlight.withValues(alpha: 0),
-                        ],
-                      ),
-                    ),
-                  ),
+                  child: DecoratedBox(decoration: BoxDecoration(gradient: glow(moving && layout.wide ? 0.3 : 0.9))),
                 ),
+                if (moving && layout.wide)
+                  AnimatedBuilder(
+                    animation: _glide,
+                    builder: (context, _) {
+                      final panel = _panel(rects, active, _glide.value);
+                      final width = panel.width * 1.4;
+                      return Positioned(
+                        left: panel.center.dx - width / 2,
+                        width: width,
+                        top: 0,
+                        height: 2.5,
+                        child: DecoratedBox(decoration: BoxDecoration(gradient: glow(1))),
+                      );
+                    },
+                  ),
               ],
             ),
           ),
@@ -2341,16 +2530,130 @@ class _Highlights extends StatelessWidget {
   }
 }
 
+/// The soft orange panel under the lit item, with a bar along its foot
+/// showing how far through its [turn] (0 to 1) the item is.
+class _HighlightPanel extends StatelessWidget {
+  final double turn;
+
+  const _HighlightPanel({required this.turn});
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = _Ink.of(context);
+    final accent = context.brand.accent;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.alphaBlend(accent.withValues(alpha: 0.15), ink.card),
+            Color.alphaBlend(accent.withValues(alpha: 0.05), ink.card),
+          ],
+        ),
+        border: Border.all(color: accent.withValues(alpha: 0.3)),
+        boxShadow: [BoxShadow(color: accent.withValues(alpha: 0.16), blurRadius: 24, offset: const Offset(0, 10))],
+      ),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 7),
+          child: _TurnBar(turn: turn),
+        ),
+      ),
+    );
+  }
+}
+
+/// How far through its turn the lit item is: a bar filling to the right,
+/// easing in once the panel has landed and easing out as it fills, a glint of
+/// light sweeping along what's filled and a glowing bead at its head.
+class _TurnBar extends StatelessWidget {
+  final double turn;
+
+  const _TurnBar({required this.turn});
+
+  /// Waits for the panel to land, then fills by the end of the turn.
+  static const _fill = Interval(0.25, 1, curve: Curves.easeInOutCubic);
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final orange = brand.highlight;
+    final fill = _fill.transform(turn.clamp(0.0, 1.0));
+    // The glint runs along twice as fast as the bar fills.
+    final glint = (fill * 2) % 1;
+    return SizedBox(
+      width: double.infinity,
+      height: 10,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final width = box.maxWidth * fill;
+          return Stack(
+            clipBehavior: Clip.none,
+            alignment: AlignmentDirectional.centerStart,
+            children: [
+              Container(
+                height: 3,
+                decoration: BoxDecoration(color: brand.accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(3)),
+              ),
+              if (fill > 0) ...[
+                Container(
+                  width: width,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(3),
+                    gradient: LinearGradient(
+                      colors: [
+                        orange.withValues(alpha: 0.35),
+                        orange,
+                        Color.lerp(orange, Colors.white, 0.75)!,
+                        orange,
+                        orange,
+                      ],
+                      stops: [0, math.max(0, glint - 0.18), glint, math.min(1, glint + 0.18), 1],
+                    ),
+                    boxShadow: [BoxShadow(color: orange.withValues(alpha: 0.35), blurRadius: 6)],
+                  ),
+                ),
+                // The bead at its head, glowing.
+                PositionedDirectional(
+                  start: width - 4,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color.lerp(orange, Colors.white, 0.55),
+                      border: Border.all(color: orange, width: 2),
+                      boxShadow: [BoxShadow(color: orange.withValues(alpha: 0.7), blurRadius: 10, spreadRadius: 1)],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 /// What Health Pro does, one thing, numbered: its icon on a softly lit tile,
 /// then its name and what it means. Under the mouse the cell lifts onto a
-/// faint wash and the tile fills with the brand's orange. A row on a tablet
-/// or a phone ([inRow]): the tile beside the words.
+/// faint wash; lit, or under the mouse, the tile fills with the brand's
+/// orange. Lit (the panel under it), the tile sends out a ripple, breathes
+/// with a little wiggle and the name turns orange. A row on a tablet or a
+/// phone ([inRow]): the tile beside the words.
 class _HighlightCell extends StatefulWidget {
   final _Highlight item;
   final int number;
   final bool inRow;
+  final bool lit;
+  final Animation<double> breath;
 
-  const _HighlightCell({required this.item, required this.number, this.inRow = false});
+  const _HighlightCell({required this.item, required this.number, required this.breath, this.inRow = false, this.lit = false});
 
   @override
   State<_HighlightCell> createState() => _HighlightCellState();
@@ -2361,29 +2664,96 @@ class _HighlightCellState extends State<_HighlightCell> {
 
   @override
   Widget build(BuildContext context) {
+    final still = reduceMotion(context);
+    final light = _lighting(context, widget.lit);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(end: widget.lit ? 1 : 0),
+        duration: light.duration,
+        curve: light.curve,
+        builder: (context, lit, _) => TweenAnimationBuilder<double>(
+          tween: Tween(end: _hover && !still ? 1 : 0),
+          duration: still ? Duration.zero : Motion.hover,
+          curve: Motion.ease,
+          builder: (context, hover, _) => AnimatedBuilder(
+            animation: widget.lit ? widget.breath : const AlwaysStoppedAnimation(0.0),
+            builder: (context, _) => _cell(
+              context,
+              lit: lit,
+              hover: widget.lit ? 0 : hover,
+              breath: widget.lit ? widget.breath.value : 1,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The cell [lit] and under the mouse ([hover]), each 0 to 1, [breath] of
+  /// the way through its turn.
+  Widget _cell(BuildContext context, {required double lit, required double hover, required double breath}) {
     final item = widget.item;
     final ink = _Ink.of(context);
     final brand = context.brand;
     final accent = brand.accent;
-    final hover = _hover && !reduceMotion(context);
-    final tile = AnimatedContainer(
-      duration: Motion.hover,
-      curve: Motion.ease,
-      width: 46,
-      height: 46,
-      decoration: BoxDecoration(
-        color: hover ? accent : null,
-        gradient: hover
-            ? null
-            : LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [accent.withValues(alpha: 0.18), accent.withValues(alpha: 0.05)],
+    final on = math.max(lit, hover);
+    final swell = _swell(breath);
+    // One ring spreading from the tile as the panel arrives.
+    final ripple = ((breath - 0.28) / 0.45).clamp(0.0, 1.0);
+    final tile = Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        if (widget.lit && ripple > 0 && ripple < 1)
+          Transform.scale(
+            scale: 1 + 0.65 * ripple,
+            child: Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: accent.withValues(alpha: 0.55 * (1 - ripple)), width: 2),
               ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: accent.withValues(alpha: hover ? 0 : 0.18)),
-      ),
-      child: Icon(item.icon, size: 23, color: hover ? BrandColors.navy : brand.accentText),
+            ),
+          ),
+        Transform.scale(
+          scale: 1 + 0.07 * swell,
+          child: Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              gradient: LinearGradient.lerp(
+                LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [accent.withValues(alpha: 0.18), accent.withValues(alpha: 0.05)],
+                ),
+                LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color.lerp(accent, Colors.white, 0.15)!, accent],
+                ),
+                on,
+              ),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: accent.withValues(alpha: 0.18 * (1 - on))),
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withValues(alpha: (0.3 + 0.2 * swell) * lit),
+                  blurRadius: 14 + 10 * swell,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Transform.rotate(
+              angle: _wiggle(breath),
+              child: Icon(item.icon, size: 23, color: Color.lerp(brand.accentText, BrandColors.navy, on)),
+            ),
+          ),
+        ),
+      ],
     );
     final number = Text(
       widget.number.toString().padLeft(2, '0'),
@@ -2391,53 +2761,53 @@ class _HighlightCellState extends State<_HighlightCell> {
         fontSize: 12,
         fontWeight: FontWeight.w800,
         letterSpacing: 1.2,
-        color: hover ? brand.accentText : brand.muted.withValues(alpha: 0.55),
+        color: Color.lerp(brand.muted.withValues(alpha: 0.55), brand.accentText, on),
       ),
     );
     final title = Text(
       item.title,
-      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: ink.heading, height: 1.25, letterSpacing: -0.3),
-    );
-    final text = Text(item.text, style: TextStyle(fontSize: 13, color: brand.muted, height: 1.45));
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: AnimatedContainer(
-        duration: Motion.hover,
-        curve: Motion.ease,
-        margin: const EdgeInsets.all(4),
-        padding: widget.inRow ? const EdgeInsets.fromLTRB(12, 14, 14, 14) : const EdgeInsets.fromLTRB(14, 16, 14, 18),
-        transform: Matrix4.translationValues(0, hover ? -2 : 0, 0),
-        decoration: BoxDecoration(
-          color: hover ? ink.tint.withValues(alpha: ink.tint.a * 0.7) : ink.tint.withValues(alpha: 0),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: widget.inRow
-            ? Row(
-                children: [
-                  tile,
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [title, const SizedBox(height: 2), text],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  number,
-                ],
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [tile, const Spacer(), number]),
-                  const SizedBox(height: 18),
-                  title,
-                  const SizedBox(height: 5),
-                  text,
-                ],
-              ),
+      style: TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w800,
+        color: Color.lerp(ink.heading, brand.accentText, lit),
+        height: 1.25,
+        letterSpacing: -0.3,
       ),
+    );
+    final text = Text(item.text, style: TextStyle(fontSize: 13, color: Color.lerp(brand.muted, ink.body, lit), height: 1.45));
+    return Container(
+      margin: const EdgeInsets.all(4),
+      padding: widget.inRow ? const EdgeInsets.fromLTRB(12, 14, 14, 22) : const EdgeInsets.fromLTRB(14, 16, 14, 26),
+      transform: Matrix4.translationValues(0, -2 * hover, 0),
+      decoration: BoxDecoration(
+        color: ink.tint.withValues(alpha: ink.tint.a * 0.7 * hover),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: widget.inRow
+          ? Row(
+              children: [
+                tile,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [title, const SizedBox(height: 2), text],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                number,
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [tile, const Spacer(), number]),
+                const SizedBox(height: 18),
+                title,
+                const SizedBox(height: 5),
+                text,
+              ],
+            ),
     );
   }
 }
@@ -3219,9 +3589,15 @@ class _Step {
   const _Step(this.icon, this.title, this.text);
 }
 
-/// Five steps from signing up to training, on a line that warms towards the
+/// Five steps from signing up to training, on a line from the first to the
 /// goal: side by side on a wide window, down the page on a narrow one.
-class _Steps extends StatelessWidget {
+///
+/// Once the section is in view the light walks through them, one step on
+/// every beat of the page (_Beat), then starts again: a spark runs along the
+/// line to the next step, whose circle fills and breathes and whose card
+/// lifts, its title in orange. The dots underneath show where it is; tapping
+/// one goes there. With less motion it stands still on the goal.
+class _Steps extends StatefulWidget {
   final _Layout layout;
 
   const _Steps({super.key, required this.layout});
@@ -3235,7 +3611,64 @@ class _Steps extends StatelessWidget {
   ];
 
   @override
+  State<_Steps> createState() => _StepsState();
+}
+
+class _StepsState extends State<_Steps> with SingleTickerProviderStateMixin {
+  static final _last = _Steps.steps.length - 1;
+
+  /// The lit step; those before it are passed.
+  int _active = _last;
+
+  /// The beat the walk was on the first step; none until the section is seen.
+  int? _from;
+  late final AnimationController _breath = AnimationController(vsync: this, duration: _Beat.settle);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final shown = _Revealed.of(context);
+    final beat = _Beat.of(context);
+    if (reduceMotion(context)) {
+      _from = null;
+      _breath.value = 0;
+      _active = _last;
+    } else if (shown) {
+      if (_from == null) {
+        // Seen at last: the walk starts from the first step, on a fresh beat.
+        _from = beat;
+        _Beat.restartOf(context);
+      }
+      final step = (beat - _from!) % _Steps.steps.length;
+      if (step != _active) _light(step);
+    }
+  }
+
+  /// Lights [step], its breath starting now.
+  void _light(int step) {
+    _active = step;
+    _breath.forward(from: 0);
+  }
+
+  /// Moves the light to [step], to walk on from there a whole beat later.
+  void _pick(int step) {
+    if (reduceMotion(context)) return setState(() => _active = step);
+    _from = _Beat.peek(context) - step;
+    _Beat.restartOf(context);
+    setState(() => _light(step));
+  }
+
+  @override
+  void dispose() {
+    _breath.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final layout = widget.layout;
+    const steps = _Steps.steps;
+    final active = _active;
     final ink = _Ink.of(context);
     final title = TextStyle(
       fontSize: layout.titleSize,
@@ -3244,7 +3677,6 @@ class _Steps extends StatelessWidget {
       letterSpacing: -layout.titleSize * 0.03,
       color: ink.heading,
     );
-    final last = steps.length - 1;
     return Padding(
       padding: EdgeInsets.only(bottom: layout.section),
       child: _Frame(
@@ -3263,33 +3695,72 @@ class _Steps extends StatelessWidget {
               LayoutBuilder(
                 builder: (context, box) {
                   final each = box.maxWidth / steps.length;
+                  final along = (box.maxWidth - each) * active / _last;
                   final accent = context.brand.accent;
+                  final move = reduceMotion(context) ? Duration.zero : Motion.card;
+                  const middle = _StepColumn.circle / 2;
                   return Stack(
+                    clipBehavior: Clip.none,
                     children: [
                       // The line through the steps, from the first to the goal.
                       Positioned(
                         left: each / 2,
                         right: each / 2,
-                        top: _StepColumn.circle / 2 - 1,
+                        top: middle - 1,
                         height: 2,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(2),
-                            gradient: LinearGradient(colors: [accent.withValues(alpha: 0.18), accent.withValues(alpha: 0.85)]),
+                            gradient: LinearGradient(
+                              colors: [accent.withValues(alpha: 0.1), accent.withValues(alpha: 0.24), accent.withValues(alpha: 0.1)],
+                            ),
                           ),
                         ),
                       ),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          for (var i = 0; i < steps.length; i++)
-                            Expanded(
-                              child: _RevealItem(
-                                order: i,
-                                child: _StepColumn(number: i + 1, step: steps[i], goal: i == last),
+                      // How far the light has come, and the spark running at its head.
+                      AnimatedPositioned(
+                        duration: move,
+                        curve: Motion.easeInOut,
+                        left: each / 2,
+                        width: along,
+                        top: middle - 1,
+                        height: 2,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(2),
+                            gradient: LinearGradient(colors: [accent.withValues(alpha: 0.55), accent]),
+                          ),
+                        ),
+                      ),
+                      AnimatedPositioned(
+                        duration: move,
+                        curve: Motion.easeInOut,
+                        left: each / 2 + along - 5,
+                        top: middle - 5,
+                        width: 10,
+                        height: 10,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: accent,
+                            boxShadow: [BoxShadow(color: accent.withValues(alpha: 0.6), blurRadius: 12, spreadRadius: 1)],
+                          ),
+                        ),
+                      ),
+                      // The cards stand level, as tall as the tallest.
+                      IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (var i = 0; i < steps.length; i++)
+                              Expanded(
+                                child: _RevealItem(
+                                  order: i,
+                                  child: _StepColumn(number: i + 1, step: steps[i], lit: i == active, breath: _breath),
+                                ),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   );
@@ -3301,10 +3772,23 @@ class _Steps extends StatelessWidget {
                 child: Column(
                   children: [
                     for (var i = 0; i < steps.length; i++)
-                      _RevealItem(order: i, child: _StepRow(number: i + 1, step: steps[i], goal: i == last)),
+                      _RevealItem(
+                        order: i,
+                        child: _StepRow(
+                          number: i + 1,
+                          step: steps[i],
+                          lit: i == active,
+                          reached: i <= active,
+                          passed: i < active,
+                          last: i == _last,
+                          breath: _breath,
+                        ),
+                      ),
                   ],
                 ),
               ),
+            SizedBox(height: layout.stepsInRow ? 44 : 28),
+            _StepDots(active: active, onPick: _pick),
           ],
         ),
       ),
@@ -3312,60 +3796,124 @@ class _Steps extends StatelessWidget {
   }
 }
 
-/// A step's icon in a ring: a soft orange disc in a card-coloured ring, or,
-/// for the [goal], filled with the brand's orange and glowing. Under the
-/// pointer ([hover]) it lifts and its ring warms.
+/// How far along a lit step's [breath] (0 to 1) it has swelled: in, then
+/// out again.
+double _swell(double breath) => math.sin(math.pi * breath);
+
+/// How a step lights up or goes dark: going dark starts at once, lighting
+/// waits for the spark to run along the line to it.
+({Duration duration, Curve curve}) _lighting(BuildContext context, bool lit) {
+  if (reduceMotion(context)) return (duration: Duration.zero, curve: Motion.ease);
+  return lit
+      ? (duration: Motion.card * 2, curve: const Interval(0.5, 1, curve: Motion.ease))
+      : (duration: Motion.card, curve: Motion.ease);
+}
+
+/// A little wiggle, 3° each way, a third of the way into a [breath].
+double _wiggle(double breath) {
+  const from = 0.3, length = 0.25;
+  if (breath < from || breath > from + length) return 0;
+  return math.sin(2 * math.pi * (breath - from) / length) * 3 * math.pi / 180;
+}
+
+/// A step's icon in a card-coloured ring, on a soft orange disc. Lit, the
+/// disc fills with the brand's orange and the ring glows; the whole circle
+/// takes one slow [breath], a halo swelling in the ring and the icon giving a
+/// little wiggle. Under the pointer ([hover]) it lifts and its ring warms.
 class _StepCircle extends StatelessWidget {
   final IconData icon;
   final double size;
-  final bool goal;
+  final bool lit;
   final bool hover;
+  final Animation<double> breath;
 
-  const _StepCircle({required this.icon, required this.size, this.goal = false, this.hover = false});
+  const _StepCircle({required this.icon, required this.size, required this.breath, this.lit = false, this.hover = false});
 
   @override
   Widget build(BuildContext context) {
     final ink = _Ink.of(context);
     final brand = context.brand;
     final accent = brand.accent;
-    return AnimatedContainer(
-      duration: Motion.hover,
+    final still = reduceMotion(context);
+    final ring = hover ? accent.withValues(alpha: 0.55) : brand.glassBorder;
+    final soft = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [accent.withValues(alpha: 0.16), accent.withValues(alpha: 0.04)],
+    );
+    final filled = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color.lerp(brand.highlight, Colors.white, 0.2)!, brand.highlight],
+    );
+    return AnimatedSlide(
+      offset: Offset(0, hover ? -3 / size : 0),
+      duration: still ? Duration.zero : Motion.hover,
       curve: Motion.ease,
-      width: size,
-      height: size,
-      transform: Matrix4.translationValues(0, hover ? -3 : 0, 0),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: goal ? null : ink.card,
-        gradient: goal
-            ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color.lerp(brand.highlight, Colors.white, 0.2)!, brand.highlight],
-              )
-            : null,
-        border: Border.all(
-          color: goal ? brand.highlight : (hover ? accent.withValues(alpha: 0.55) : brand.glassBorder),
-          width: 1.5,
-        ),
-        boxShadow: goal
-            ? [BoxShadow(color: brand.highlight.withValues(alpha: hover ? 0.5 : 0.35), blurRadius: 28, offset: const Offset(0, 10))]
-            : ink.shadow(light: hover ? 0.12 : 0.08, dark: 0.3, blur: 24, dy: 10),
-      ),
-      child: goal
-          ? Icon(icon, size: size * 0.4, color: BrandColors.navy)
-          : Container(
-              margin: EdgeInsets.all(size * 0.1),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [accent.withValues(alpha: 0.16), accent.withValues(alpha: 0.04)],
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(end: lit ? 1 : 0),
+        duration: _lighting(context, lit).duration,
+        curve: _lighting(context, lit).curve,
+        builder: (context, l, _) => AnimatedBuilder(
+          animation: breath,
+          builder: (context, _) {
+            final b = lit ? _swell(breath.value) : 0.0;
+            return Transform.scale(
+              scale: 1 + 0.05 * b,
+              child: Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: ink.card,
+                  border: Border.all(color: Color.lerp(ring, accent.withValues(alpha: 0.45), l)!, width: 1.5),
+                  boxShadow: BoxShadow.lerpList(
+                    ink.shadow(light: hover ? 0.12 : 0.08, dark: 0.3, blur: 24, dy: 10),
+                    [BoxShadow(color: brand.highlight.withValues(alpha: 0.32), blurRadius: 26, offset: const Offset(0, 10))],
+                    l,
+                  ),
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.none,
+                  children: [
+                    // A glow round the disc that swells with the breath.
+                    Opacity(
+                      opacity: ((0.35 + 0.5 * b) * l).clamp(0.0, 1.0),
+                      child: Transform.scale(
+                        scale: 1 + 0.2 * b,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: RadialGradient(
+                              colors: [accent.withValues(alpha: 0.5), accent.withValues(alpha: 0)],
+                              stops: const [0.6, 1],
+                            ),
+                          ),
+                          child: const SizedBox.expand(),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      margin: EdgeInsets.all(size * 0.1),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient.lerp(soft, filled, l),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.25 * l)),
+                      ),
+                      alignment: Alignment.center,
+                      child: Transform.rotate(
+                        angle: lit ? _wiggle(breath.value) : 0,
+                        child: Icon(icon, size: size * 0.38, color: Color.lerp(brand.accentText, Colors.white, l)),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Icon(icon, size: size * 0.36, color: brand.accentText),
-            ),
+            );
+          },
+        ),
+      ),
     );
   }
 }
@@ -3385,16 +3933,116 @@ class _StepLabel extends StatelessWidget {
   }
 }
 
-/// A step under its circle, side by side with the others on the line.
+/// A step's words on a card. Lit, the card lifts a little, its edge and title
+/// warm to orange and, when [centred], a small dot breathes at its foot.
+class _StepCard extends StatelessWidget {
+  final int number;
+  final _Step step;
+  final bool lit;
+  final bool hover;
+  final bool centred;
+  final Animation<double> breath;
+
+  const _StepCard({
+    required this.number,
+    required this.step,
+    required this.breath,
+    this.lit = false,
+    this.hover = false,
+    this.centred = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = _Ink.of(context);
+    final brand = context.brand;
+    final accent = brand.accent;
+    final move = reduceMotion(context) ? Duration.zero : Motion.card;
+    final light = _lighting(context, lit);
+    final hairline = ink.pick(LightColors.navy.withValues(alpha: 0.08), Colors.white.withValues(alpha: 0.08));
+    final align = centred ? TextAlign.center : TextAlign.start;
+    return AnimatedContainer(
+      duration: hover && !lit ? move : light.duration,
+      curve: hover && !lit ? Motion.ease : light.curve,
+      transform: Matrix4.translationValues(0, lit || hover ? -4 : 0, 0),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(centred ? 18 : 16),
+        color: lit ? Color.alphaBlend(accent.withValues(alpha: 0.05), ink.card) : ink.card.withValues(alpha: 0.75),
+        border: Border.all(color: lit || hover ? accent.withValues(alpha: 0.3) : hairline),
+        boxShadow: lit ? ink.shadow(light: 0.1, dark: 0.35, blur: 26, dy: 12) : ink.shadow(light: 0.03, dark: 0.15, blur: 16, dy: 6),
+      ),
+      child: Stack(
+        alignment: centred ? Alignment.topCenter : AlignmentDirectional.topStart,
+        children: [
+          Padding(
+            padding: centred ? const EdgeInsets.fromLTRB(14, 18, 14, 26) : const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: centred ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+              children: [
+                _StepLabel(number),
+                SizedBox(height: centred ? 6 : 4),
+                // Over the page's own text style, so it keeps the brand's font.
+                AnimatedDefaultTextStyle(
+                  duration: light.duration,
+                  curve: light.curve,
+                  style: DefaultTextStyle.of(context).style.merge(TextStyle(
+                    fontSize: centred ? 17 : 16.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: centred ? -0.3 : -0.2,
+                    color: lit ? brand.accentText : ink.heading,
+                  )),
+                  child: Text(step.title, textAlign: align),
+                ),
+                SizedBox(height: centred ? 6 : 3),
+                Text(step.text, textAlign: align, style: TextStyle(fontSize: 13.5, height: 1.5, color: brand.muted)),
+              ],
+            ),
+          ),
+          if (centred)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 11,
+              child: Center(
+                child: AnimatedOpacity(
+                  opacity: lit ? 1 : 0,
+                  duration: light.duration,
+                  curve: light.curve,
+                  child: AnimatedBuilder(
+                    animation: breath,
+                    builder: (context, child) {
+                      final b = lit ? _swell(breath.value) : 0.0;
+                      return Opacity(
+                        opacity: 0.45 + 0.45 * b,
+                        child: Transform.scale(scale: 1 + 0.4 * b, child: child),
+                      );
+                    },
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(shape: BoxShape.circle, color: accent),
+                      child: const SizedBox.square(dimension: 5),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A step: its circle on the line, its card under it.
 class _StepColumn extends StatefulWidget {
   /// The circle's size; the line runs through its middle.
   static const circle = 80.0;
 
   final int number;
   final _Step step;
-  final bool goal;
+  final bool lit;
+  final Animation<double> breath;
 
-  const _StepColumn({required this.number, required this.step, this.goal = false});
+  const _StepColumn({required this.number, required this.step, required this.breath, this.lit = false});
 
   @override
   State<_StepColumn> createState() => _StepColumnState();
@@ -3405,34 +4053,27 @@ class _StepColumnState extends State<_StepColumn> {
 
   @override
   Widget build(BuildContext context) {
-    final ink = _Ink.of(context);
-    final step = widget.step;
+    final hover = _hover && !reduceMotion(context);
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 7),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _StepCircle(
-              icon: step.icon,
-              size: _StepColumn.circle,
-              goal: widget.goal,
-              hover: _hover && !reduceMotion(context),
+            Center(
+              child: _StepCircle(
+                icon: widget.step.icon,
+                size: _StepColumn.circle,
+                lit: widget.lit,
+                hover: hover,
+                breath: widget.breath,
+              ),
             ),
             const SizedBox(height: 22),
-            _StepLabel(widget.number),
-            const SizedBox(height: 6),
-            Text(
-              step.title,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: -0.3, color: ink.heading),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              step.text,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13.5, height: 1.5, color: context.brand.muted),
+            Expanded(
+              child: _StepCard(number: widget.number, step: widget.step, lit: widget.lit, hover: hover, breath: widget.breath),
             ),
           ],
         ),
@@ -3441,18 +4082,32 @@ class _StepColumnState extends State<_StepColumn> {
   }
 }
 
-/// A step beside its circle, one under the other, the line running down
-/// from each circle to the next.
+/// A step beside its circle, one under the other, the line running down from
+/// each circle to the next; it warms from the top once the light has
+/// [reached] the step, and all the way down once it has [passed] it.
 class _StepRow extends StatelessWidget {
   final int number;
   final _Step step;
-  final bool goal;
+  final bool lit;
+  final bool reached;
+  final bool passed;
 
-  const _StepRow({required this.number, required this.step, this.goal = false});
+  /// The goal, with no line under it.
+  final bool last;
+  final Animation<double> breath;
+
+  const _StepRow({
+    required this.number,
+    required this.step,
+    required this.breath,
+    this.lit = false,
+    this.reached = false,
+    this.passed = false,
+    this.last = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final ink = _Ink.of(context);
     final accent = context.brand.accent;
     return IntrinsicHeight(
       child: Row(
@@ -3460,10 +4115,12 @@ class _StepRow extends StatelessWidget {
         children: [
           Column(
             children: [
-              _StepCircle(icon: step.icon, size: 58, goal: goal),
-              if (!goal)
+              _StepCircle(icon: step.icon, size: 58, lit: lit, breath: breath),
+              if (!last)
                 Expanded(
-                  child: Container(
+                  child: AnimatedContainer(
+                    duration: reduceMotion(context) ? Duration.zero : Motion.card,
+                    curve: Motion.easeInOut,
                     width: 2,
                     margin: const EdgeInsets.symmetric(vertical: 6),
                     decoration: BoxDecoration(
@@ -3471,34 +4128,74 @@ class _StepRow extends StatelessWidget {
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [accent.withValues(alpha: 0.2), accent.withValues(alpha: 0.5)],
+                        colors: [
+                          accent.withValues(alpha: reached ? 0.5 : 0.14),
+                          accent.withValues(alpha: passed ? 0.9 : 0.14),
+                        ],
                       ),
                     ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(width: 18),
+          const SizedBox(width: 16),
           Expanded(
             child: Padding(
-              padding: EdgeInsets.only(top: 6, bottom: goal ? 0 : 28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _StepLabel(number),
-                  const SizedBox(height: 4),
-                  Text(
-                    step.title,
-                    style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800, letterSpacing: -0.2, color: ink.heading),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(step.text, style: TextStyle(fontSize: 13.5, height: 1.45, color: context.brand.muted)),
-                ],
-              ),
+              padding: EdgeInsets.only(top: 2, bottom: last ? 0 : 18),
+              child: _StepCard(number: number, step: step, lit: lit, centred: false, breath: breath),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Where the light is: a dot for each step, joined by hairlines, the lit one
+/// drawn out into a bar. Tapping a dot moves the light there.
+class _StepDots extends StatelessWidget {
+  final int active;
+  final ValueChanged<int> onPick;
+
+  const _StepDots({required this.active, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = context.brand.accent;
+    final move = reduceMotion(context) ? Duration.zero : Motion.card;
+    const steps = _Steps.steps;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < steps.length; i++) ...[
+          if (i > 0) Container(width: 28, height: 1, color: accent.withValues(alpha: 0.18)),
+          Semantics(
+            button: true,
+            selected: i == active,
+            label: 'Step ${i + 1}: ${steps[i].title}',
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onPick(i),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+                  child: AnimatedContainer(
+                    duration: move,
+                    curve: Motion.ease,
+                    width: i == active ? 24 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      color: i == active ? accent : accent.withValues(alpha: 0.25),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

@@ -277,7 +277,7 @@ class _QrPassState extends State<_QrPass> {
                 children: [
                   Row(
                     children: [
-                      const HealthProLogo(height: 30, onDark: true),
+                      const HealthProLogo(height: 30, onDark: true, animate: false),
                       const Spacer(),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),

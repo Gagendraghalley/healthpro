@@ -59,6 +59,67 @@ void main() {
     }
   });
 
+  for (final MapEntry(key: name, value: size) in {'computer': sizes['computer']!, 'phone': sizes['phone']!}.entries) {
+    testWidgets('on a $name the light walks through the steps, one every two seconds', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await show(tester, size);
+      // The dots under the steps say which one is lit.
+      Finder dot(int step) => find.bySemanticsLabel(RegExp('^Step $step: '));
+      int lit() {
+        final on = [
+          for (var i = 1; i <= 5; i++)
+            if (containsSemantics(isSelected: true).matches(tester.getSemantics(dot(i)), {})) i,
+        ];
+        expect(on, hasLength(1));
+        return on.single;
+      }
+
+      await tester.ensureVisible(find.text('Achieve Goals'));
+      await tester.pumpAndSettle();
+      // Mid-screen, clear of the bar along the top.
+      await Scrollable.ensureVisible(tester.element(dot(5)), alignment: 0.5);
+      await tester.pumpAndSettle();
+      // Tapping a dot moves the light there, and it walks on from it.
+      await tester.tap(dot(4));
+      await tester.pump();
+      expect(lit(), 4);
+      for (var i = 1; i <= 5; i++) {
+        await tester.pump(const Duration(seconds: 2));
+        // After the goal it starts again from signing up.
+        expect(lit(), (3 + i) % 5 + 1);
+      }
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+    });
+  }
+
+  testWidgets('what it does lights up one thing after another, on the beat', (tester) async {
+    await show(tester, sizes['computer']!);
+    // Frame by frame, so what the beat sets moving plays out.
+    Future<void> wait(int ms) async {
+      for (var t = 0; t < ms; t += 100) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    const titles = ['Membership Management', 'Attendance Tracking', 'Easy Payments', 'Staff & Roles', 'Business Insights'];
+    // The lit one's name is the only one in orange.
+    int lit() {
+      final colours = [for (final title in titles) tester.widget<Text>(find.text(title)).style!.color];
+      final odd = [for (var i = 0; i < titles.length; i++) if (colours.where((c) => c == colours[i]).length == 1) i];
+      expect(odd, hasLength(1));
+      return odd.single;
+    }
+
+    await wait(1500);
+    expect(lit(), 0);
+    for (var i = 1; i <= 5; i++) {
+      await wait(2000);
+      expect(lit(), i % 5);
+    }
+  });
+
   testWidgets('it claims no member counts, ratings or prices', (tester) async {
     await show(tester, sizes['computer']!);
     for (final madeUp in ['10K+', '10,000', '4.8', 'Nu ', 'Rated']) {

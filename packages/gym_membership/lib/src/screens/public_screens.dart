@@ -6,7 +6,7 @@ import 'package:health_pro_core/health_pro_core.dart';
 import '../data/gym_models.dart';
 import '../data/gym_repository.dart';
 import '../gym_routes.dart';
-import '../widgets/gym_widgets.dart';
+import '../widgets/gym_public_widgets.dart';
 import '../widgets/trainer_widgets.dart';
 import '../data/trainers.dart';
 import 'my_gyms_screen.dart';
@@ -115,6 +115,18 @@ class _GymListScreenState extends ConsumerState<GymListScreen> {
     });
   }
 
+  /// [chips] in a row: wrapping onto more lines, or on a phone one line
+  /// swiped along.
+  Widget _chips(BuildContext context, List<Widget> chips) {
+    if (MediaQuery.sizeOf(context).width >= 600) {
+      return Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: chips);
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(children: [for (final (i, chip) in chips.indexed) ...[if (i > 0) const SizedBox(width: 8), chip]]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const query = (type: gymVenueType, dzongkhag: null);
@@ -134,6 +146,11 @@ class _GymListScreenState extends ConsumerState<GymListScreen> {
         data: (gyms) {
           final places = {for (final g in gyms) g.dzongkhag}.toList()..sort();
           final shown = arrangeGyms(gyms, prices: prices, dzongkhag: _dzongkhag, budget: _budget, sort: sort, here: here);
+          final countText = [
+            '${shown.length} ${shown.length == 1 ? 'gym' : 'gyms'}',
+            if (_budget != null) 'with a package up to ${formatNu(_budget!)}',
+            if (sort != GymSort.suggested) sort.label.toLowerCase(),
+          ].join(' · ');
           return RefreshIndicator(
             onRefresh: () {
               ref.invalidate(gymPriceRangesProvider);
@@ -142,81 +159,126 @@ class _GymListScreenState extends ConsumerState<GymListScreen> {
             child: ListView(
               padding: pagePadding(context),
               children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    FilterChip(
-                      avatar: _locating
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.my_location_rounded, size: 18),
-                      label: const Text('Near me'),
-                      selected: here != null,
-                      onSelected: _locating ? null : (_) => _nearMe(),
-                    ),
-                    _MenuChip<GymSort>(
-                      icon: Icons.sort_rounded,
-                      label: 'Sort: ${sort.label}',
-                      options: [
-                        for (final o in GymSort.values)
-                          if (o != GymSort.nearest || here != null) (o, o.label),
-                      ],
-                      onSelected: (o) => setState(() => _sort = o),
-                    ),
-                    _MenuChip<int?>(
-                      icon: Icons.account_balance_wallet_outlined,
-                      label: _budget == null ? 'Any budget' : 'Up to ${formatNu(_budget!)}',
-                      options: [(null, 'Any budget'), for (final b in gymBudgets) (b, 'Up to ${formatNu(b)}')],
-                      onSelected: (b) => setState(() => _budget = b),
-                    ),
-                  ],
-                ),
-                if (places.length > 1) ...[
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                GymListHeader(
+                  gyms: gyms.length,
+                  places: places.length,
+                  openNow: switch (gyms.where((g) => g.openingHours?.at(BhutanTime.now())?.open ?? false).length) {
+                    0 => null,
+                    final open => open,
+                  },
+                  filters: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      for (final place in [null, ...places])
-                        ChoiceChip(
-                          label: Text(place ?? 'All'),
-                          selected: _dzongkhag == place,
-                          onSelected: (_) => setState(() => _dzongkhag = place),
+                      _chips(
+                        context,
+                        [
+                          FilterChip(
+                            avatar: _locating
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                : const Icon(Icons.my_location_rounded, size: 18),
+                            label: const Text('Near me'),
+                            selected: here != null,
+                            onSelected: _locating ? null : (_) => _nearMe(),
+                          ),
+                          _MenuChip<GymSort>(
+                            icon: Icons.sort_rounded,
+                            label: 'Sort: ${sort.label}',
+                            options: [
+                              for (final o in GymSort.values)
+                                if (o != GymSort.nearest || here != null) (o, o.label),
+                            ],
+                            onSelected: (o) => setState(() => _sort = o),
+                          ),
+                          _MenuChip<int?>(
+                            icon: Icons.account_balance_wallet_outlined,
+                            label: _budget == null ? 'Any budget' : 'Up to ${formatNu(_budget!)}',
+                            options: [(null, 'Any budget'), for (final b in gymBudgets) (b, 'Up to ${formatNu(b)}')],
+                            onSelected: (b) => setState(() => _budget = b),
+                          ),
+                        ],
+                      ),
+                      if (places.length > 1) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Divider(height: 1, color: context.brand.glassBorder),
                         ),
+                        _chips(
+                          context,
+                          [
+                            Padding(
+                              padding: const EdgeInsets.only(left: 2, right: 4),
+                              child: Text(
+                                'Dzongkhag',
+                                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: context.brand.muted),
+                              ),
+                            ),
+                            for (final place in [null, ...places])
+                              ChoiceChip(
+                                label: Text(place ?? 'All'),
+                                selected: _dzongkhag == place,
+                                onSelected: (_) => setState(() => _dzongkhag = place),
+                              ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
-                ],
-                const SizedBox(height: 12),
-                Text(
-                  [
-                    '${shown.length} ${shown.length == 1 ? 'gym' : 'gyms'}',
-                    if (_budget != null) 'with a package up to ${formatNu(_budget!)}',
-                    if (sort != GymSort.suggested) sort.label.toLowerCase(),
-                  ].join(' · '),
-                  style: TextStyle(color: context.brand.muted),
                 ),
-                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 26, 4, 14),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    // A new count slides in over the last.
+                    child: AnimatedSwitcher(
+                      duration: Motion.of(context, Motion.page),
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween(begin: const Offset(0, 0.4), end: Offset.zero).animate(animation),
+                          child: child,
+                        ),
+                      ),
+                      layoutBuilder: (current, previous) =>
+                          Stack(alignment: Alignment.centerLeft, children: [...previous, if (current != null) current]),
+                      child: Text(
+                        countText,
+                        key: ValueKey(countText),
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: -0.2, color: context.brand.ink),
+                      ),
+                    ),
+                  ),
+                ),
                 if (shown.isEmpty)
-                  EmptyState(
-                    icon: Icons.fitness_center_rounded,
-                    title: _budget != null ? 'No gyms within that budget' : 'No gyms here yet',
-                    message: _budget != null ? 'Try a higher budget.' : 'Run a gym? Register it on Health Pro.',
-                    actionLabel: _budget != null ? 'Any budget' : 'Register your gym',
-                    onAction: _budget != null ? () => setState(() => _budget = null) : () => context.push(CoreRoutes.registerVenue),
+                  FadeSlideIn(
+                    key: ValueKey('empty $_budget'),
+                    child: EmptyState(
+                      icon: Icons.fitness_center_rounded,
+                      title: _budget != null ? 'No gyms within that budget' : 'No gyms here yet',
+                      message: _budget != null ? 'Try a higher budget.' : 'Run a gym? Register it on Health Pro.',
+                      actionLabel: _budget != null ? 'Any budget' : 'Register your gym',
+                      onAction: _budget != null ? () => setState(() => _budget = null) : () => context.push(CoreRoutes.registerVenue),
+                    ),
                   )
                 else
                   ResponsiveGrid(
-                    minItemWidth: 320,
+                    minItemWidth: 300,
                     maxColumns: 4,
+                    spacing: 18,
+                    runSpacing: 18,
                     equalHeight: false,
+                    // Rising into place as they scroll into view, a row's
+                    // cards one after another.
                     children: [
-                      for (final row in shown)
-                        VenueCard(
-                          venue: row.gym,
-                          placeholderIcon: Icons.fitness_center_rounded,
-                          onTap: () => context.push(GymRoutes.gymFor(row.gym.id)),
-                          details: _GymFacts(price: row.price, hours: row.gym.openingHours, km: row.km),
+                      for (final (i, row) in shown.indexed)
+                        GymReveal(
+                          key: ValueKey(row.gym.id),
+                          delay: Motion.stagger * (i % 4),
+                          child: GymListCard(
+                            gym: row.gym,
+                            price: row.price,
+                            km: row.km,
+                            onTap: () => context.push(GymRoutes.gymFor(row.gym.id)),
+                          ),
                         ),
                     ],
                   ),
@@ -225,38 +287,6 @@ class _GymListScreenState extends ConsumerState<GymListScreen> {
           );
         },
       ),
-    );
-  }
-}
-
-/// A gym's prices, hours today and distance, on its card.
-class _GymFacts extends StatelessWidget {
-  final ({int low, int high})? price;
-  final OpeningHours? hours;
-  final double? km;
-
-  const _GymFacts({required this.price, required this.hours, required this.km});
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return Wrap(
-      spacing: 10,
-      runSpacing: 6,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Text(
-          price == null ? 'Prices at the desk' : priceRangeText(price!.low, price!.high),
-          style: TextStyle(fontWeight: FontWeight.w800, color: price == null ? brand.muted : brand.ink),
-        ),
-        if (km != null)
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.near_me_outlined, size: 15, color: brand.muted),
-            const SizedBox(width: 3),
-            Text('${distanceText(km!)} away', style: TextStyle(color: brand.muted)),
-          ]),
-        OpenNowChip(hours: hours),
-      ],
     );
   }
 }
@@ -303,8 +333,20 @@ class GymDetailsScreen extends ConsumerWidget {
     final signedIn = ref.watch(currentUserIdProvider) != null;
     final access = signedIn ? ref.watch(venueAccessProvider(venueId)).valueOrNull : null;
 
+    // Opened straight (after a refresh, from a link or its QR code) there's
+    // nothing to go back to: back leads to the list of gyms. In the app's
+    // frame on a phone the bar keeps its menu button instead.
+    final canGoBack = ModalRoute.of(context)?.canPop ?? false;
+    final menu = AppShellScope.maybeOf(context)?.openMenu != null;
     return AppPage(
       title: venue.valueOrNull?.name ?? 'Gym',
+      leading: canGoBack || menu
+          ? null
+          : IconButton(
+              tooltip: 'All gyms',
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () => context.go(GymRoutes.gyms),
+            ),
       actions: [
         if (access != null)
           TextButton.icon(
@@ -324,6 +366,87 @@ class GymDetailsScreen extends ConsumerWidget {
           final joinCard = JoinGymCard(gym: gym, plans: plans.valueOrNull ?? const [], highlight: join);
           final onSale = plans.valueOrNull ?? const <GymPlan>[];
           final prices = [for (final p in onSale) p.price];
+          final brand = context.brand;
+          final now = gym.openingHours?.at(BhutanTime.now());
+          final promo = gym.promoVideo == null ? null : ref.watch(venueRepositoryProvider).promoVideoUrl(gym.promoVideo);
+          final text = TextStyle(fontSize: 15, height: 1.7, color: brand.body);
+          // Its prices, today's hours and its reviews, at a glance.
+          final facts = GymFactsBar(
+            facts: [
+              (
+                icon: Icons.payments_outlined,
+                label: 'Packages',
+                value: prices.isNotEmpty
+                    ? priceRangeText(prices.reduce((a, b) => a < b ? a : b), prices.reduce((a, b) => a > b ? a : b))
+                    : (plans.isLoading ? '…' : 'Prices at the desk'),
+                color: prices.isEmpty ? brand.muted : null,
+              ),
+              if (now != null)
+                (
+                  icon: Icons.schedule_rounded,
+                  label: 'Today',
+                  value: now.label,
+                  color: now.open ? brand.readable(brand.success) : null,
+                ),
+              if (gym.ratingCount > 0)
+                (
+                  icon: Icons.star_rounded,
+                  label: 'Reviews',
+                  value: '${gym.ratingAverage!.toStringAsFixed(1)} · ${gym.ratingCount} '
+                      '${gym.ratingCount == 1 ? 'review' : 'reviews'}',
+                  color: null,
+                ),
+            ],
+          );
+          final packages = GymSection(
+            icon: Icons.sell_outlined,
+            title: 'Packages',
+            child: AsyncValueView<List<GymPlan>>(
+              value: plans,
+              onRetry: () => ref.invalidate(gymPlansProvider((venueId: venueId, all: false))),
+              data: (list) => list.isEmpty
+                  ? Text('This gym has not added its packages yet.', style: TextStyle(color: brand.muted))
+                  : GymPackagesList(plans: list),
+            ),
+          );
+          final about = gym.description == null
+              ? null
+              : GymSection(icon: Icons.info_outline_rounded, title: 'About', child: Text(gym.description!, style: text));
+          final facilities = gym.facilities.isEmpty
+              ? null
+              : GymSection(icon: Icons.checklist_rounded, title: 'Facilities', child: GymFacilities(facilities: gym.facilities));
+          final promoVideo = promo == null
+              ? null
+              : GymSection(
+                  icon: Icons.play_circle_outline_rounded,
+                  title: 'Take a look inside',
+                  child: PromoVideoPlayer(key: ValueKey(promo), url: promo),
+                );
+          final videos = gym.videos.isEmpty
+              ? null
+              : GymSection(icon: Icons.smart_display_outlined, title: 'Videos', child: VenueVideosView(videos: gym.videos));
+          final contact = GymContactPanel.shows(gym)
+              ? GymSection(icon: Icons.support_agent_rounded, title: 'Contact', child: GymContactPanel(gym: gym))
+              : null;
+          final hours = gym.openingHours == null
+              ? null
+              : GymSection(icon: Icons.schedule_rounded, title: 'Opening hours', child: GymHoursList(hours: gym.openingHours!));
+          final map = !gym.hasLocation
+              ? null
+              : GymSection(
+                  icon: Icons.map_outlined,
+                  title: 'Where it is',
+                  child: VenueMap(latitude: gym.latitude!, longitude: gym.longitude!),
+                );
+          final cancellation = gym.cancellationPolicy == null
+              ? null
+              : GymSection(icon: Icons.policy_outlined, title: 'Cancellation and refunds', child: Text(gym.cancellationPolicy!, style: text));
+          final trainers = _GymTrainers(venueId: gym.id);
+          // Its heading brings its own room above it.
+          final reviews = GymSection(padding: const EdgeInsets.fromLTRB(18, 0, 18, 18), child: ReviewsSection(venue: gym));
+          final trainHere = gym.isVerified ? TrainHereCard(gym: gym) : null;
+          // From the gym's QR code, joining comes before anything else.
+          final joinHere = join ? null : joinCard;
           return RefreshIndicator(
             onRefresh: () async {
               ref.invalidate(venueProvider(venueId));
@@ -342,98 +465,65 @@ class GymDetailsScreen extends ConsumerWidget {
                       icon: Icons.visibility_off_outlined,
                     ),
                   ),
-                // From the gym's QR code: joining, before anything else.
                 if (join) ...[joinCard, const SizedBox(height: 16)],
-                ResponsiveColumns(
-                  flex: (3, 2),
-                  first: [
-                    VenuePhotoCarousel(photos: gym.photos, placeholderIcon: Icons.fitness_center_rounded),
-                    const SizedBox(height: 16),
-                    Row(
+                FadeSlideIn(offset: 14, child: GymProfileHero(gym: gym)),
+                const SizedBox(height: 18),
+                // Side by side on a computer: the gym on the left; joining,
+                // packages and how to get there on the right. One column
+                // otherwise, joining and the packages near the top.
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxWidth < 900) {
+                      return _stack([
+                        facts,
+                        joinHere,
+                        packages,
+                        about,
+                        facilities,
+                        contact,
+                        hours,
+                        map,
+                        promoVideo,
+                        videos,
+                        trainers,
+                        reviews,
+                        trainHere,
+                        cancellation,
+                      ]);
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(child: Text(gym.name, style: context.text.headlineSmall)),
-                        if (gym.isVerified) VerificationChip(status: gym.verificationStatus),
+                        Expanded(flex: 3, child: _stack([facts, about, facilities, promoVideo, videos, trainers, reviews])),
+                        const SizedBox(width: 22),
+                        Expanded(
+                          flex: 2,
+                          child: _stack([joinHere, trainHere, packages, contact, hours, map, cancellation], after: Motion.stagger),
+                        ),
                       ],
-                    ),
-                    const SizedBox(height: 4),
-                    InfoRow(icon: Icons.place_outlined, text: [gym.place, if (gym.address != null) gym.address!].join(' · ')),
-                    if (gym.ratingCount > 0)
-                      Row(children: [
-                        RatingStars(rating: gym.ratingAverage!),
-                        Text('  ${gym.ratingAverage!.toStringAsFixed(1)} · ${gym.ratingCount} reviews'),
-                      ]),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 6,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        if (prices.isNotEmpty)
-                          Text(
-                            priceRangeText(prices.reduce((a, b) => a < b ? a : b), prices.reduce((a, b) => a > b ? a : b)),
-                            style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                        OpenNowChip(hours: gym.openingHours),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    VenueContactButtons(venue: gym),
-                    const SizedBox(height: 8),
-                    VenueContactDetails(venue: gym),
-                    VenuePromoVideo(venue: gym, title: 'Take a look inside'),
-                    if (gym.description != null) ...[
-                      const SectionTitle('About'),
-                      Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(gym.description!)),
-                    ],
-                    if (gym.facilities.isNotEmpty) ...[
-                      const SectionTitle('Facilities'),
-                      FacilitiesView(facilities: gym.facilities),
-                    ],
-                    if (gym.videos.isNotEmpty) ...[
-                      const SectionTitle('Videos'),
-                      VenueVideosView(videos: gym.videos),
-                    ],
-                    _GymTrainers(venueId: gym.id),
-                    ReviewsSection(venue: gym),
-                  ],
-                  second: [
-                    if (!join) ...[const SectionTitle('How to join'), joinCard],
-                    if (gym.isVerified) TrainHereCard(gym: gym),
-                    if (gym.openingHours != null) ...[
-                      const SectionTitle('Opening hours'),
-                      OpeningHoursView(hours: gym.openingHours!),
-                    ],
-                    if (gym.hasLocation) ...[
-                      const SectionTitle('Where it is'),
-                      VenueMap(latitude: gym.latitude!, longitude: gym.longitude!),
-                    ],
-                    const SectionTitle('Packages'),
-                    AsyncValueView<List<GymPlan>>(
-                      value: plans,
-                      onRetry: () => ref.invalidate(gymPlansProvider((venueId: venueId, all: false))),
-                      data: (list) => list.isEmpty
-                          ? const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 4),
-                              child: Text('This gym has not added its packages yet.'),
-                            )
-                          : Column(
-                              children: [
-                                for (final plan in list)
-                                  Padding(padding: const EdgeInsets.only(bottom: 10), child: PlanCard(plan: plan)),
-                              ],
-                            ),
-                    ),
-                    if (gym.cancellationPolicy != null) ...[
-                      const SectionTitle('Cancellation and refunds'),
-                      SectionCard(child: Text(gym.cancellationPolicy!)),
-                    ],
-                  ],
+                    );
+                  },
                 ),
               ],
             ),
           );
         },
       ),
+    );
+  }
+
+  /// [parts] one under another, the ones a gym has (the trainers bring
+  /// their own room, as they may have none), each rising into place as it
+  /// scrolls into view: the first few in turn, [after] the page opens.
+  static Widget _stack(List<Widget?> parts, {Duration after = Duration.zero}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final (i, part) in parts.nonNulls.indexed) ...[
+          if (i > 0 && part is! _GymTrainers) const SizedBox(height: 18),
+          GymReveal(delay: after + Motion.stagger * (2 + (i < 3 ? i : 3)), child: part),
+        ],
+      ],
     );
   }
 }
@@ -449,15 +539,13 @@ class _GymTrainers extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final trainers = ref.watch(gymVerifiedTrainersProvider(venueId)).valueOrNull ?? const <TrainerProfile>[];
     if (trainers.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SectionTitle('Trainers (${trainers.length})'),
-        SectionCard(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Column(children: [for (final t in trainers) TrainerTile(trainer: t, venueId: venueId)]),
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.only(top: 18),
+      child: GymSection(
+        icon: Icons.sports_rounded,
+        title: 'Trainers (${trainers.length})',
+        child: Column(children: [for (final t in trainers) TrainerTile(trainer: t, venueId: venueId)]),
+      ),
     );
   }
 }

@@ -444,7 +444,7 @@ class _GymPoster extends StatelessWidget {
                   colors: [BrandColors.navy, LightColors.navy],
                 ),
               ),
-              child: const Center(child: HealthProLogo(height: 50, onDark: true)),
+              child: const Center(child: HealthProLogo(height: 50, onDark: true, animate: false)),
             ),
             Container(height: 4, color: accent),
             Padding(

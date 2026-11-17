@@ -114,7 +114,9 @@ class AuthLayout extends StatelessWidget {
         // between them, and only the card changes.
         const Hero(tag: _Photo.heroTag, child: _Photo()),
         _Wash(side: side),
-        CustomPaint(painter: _WavePainter.of(context)),
+        // A warm light drifting over the card's side; the wave drawn in.
+        const Positioned(right: 80, top: -140, child: _Glow(size: 460)),
+        const _Wave(),
         SafeArea(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -138,7 +140,7 @@ class AuthLayout extends StatelessWidget {
                         delay: const Duration(milliseconds: 80),
                         child: Container(
                           width: cardWidth,
-                          padding: const EdgeInsets.fromLTRB(36, 36, 36, 28),
+                          clipBehavior: Clip.antiAlias,
                           decoration: BoxDecoration(
                             color: context.colors.surface,
                             borderRadius: BorderRadius.circular(28),
@@ -147,7 +149,32 @@ class AuthLayout extends StatelessWidget {
                                 ? const [BoxShadow(color: Color(0x47000000), blurRadius: 50, offset: Offset(0, 24))]
                                 : const [BoxShadow(color: Color(0x40050B1C), blurRadius: 44, offset: Offset(0, 20))],
                           ),
-                          child: _form(context),
+                          child: Stack(
+                            children: [
+                              Padding(padding: const EdgeInsets.fromLTRB(36, 36, 36, 28), child: _form(context)),
+                              // An orange line growing along the card's top.
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                top: 0,
+                                height: 3,
+                                child: _GrowIn(
+                                  delay: const Duration(milliseconds: 380),
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          context.brand.highlight.withValues(alpha: 0),
+                                          context.brand.highlight,
+                                          context.brand.highlight.withValues(alpha: 0),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -174,29 +201,39 @@ class AuthLayout extends StatelessWidget {
               children: [
                 const Hero(tag: _Photo.heroTag, child: _Photo()),
                 const _Wash(side: AuthSide.signIn, banner: true),
-                CustomPaint(painter: _WavePainter.of(context, banner: true)),
+                const Positioned(right: -70, top: -90, child: _Glow(size: 280)),
+                const _Wave(banner: true),
+                // The logo popping in, catching the light.
                 Padding(
                   padding: EdgeInsets.fromLTRB(16, insets.top + 8, 16, 80),
-                  child: const Center(child: FadeSlideIn(child: HealthProLogo(height: 112, onDark: true))),
+                  child: const Center(
+                    child: PopIn(
+                      child: _Sheen(delay: Duration(milliseconds: 700), child: HealthProLogo(height: 112, onDark: true)),
+                    ),
+                  ),
                 ),
                 if (backButton != null) Positioned(top: insets.top + 8, left: 12, child: backButton),
               ],
             ),
           ),
-          // The sheet rises over the foot of the banner.
+          // The sheet rises over the foot of the banner, sliding up into
+          // place as the page opens.
           Transform.translate(
             offset: const Offset(0, -30),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: context.colors.surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(20, 30, 20, insets.bottom + 4),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 480),
-                    child: FadeSlideIn(child: _form(context)),
+            child: FadeSlideIn(
+              offset: 40,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: context.colors.surface,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(20, 30, 20, insets.bottom + 4),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 480),
+                      child: FadeSlideIn(child: _form(context)),
+                    ),
                   ),
                 ),
               ),
@@ -293,6 +330,64 @@ class _Wash extends StatelessWidget {
   }
 }
 
+/// The orange wave, drawn in from the left as the page opens, then
+/// swaying a few times before it rests.
+class _Wave extends StatefulWidget {
+  final bool banner;
+
+  const _Wave({this.banner = false});
+
+  @override
+  State<_Wave> createState() => _WaveState();
+}
+
+class _WaveState extends State<_Wave> with SingleTickerProviderStateMixin {
+  static const _sways = 3;
+  static const _draw = Duration(milliseconds: 1100);
+  static const _sway = Duration(milliseconds: 2400);
+  // Made at once, so a page left before it moved can still put it away.
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: _draw + _sway * _sways);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (reduceMotion(context)) {
+      _c.value = 1;
+    } else if (!_c.isAnimating && !_c.isCompleted) {
+      _c.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = (_draw + _sway * _sways).inMilliseconds;
+    final drawn = _draw.inMilliseconds / total;
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) {
+        final t = _c.value;
+        final reveal = Motion.ease.transform((t / drawn).clamp(0.0, 1.0));
+        // Swaying after it's drawn, less and less, to rest where it began.
+        final after = ((t - drawn) / (1 - drawn)).clamp(0.0, 1.0);
+        final sway = after == 0 || after == 1 ? 0.0 : math.sin(after * _sways * 2 * math.pi) * (1 - after);
+        return CustomPaint(painter: _WavePainter.of(context, banner: widget.banner, reveal: reveal, sway: sway));
+      },
+    );
+  }
+}
+
 /// The orange wave over a navy foot, sweeping from the left down to the
 /// right, as on the logo.
 class _WavePainter extends CustomPainter {
@@ -304,22 +399,38 @@ class _WavePainter extends CustomPainter {
   /// The lighter middle of the wave.
   final Color soft;
 
-  const _WavePainter({this.banner = false, this.color = BrandColors.orange, this.soft = const Color(0xFFFF8A3D)});
+  /// How much of it is drawn, from the left (0 to 1).
+  final double reveal;
 
-  _WavePainter.of(BuildContext context, {bool banner = false})
+  /// How far its curve leans from rest (-1 to 1).
+  final double sway;
+
+  const _WavePainter({
+    this.banner = false,
+    this.color = BrandColors.orange,
+    this.soft = const Color(0xFFFF8A3D),
+    this.reveal = 1,
+    this.sway = 0,
+  });
+
+  _WavePainter.of(BuildContext context, {bool banner = false, double reveal = 1, double sway = 0})
       : this(
             banner: banner,
             color: context.brand.highlight,
-            soft: context.brand.themedShade(const Color(0xFFFF8A3D)));
+            soft: context.brand.themedShade(const Color(0xFFFF8A3D)),
+            reveal: reveal,
+            sway: sway);
 
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
+    if (reveal <= 0) return;
+    if (reveal < 1) canvas.clipRect(Rect.fromLTWH(0, 0, w * reveal, h));
     // Where the wave meets the left and the right edge.
     final left = h * (banner ? 0.70 : 0.80);
     final right = h * (banner ? 0.86 : 0.90);
-    final lift = h * (banner ? 0.10 : 0.07);
+    final lift = h * (banner ? 0.10 : 0.07) * (1 + 0.35 * sway);
     Path wave(double dy) => Path()
       ..moveTo(0, left + dy)
       ..cubicTo(w * 0.32, left - lift + dy, w * 0.60, right + lift * 0.4 + dy, w, right - lift * 0.5 + dy)
@@ -339,7 +450,131 @@ class _WavePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_WavePainter old) => old.banner != banner || old.color != color || old.soft != soft;
+  bool shouldRepaint(_WavePainter old) =>
+      old.banner != banner || old.color != color || old.soft != soft || old.reveal != reveal || old.sway != sway;
+}
+
+/// A light sweeping across [child] a couple of times, [delay] after it
+/// shows; then it rests.
+class _Sheen extends StatefulWidget {
+  final Widget child;
+  final Duration delay;
+
+  const _Sheen({required this.child, this.delay = Duration.zero});
+
+  @override
+  State<_Sheen> createState() => _SheenState();
+}
+
+class _SheenState extends State<_Sheen> with SingleTickerProviderStateMixin {
+  static const _sweeps = 2;
+  static const _sweep = Duration(milliseconds: 1000);
+  // Made at once, so one that never swept (less motion) can still be put
+  // away.
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: widget.delay + _sweep * _sweeps);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!reduceMotion(context) && !_c.isAnimating && !_c.isCompleted) _c.forward();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (reduceMotion(context)) return widget.child;
+    return AnimatedBuilder(
+      animation: _c,
+      child: widget.child,
+      builder: (context, child) {
+        final after = _c.value * _c.duration!.inMilliseconds - widget.delay.inMilliseconds;
+        if (after <= 0 || _c.isCompleted) return child!;
+        final t = Motion.easeInOut.transform((after / _sweep.inMilliseconds) % 1);
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (bounds) => LinearGradient(
+            colors: [Colors.white.withValues(alpha: 0), Colors.white.withValues(alpha: 0.5), Colors.white.withValues(alpha: 0)],
+            stops: const [0.35, 0.5, 0.65],
+            transform: _SheenSlide(t),
+          ).createShader(bounds),
+          child: child,
+        );
+      },
+    );
+  }
+}
+
+/// Moves the sheen from beyond the left edge to beyond the right.
+class _SheenSlide extends GradientTransform {
+  final double t;
+
+  const _SheenSlide(this.t);
+
+  @override
+  Matrix4? transform(Rect bounds, {TextDirection? textDirection}) =>
+      Matrix4.translationValues(bounds.width * (t * 2.4 - 1.2), 0, 0);
+}
+
+/// [child] growing out from one end ([alignment]), [delay] after it shows.
+class _GrowIn extends StatelessWidget {
+  final Widget child;
+  final Duration delay;
+  final Alignment alignment;
+
+  const _GrowIn({required this.child, this.delay = Duration.zero, this.alignment = Alignment.centerLeft});
+
+  @override
+  Widget build(BuildContext context) {
+    if (reduceMotion(context)) return child;
+    final total = delay + const Duration(milliseconds: 700);
+    final start = delay.inMilliseconds / total.inMilliseconds;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: total,
+      builder: (context, t, child) {
+        final local = t <= start ? 0.0 : Motion.ease.transform((t - start) / (1 - start));
+        return Transform(alignment: alignment, transform: Matrix4.diagonal3Values(local, 1, 1), child: child);
+      },
+      child: child,
+    );
+  }
+}
+
+/// A soft round light of the brand's orange, drifting gently a few times.
+class _Glow extends StatelessWidget {
+  final double size;
+
+  const _Glow({required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = context.brand.highlight;
+    return IgnorePointer(
+      child: GentleFloat(
+        distance: 18,
+        cycles: 3,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(colors: [color.withValues(alpha: 0.28), color.withValues(alpha: 0)]),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// The photo's side on a computer: the logo, and the perks.
@@ -362,12 +597,13 @@ class _Showcase extends StatelessWidget {
               children: [
                 if (backButton != null) ...[backButton!, const SizedBox(width: 14)],
                 // Smaller when the photo's side is narrow.
+                // Catching the light once it has arrived.
                 const Flexible(
                   child: FadeSlideIn(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
-                      child: HealthProLogo(height: 118, onDark: true),
+                      child: _Sheen(delay: Duration(milliseconds: 700), child: HealthProLogo(height: 118, onDark: true)),
                     ),
                   ),
                 ),
@@ -405,17 +641,25 @@ class _PerkBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Each popping in after the bar, one after another.
     final items = <Widget>[
-      for (final (icon, label) in perks)
+      for (final (i, (icon, label)) in perks.indexed)
         Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white, size: 26),
+            PopIn(
+              delay: Duration(milliseconds: 420 + 90 * i),
+              child: Icon(icon, color: Colors.white, size: 26),
+            ),
             const SizedBox(height: 8),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 12.5, height: 1.3, fontWeight: FontWeight.w600),
+            FadeSlideIn(
+              delay: Duration(milliseconds: 480 + 90 * i),
+              offset: 8,
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 12.5, height: 1.3, fontWeight: FontWeight.w600),
+              ),
             ),
           ],
         ),
@@ -485,8 +729,8 @@ class _JoinPitch extends StatelessWidget {
           child: Text.rich(
             TextSpan(
               children: [
-                const TextSpan(text: 'Join\nSports'),
-                TextSpan(text: 'Hub', style: TextStyle(color: context.brand.themedShade(const Color(0xFFFF8A3D)))),
+                const TextSpan(text: 'Join\nHealth '),
+                TextSpan(text: 'Pro', style: TextStyle(color: context.brand.themedShade(const Color(0xFFFF8A3D)))),
               ],
             ),
             style: headline,
@@ -499,24 +743,29 @@ class _JoinPitch extends StatelessWidget {
             style: TextStyle(color: Colors.white.withValues(alpha: 0.92), fontSize: 20, fontWeight: FontWeight.w500),
           ),
         ),
-        for (final (icon, label) in perks)
+        for (final (i, (icon, label)) in perks.indexed)
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [context.brand.themedShade(const Color(0xFFFF8A3D)), context.brand.highlight],
+                // Popping in after its line arrives.
+                PopIn(
+                  delay: Duration(milliseconds: 260 + 90 * i),
+                  child: Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [context.brand.themedShade(const Color(0xFFFF8A3D)), context.brand.highlight],
+                      ),
+                      boxShadow: [BoxShadow(color: context.brand.highlight.withValues(alpha: 0.4), blurRadius: 16)],
                     ),
+                    child: Icon(icon, color: Colors.white, size: 23),
                   ),
-                  child: Icon(icon, color: Colors.white, size: 23),
                 ),
                 const SizedBox(width: 16),
                 Flexible(
@@ -554,15 +803,20 @@ class _Motto extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
+          // The stroke drawn in from its bright end, after the words.
           Transform.rotate(
             angle: -0.04,
-            child: Container(
-              width: 150,
-              height: 4,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(4),
-                gradient: LinearGradient(
-                    colors: [context.brand.highlight.withValues(alpha: 0), context.brand.highlight]),
+            child: _GrowIn(
+              delay: const Duration(milliseconds: 450),
+              alignment: Alignment.centerRight,
+              child: Container(
+                width: 150,
+                height: 4,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                  gradient: LinearGradient(
+                      colors: [context.brand.highlight.withValues(alpha: 0), context.brand.highlight]),
+                ),
               ),
             ),
           ),
@@ -659,61 +913,65 @@ class AuthPrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = context.brand.accent;
-    // Faded while there's nothing to press yet (not while it's working).
+    // Faded while there's nothing to press yet (not while it's working); a
+    // light sweeping across it once the page has arrived.
     return AnimatedOpacity(
       opacity: busy || onPressed != null ? 1 : 0.45,
       duration: Motion.of(context, Motion.hover),
       child: Pressable(
-      enabled: !busy && onPressed != null,
-      child: DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(colors: [context.brand.themedShade(const Color(0xFFFF8A3D)), accent]),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withValues(alpha: 0.38),
-            blurRadius: 24,
-            spreadRadius: -8,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: FilledButton(
-        onPressed: busy ? null : onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          disabledBackgroundColor: Colors.transparent,
-          foregroundColor: Colors.white,
-          disabledForegroundColor: Colors.white.withValues(alpha: 0.85),
-          shadowColor: Colors.transparent,
-          minimumSize: const Size.fromHeight(54),
-          shape: const StadiumBorder(),
-          textStyle: const TextStyle(fontFamily: brandFont, fontWeight: FontWeight.w700, fontSize: 16.5),
-        ),
-        // The words give way to a spinner, and back, without a jump.
-        child: AnimatedSwitcher(
-          duration: Motion.of(context, Motion.press),
-          transitionBuilder: (child, a) => FadeTransition(
-            opacity: a,
-            child: ScaleTransition(scale: Tween(begin: 0.85, end: 1.0).animate(a), child: child),
-          ),
-          child: busy
-              ? const SizedBox(
-                  key: ValueKey('busy'),
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-              : Row(
-                  key: const ValueKey('ready'),
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (icon != null) ...[Icon(icon, size: 21), const SizedBox(width: 10)],
-                    Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
-                  ],
+        enabled: !busy && onPressed != null,
+        child: _Sheen(
+          delay: const Duration(milliseconds: 1100),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              gradient: LinearGradient(colors: [context.brand.themedShade(const Color(0xFFFF8A3D)), accent]),
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.38),
+                  blurRadius: 24,
+                  spreadRadius: -8,
+                  offset: const Offset(0, 12),
                 ),
+              ],
+            ),
+            child: FilledButton(
+              onPressed: busy ? null : onPressed,
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                disabledBackgroundColor: Colors.transparent,
+                foregroundColor: Colors.white,
+                disabledForegroundColor: Colors.white.withValues(alpha: 0.85),
+                shadowColor: Colors.transparent,
+                minimumSize: const Size.fromHeight(54),
+                shape: const StadiumBorder(),
+                textStyle: const TextStyle(fontFamily: brandFont, fontWeight: FontWeight.w700, fontSize: 16.5),
+              ),
+              // The words give way to a spinner, and back, without a jump.
+              child: AnimatedSwitcher(
+                duration: Motion.of(context, Motion.press),
+                transitionBuilder: (child, a) => FadeTransition(
+                  opacity: a,
+                  child: ScaleTransition(scale: Tween(begin: 0.85, end: 1.0).animate(a), child: child),
+                ),
+                child: busy
+                    ? const SizedBox(
+                        key: ValueKey('busy'),
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                    : Row(
+                        key: const ValueKey('ready'),
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (icon != null) ...[Icon(icon, size: 21), const SizedBox(width: 10)],
+                          Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+                        ],
+                      ),
+              ),
+            ),
+          ),
         ),
-      ),
-      ),
       ),
     );
   }
@@ -770,6 +1028,10 @@ class CodeBoxes extends StatefulWidget {
   final ValueChanged<String>? onCompleted;
   final ValueChanged<String>? onSubmitted;
 
+  /// The code was refused (wrong, or too short): the boxes shake as it
+  /// turns true.
+  final bool refused;
+
   const CodeBoxes({
     super.key,
     required this.controller,
@@ -784,19 +1046,32 @@ class CodeBoxes extends StatefulWidget {
     this.validator,
     this.onCompleted,
     this.onSubmitted,
+    this.refused = false,
   });
 
   @override
   State<CodeBoxes> createState() => _CodeBoxesState();
 }
 
-class _CodeBoxesState extends State<CodeBoxes> {
+class _CodeBoxesState extends State<CodeBoxes> with TickerProviderStateMixin {
   FocusNode? _ownFocus;
   FocusNode get _focus => widget.focusNode ?? (_ownFocus ??= FocusNode());
+
+  /// The boxes bobbing one after another once the last is filled.
+  late final AnimationController _done;
+
+  /// The boxes shaking when the code is refused.
+  late final AnimationController _shake;
+
+  int _length = 0;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
+    _done = AnimationController(vsync: this, duration: Motion.card * 2);
+    _shake = AnimationController(vsync: this, duration: Motion.card * 1.2);
+    _length = widget.controller.text.length;
     widget.controller.addListener(_changed);
     _focus.addListener(_changed);
   }
@@ -812,6 +1087,7 @@ class _CodeBoxesState extends State<CodeBoxes> {
       (old.focusNode ?? _ownFocus)?.removeListener(_changed);
       _focus.addListener(_changed);
     }
+    if (widget.refused && !old.refused) _shakeThem();
   }
 
   @override
@@ -819,11 +1095,21 @@ class _CodeBoxesState extends State<CodeBoxes> {
     widget.controller.removeListener(_changed);
     _focus.removeListener(_changed);
     _ownFocus?.dispose();
+    _done.dispose();
+    _shake.dispose();
     super.dispose();
   }
 
   void _changed() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final length = widget.controller.text.length;
+    if (length == widget.length && _length < widget.length && !reduceMotion(context)) _done.forward(from: 0);
+    _length = length;
+    setState(() {});
+  }
+
+  void _shakeThem() {
+    if (mounted && !reduceMotion(context)) _shake.forward(from: 0);
   }
 
   @override
@@ -835,6 +1121,9 @@ class _CodeBoxesState extends State<CodeBoxes> {
       builder: (field) {
         final text = widget.controller.text;
         final error = field.errorText;
+        // Refused here too: a shake as the message appears.
+        if (error != null && _error == null) WidgetsBinding.instance.addPostFrameCallback((_) => _shakeThem());
+        _error = error;
         // The box the next digit goes in (the last one once they're full).
         final active = _focus.hasFocus ? text.length.clamp(0, widget.length - 1) : -1;
         return Column(
@@ -899,36 +1188,97 @@ class _CodeBoxesState extends State<CodeBoxes> {
                       builder: (context, box) {
                         const gap = 10.0;
                         final size = ((box.maxWidth - gap * (widget.length - 1)) / widget.length).clamp(36.0, 58.0);
-                        return Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            for (var i = 0; i < widget.length; i++) ...[
-                              if (i > 0) const SizedBox(width: gap),
-                              AnimatedContainer(
-                                duration: Motion.of(context, Motion.hover),
-                                width: size,
-                                // A little shorter when they're narrow (a phone).
-                                height: (size * 1.12).clamp(44.0, 60.0),
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: brand.card,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: error != null
-                                        ? brand.danger
-                                        : i == active
-                                            ? brand.accent
-                                            : brand.fieldBorder,
-                                    width: i == active ? 1.8 : 1,
-                                  ),
-                                ),
-                                child: Text(
-                                  i >= text.length ? '' : (widget.hidden ? '•' : text[i]),
-                                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: brand.ink),
-                                ),
+                        final height = (size * 1.12).clamp(44.0, 60.0);
+                        // Shaking when refused; each box bobbing in turn once
+                        // they're all filled.
+                        return AnimatedBuilder(
+                          animation: Listenable.merge([_shake, _done]),
+                          builder: (context, _) {
+                            final s = _shake.value;
+                            final shake = s == 0 || s == 1 ? 0.0 : math.sin(s * math.pi * 6) * 10 * (1 - s);
+                            double bob(int i) {
+                              final d = _done.value;
+                              if (d == 0 || d == 1) return 1;
+                              final t = ((d - i * 0.09) / 0.45).clamp(0.0, 1.0);
+                              return 1 + 0.1 * math.sin(t * math.pi);
+                            }
+
+                            return Transform.translate(
+                              offset: Offset(shake, 0),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  for (var i = 0; i < widget.length; i++) ...[
+                                    if (i > 0) const SizedBox(width: gap),
+                                    // Arriving one after another.
+                                    PopIn(
+                                      delay: Duration(milliseconds: 260 + 55 * i),
+                                      child: Transform.scale(
+                                        scale: bob(i),
+                                        child: AnimatedContainer(
+                                          duration: Motion.of(context, Motion.hover),
+                                          curve: Motion.ease,
+                                          width: size,
+                                          // A little shorter when they're narrow (a phone).
+                                          height: height,
+                                          alignment: Alignment.center,
+                                          decoration: BoxDecoration(
+                                            // Filled ones warm a little; the one waiting glows.
+                                            color: i < text.length
+                                                ? Color.alphaBlend(brand.accent.withValues(alpha: 0.07), brand.card)
+                                                : brand.card,
+                                            borderRadius: BorderRadius.circular(14),
+                                            border: Border.all(
+                                              color: error != null
+                                                  ? brand.danger
+                                                  : i == active
+                                                      ? brand.accent
+                                                      : i < text.length
+                                                          ? brand.accent.withValues(alpha: 0.45)
+                                                          : brand.fieldBorder,
+                                              width: i == active ? 1.8 : 1,
+                                            ),
+                                            boxShadow: i == active && error == null
+                                                ? [BoxShadow(color: brand.accent.withValues(alpha: 0.24), blurRadius: 14, spreadRadius: 1)]
+                                                : null,
+                                          ),
+                                          // Each digit popping in as it's typed;
+                                          // the waiting box showing where it goes.
+                                          child: AnimatedSwitcher(
+                                            duration: Motion.of(context, Motion.dropdown),
+                                            transitionBuilder: (child, a) => FadeTransition(
+                                              opacity: a,
+                                              child: ScaleTransition(
+                                                scale: Tween(begin: 0.4, end: 1.0).animate(CurvedAnimation(parent: a, curve: Motion.pop)),
+                                                child: child,
+                                              ),
+                                            ),
+                                            child: i < text.length
+                                                ? Text(
+                                                    widget.hidden ? '•' : text[i],
+                                                    key: ValueKey('$i ${widget.hidden ? '•' : text[i]}'),
+                                                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: brand.ink),
+                                                  )
+                                                : i == active
+                                                    ? Container(
+                                                        key: const ValueKey('caret'),
+                                                        width: 2.5,
+                                                        height: height * 0.42,
+                                                        decoration: BoxDecoration(
+                                                          color: brand.accent,
+                                                          borderRadius: BorderRadius.circular(2),
+                                                        ),
+                                                      )
+                                                    : const SizedBox.shrink(key: ValueKey('empty')),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
-                            ],
-                          ],
+                            );
+                          },
                         );
                       },
                     ),

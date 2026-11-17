@@ -14,6 +14,7 @@ import '../utils/validators.dart';
 import '../widgets/app_page.dart';
 import '../widgets/common.dart';
 import '../widgets/logo.dart';
+import '../widgets/motion.dart';
 import '../widgets/splash.dart';
 import 'auth_layout.dart';
 import 'install_app_button.dart';
@@ -463,27 +464,55 @@ class _VerifyCodeScreenState extends ConsumerState<VerifyCodeScreen> {
       title: 'Check your email',
       subtitle: 'We emailed a 6-digit code to',
       children: [
+        // Where it went, with the letter that's on its way.
         Transform.translate(
-          offset: const Offset(0, -18),
-          child: Text(
-            pending.email,
-            style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: context.brand.accent),
+          offset: const Offset(0, -12),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(5, 5, 14, 5),
+              decoration: BoxDecoration(
+                color: context.brand.accent.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: context.brand.accent.withValues(alpha: 0.22)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const _SentMail(),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      pending.email,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: context.brand.accentText),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
+        const SizedBox(height: 4),
         CodeBoxes(
           controller: _code,
           autofocus: true,
           autofillHints: const [AutofillHints.oneTimeCode],
+          refused: _error != null,
           onCompleted: (_) {
             if (!_busy) _verify(pending);
           },
           onSubmitted: (_) => _verify(pending),
         ),
-        const SizedBox(height: 10),
-        Text(
-          "Can't see it? Check your spam folder.",
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 13, color: context.brand.muted),
+        const SizedBox(height: 12),
+        FadeSlideIn(
+          delay: const Duration(milliseconds: 700),
+          offset: 6,
+          child: Text(
+            "Can't see it? Check your spam folder.",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: context.brand.muted),
+          ),
         ),
         if (_error != null) ...[const SizedBox(height: 14), AuthError(_error!)],
         const SizedBox(height: 22),
@@ -494,17 +523,123 @@ class _VerifyCodeScreenState extends ConsumerState<VerifyCodeScreen> {
           onPressed: () => _verify(pending),
         ),
         const SizedBox(height: 10),
+        // The wait for another code: a ring running down; then the way to
+        // ask, popping in.
         Center(
-          child: TextButton(
-            onPressed: _wait > 0 ? null : () => _resend(pending),
-            style: TextButton.styleFrom(
-              foregroundColor: context.brand.accent,
-              textStyle: const TextStyle(fontFamily: brandFont, fontWeight: FontWeight.w700, fontSize: 14),
+          child: AnimatedSwitcher(
+            duration: Motion.of(context, Motion.page),
+            transitionBuilder: (child, a) => FadeTransition(
+              opacity: a,
+              child: ScaleTransition(scale: Tween(begin: 0.85, end: 1.0).animate(CurvedAnimation(parent: a, curve: Motion.pop)), child: child),
             ),
-            child: Text(_wait > 0 ? 'Send a new code in $_wait s' : 'Send a new code'),
+            child: _wait > 0
+                ? Padding(
+                    key: const ValueKey('wait'),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: TweenAnimationBuilder<double>(
+                            tween: Tween(end: _wait / resendSeconds),
+                            duration: Motion.of(context, const Duration(seconds: 1)),
+                            builder: (context, v, _) => CircularProgressIndicator(
+                              value: v,
+                              strokeWidth: 2.5,
+                              color: context.brand.accent,
+                              backgroundColor: context.brand.accent.withValues(alpha: 0.15),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Send a new code in $_wait s',
+                          style: TextStyle(fontFamily: brandFont, fontWeight: FontWeight.w700, fontSize: 14, color: context.brand.muted),
+                        ),
+                      ],
+                    ),
+                  )
+                : TextButton.icon(
+                    key: const ValueKey('ready'),
+                    onPressed: () => _resend(pending),
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('Send a new code'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: context.brand.accent,
+                      textStyle: const TextStyle(fontFamily: brandFont, fontWeight: FontWeight.w700, fontSize: 14),
+                    ),
+                  ),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A letter on its way: an orange badge that pops in, the envelope sliding
+/// into it, ringing out a few times and floating gently, then resting.
+class _SentMail extends StatelessWidget {
+  const _SentMail();
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final badge = Container(
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [brand.themedShade(const Color(0xFFFF8A3D)), brand.accent],
+        ),
+        boxShadow: [BoxShadow(color: brand.accent.withValues(alpha: 0.35), blurRadius: 10, offset: const Offset(0, 3))],
+      ),
+      child: const Icon(Icons.mark_email_unread_rounded, size: 16, color: Colors.white),
+    );
+    if (reduceMotion(context)) return badge;
+    // Rings going out (three), fading as they grow, under the badge.
+    return SizedBox(
+      width: 30,
+      height: 30,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 3200),
+            builder: (context, t, _) {
+              if (t == 1 || t < 0.12) return const SizedBox.shrink();
+              final r = Motion.ease.transform(((t - 0.12) / 0.88 * 3) % 1);
+              return OverflowBox(
+                maxWidth: 80,
+                maxHeight: 80,
+                child: Container(
+                  width: 30 * (1 + 0.9 * r),
+                  height: 30 * (1 + 0.9 * r),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: brand.accent.withValues(alpha: 0.45 * (1 - r)), width: 2),
+                  ),
+                ),
+              );
+            },
+          ),
+          PopIn(
+            delay: const Duration(milliseconds: 240),
+            child: GentleFloat(
+              distance: 3,
+              cycles: 3,
+              period: const Duration(milliseconds: 1800),
+              child: badge,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
