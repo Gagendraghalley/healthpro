@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- The launch screen: Health Pro's navy (LaunchBackground, top to bottom) and
-     the logo in the middle at 240pt wide (LaunchImage). The Flutter splash
-     (HealthProSplash) draws the same, so the handover doesn't jump. -->
+<!-- The launch screen: white (LaunchBackground) and the blue-lettered logo in
+     the middle at 240pt wide (LaunchImage). The Flutter splash
+     (HealthProSplash) draws the same in the light theme (the app's own until
+     someone picks dark; this can't read their choice), so the handover
+     doesn't jump. -->
 <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="12121" systemVersion="16G29" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
     <dependencies>
         <deployment identifier="iOS"/>
@@ -24,7 +26,7 @@
                             <imageView opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" image="LaunchImage" translatesAutoresizingMaskIntoConstraints="NO" id="YRO-k0-Ey4">
                             </imageView>
                         </subviews>
-                        <color key="backgroundColor" red="0.039215686274509803" green="0.10196078431372549" blue="0.24313725490196078" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
                             <constraint firstItem="Lbg-Im-001" firstAttribute="leading" secondItem="Ze5-6b-2t3" secondAttribute="leading" id="Lbg-Ct-001"/>
                             <constraint firstItem="Lbg-Im-001" firstAttribute="trailing" secondItem="Ze5-6b-2t3" secondAttribute="trailing" id="Lbg-Ct-002"/>

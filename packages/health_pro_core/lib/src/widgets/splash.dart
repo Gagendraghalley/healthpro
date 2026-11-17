@@ -6,16 +6,18 @@ import 'package:flutter/services.dart';
 import '../theme/brand.dart';
 import 'logo.dart';
 
-/// The splash screen: the white-lettered logo in the middle of the side
-/// menu's navy, its heartbeat tracing, a slim green bar (the logo's green)
-/// running under it. Shown while the app gets ready (the modules load at
-/// start), in both themes.
+/// The splash screen, in the app's theme: in light, the blue-lettered logo
+/// on white; in dark, the white-lettered logo on the side menu's navy. Its
+/// heartbeat traces, and a slim green bar (the logo's green) runs under it.
+/// Shown while the app gets ready (the modules load at start).
 ///
 /// Before Flutter starts, the launch screens show the same logo at the same
 /// size and place, so the handover doesn't jump. Keep them in step:
-/// - web/index.html (#splash) and web/splash/
+/// - web/index.html (#splash) and web/splash/: in the theme the app saved
 /// - Android: res/drawable*/launch_background.xml, res/values*-v31/styles.xml
 /// - iOS: Runner/Base.lproj/LaunchScreen.storyboard, LaunchImage
+/// The phone's launch screens can't read the app's choice, so they show the
+/// light one, the app's own until someone picks dark.
 class HealthProSplash extends StatelessWidget {
   const HealthProSplash({super.key});
 
@@ -26,13 +28,17 @@ class HealthProSplash extends StatelessWidget {
   /// From the logo's foot to the bar.
   static const barGap = 36.0;
 
-  /// Reads the logo's pictures ahead of the first frame (main, before
-  /// runApp), so the splash shows it at once rather than blinking in after
-  /// the launch screen. Never takes more than a few seconds, and never fails.
-  static Future<void> precacheLogo() {
+  /// The light splash's background (the launch screens' too).
+  static const lightBackground = Colors.white;
+
+  /// Reads the logo's pictures for the theme it opens in ([dark] or light)
+  /// ahead of the first frame (main, before runApp), so the splash shows it
+  /// at once rather than blinking in after the launch screen. Never takes
+  /// more than a few seconds, and never fails.
+  static Future<void> precacheLogo({required bool dark}) {
     Future<void> read(String part) {
       final done = Completer<void>();
-      final image = AssetImage(HealthProLogo.assetFor(part, onDark: true), package: HealthProLogo.package);
+      final image = AssetImage(HealthProLogo.assetFor(part, onDark: dark), package: HealthProLogo.package);
       final stream = image.resolve(ImageConfiguration.empty);
       late final ImageStreamListener listener;
       void finish() {
@@ -53,26 +59,30 @@ class HealthProSplash extends StatelessWidget {
   Widget build(BuildContext context) {
     final width = logoWidthFor(MediaQuery.sizeOf(context));
     final height = width / HealthProLogo.aspectRatio;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [BrandColors.midnight, BrandColors.night],
-          ),
+        decoration: BoxDecoration(
+          color: dark ? null : lightBackground,
+          gradient: dark
+              ? const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [BrandColors.midnight, BrandColors.night],
+                )
+              : null,
         ),
         child: LayoutBuilder(
           builder: (context, box) => Stack(
             children: [
               // The heartbeat starts tracing at once: the splash is short.
-              Center(child: HealthProLogo(height: height, onDark: true, delay: Duration.zero)),
+              Center(child: HealthProLogo(height: height, onDark: dark, delay: Duration.zero)),
               Positioned(
                 left: 0,
                 right: 0,
                 top: box.maxHeight / 2 + height / 2 + barGap,
-                child: Center(child: _RunningBar(width: width / 2)),
+                child: Center(child: _RunningBar(width: width / 2, dark: dark)),
               ),
             ],
           ),
@@ -86,8 +96,9 @@ class HealthProSplash extends StatelessWidget {
 /// a faint track.
 class _RunningBar extends StatefulWidget {
   final double width;
+  final bool dark;
 
-  const _RunningBar({required this.width});
+  const _RunningBar({required this.width, required this.dark});
 
   @override
   State<_RunningBar> createState() => _RunningBarState();
@@ -115,7 +126,7 @@ class _RunningBarState extends State<_RunningBar> with SingleTickerProviderState
           width: widget.width,
           height: 4,
           child: ColoredBox(
-            color: Colors.white.withValues(alpha: 0.12),
+            color: widget.dark ? Colors.white.withValues(alpha: 0.12) : BrandColors.navy.withValues(alpha: 0.08),
             child: AnimatedBuilder(
               animation: _eased,
               builder: (context, child) => Stack(

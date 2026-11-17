@@ -3,7 +3,7 @@
     "short_name": "Health Pro",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#071229",
+    "background_color": "#FFFFFF",
     "theme_color": "#0C2152",
     "description": "Find a gym, join and check in with your phone, in Bhutan.",
     "orientation": "portrait-primary",

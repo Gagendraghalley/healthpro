@@ -108,10 +108,27 @@ void main() {
       expect(logo.width, 320);
     });
 
-    testWidgets('white lettering on navy, in the light theme too, and it says it is loading', (tester) async {
+    /// The splash's background.
+    BoxDecoration background(WidgetTester tester) => tester
+        .widget<DecoratedBox>(find.descendant(of: find.byType(HealthProSplash), matching: find.byType(DecoratedBox)).first)
+        .decoration as BoxDecoration;
+
+    testWidgets('in light, blue lettering on white, as the launch screens', (tester) async {
+      await showSplash(tester, const Size(390, 844), theme: AppTheme.light);
+      expect(shownImages(tester), [endsWith('/logo_base.webp'), endsWith('/logo_heartbeat.webp')]);
+      expect(background(tester).color, HealthProSplash.lightBackground);
+      expect(background(tester).gradient, isNull);
+    });
+
+    testWidgets('in dark, white lettering on navy, as before', (tester) async {
+      await showSplash(tester, const Size(390, 844), theme: AppTheme.dark);
+      expect(shownImages(tester), [endsWith('/logo_base_on_dark.webp'), endsWith('/logo_heartbeat_on_dark.webp')]);
+      expect((background(tester).gradient! as LinearGradient).colors, [BrandColors.midnight, BrandColors.night]);
+    });
+
+    testWidgets('it says it is loading, the bar under the logo', (tester) async {
       final semantics = tester.ensureSemantics();
       await showSplash(tester, const Size(390, 844), theme: AppTheme.light);
-      expect(shownImages(tester), [endsWith('/logo_base_on_dark.webp'), endsWith('/logo_heartbeat_on_dark.webp')]);
       expect(find.bySemanticsLabel('Loading'), findsOneWidget);
       // The bar sits under the logo.
       final logo = tester.getRect(find.byType(HealthProLogo));

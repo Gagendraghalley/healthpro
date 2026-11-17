@@ -18,11 +18,12 @@ Future<void> main() async {
     runApp(StartupProblemApp(problem));
     return;
   }
-  // The splash's logo is read while Supabase starts, so the first frame
-  // shows it and the launch screen hands over without a blink.
-  final splashLogo = HealthProSplash.precacheLogo();
-  await Supabase.initialize(url: Env.supabaseUrl, publishableKey: Env.supabaseAnonKey);
+  // The splash's logo, in the theme it opens in, is read while Supabase
+  // starts, so the first frame shows it and the launch screen hands over
+  // without a blink.
   final themeMode = await ThemeModeController.saved();
+  final splashLogo = HealthProSplash.precacheLogo(dark: themeMode == ThemeMode.dark);
+  await Supabase.initialize(url: Env.supabaseUrl, publishableKey: Env.supabaseAnonKey);
   final reduceMotion = await ReduceMotionController.saved();
   // Whoever is still signed in opens in their own colours.
   final signedIn = Supabase.instance.client.auth.currentUser?.id;

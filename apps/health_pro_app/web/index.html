@@ -37,10 +37,20 @@
     The splash, shown until Flutter draws its first frame: the same logo,
     size and place as HealthProSplash
     (packages/health_pro_core/lib/src/widgets/splash.dart), so the handover
-    doesn't jump. Change one, change the other.
+    doesn't jump. Change one, change the other. In the app's theme: light
+    (white) until someone picks dark, which the app keeps in localStorage
+    (shared_preferences: "flutter.theme_mode").
   -->
+  <script>
+    try {
+      if (/dark/.test(localStorage.getItem('flutter.theme_mode') || '')) {
+        document.documentElement.classList.add('splash-dark');
+      }
+    } catch (e) {}
+  </script>
   <style>
-    html, body { margin: 0; height: 100%; background: #071229; }
+    html, body { margin: 0; height: 100%; background: #FFFFFF; }
+    html.splash-dark, html.splash-dark body { background: #071229; }
     #splash {
       --logo: 240px;
       position: fixed;
@@ -49,9 +59,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(180deg, #0C2152 0%, #071229 100%);
+      background: #FFFFFF;
       transition: opacity .25s ease;
     }
+    .splash-dark #splash { background: linear-gradient(180deg, #0C2152 0%, #071229 100%); }
     @media (min-width: 600px) and (min-height: 600px) {
       #splash { --logo: 320px; }
     }
@@ -69,8 +80,9 @@
       height: 4px;
       overflow: hidden;
       border-radius: 2px;
-      background: rgba(255, 255, 255, .12);
+      background: rgba(11, 21, 48, .08);
     }
+    .splash-dark #splash .bar { background: rgba(255, 255, 255, .12); }
     #splash .bar::after {
       content: "";
       position: absolute;
@@ -92,7 +104,11 @@
 </head>
 <body>
   <div id="splash" role="progressbar" aria-label="Loading Health Pro">
-    <img src="splash/logo.webp" alt="Health Pro">
+    <img alt="Health Pro">
+    <script>
+      document.currentScript.previousElementSibling.src =
+        document.documentElement.classList.contains('splash-dark') ? 'splash/logo_dark.webp' : 'splash/logo.webp';
+    </script>
     <div class="bar"></div>
   </div>
   <script>

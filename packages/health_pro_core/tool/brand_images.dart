@@ -499,17 +499,21 @@ void main() {
       await saveWebp('$images/mark.webp', await markAt(512));
       await saveWebp('$images/mark_on_dark.webp', await markAt(512, image: markOnDarkImage));
 
-      // Launch screens, on navy: the white-lettered logo, 240 wide.
-      await saveWebp('$app/web/splash/logo.webp', await logoAt(720, dark: true));
+      // Launch screens, 240 wide. The web's in both themes (it reads the
+      // app's choice); the phones' in light, on white (they can't).
+      await saveWebp('$app/web/splash/logo.webp', await logoAt(720, dark: false));
+      await saveWebp('$app/web/splash/logo_dark.webp', await logoAt(720, dark: true));
+      await save('$ios/LaunchBackground.imageset/LaunchBackground.png',
+          await render(4, 512, (c, s) {}, background: HealthProSplash.lightBackground), opaque: true);
       for (final (dpi, scale) in [('mdpi', 1.0), ('hdpi', 1.5), ('xhdpi', 2.0), ('xxhdpi', 3.0), ('xxxhdpi', 4.0)]) {
-        await save('$res/drawable-$dpi/splash_logo.png', await logoAt(240 * scale, dark: true));
+        await save('$res/drawable-$dpi/splash_logo.png', await logoAt(240 * scale, dark: false));
         // Android 12+: the mark in its 288dp icon, inside the 192dp circle.
         await save('$res/drawable-$dpi/splash_icon.png', await markAt((288 * scale).round(), scale: 0.5));
         await save('$res/mipmap-$dpi/ic_launcher.png',
             await markAt((48 * scale).round(), scale: 0.86, background: Colors.white), opaque: true);
       }
       for (final (suffix, scale) in [('', 1), ('@2x', 2), ('@3x', 3)]) {
-        await save('$ios/LaunchImage.imageset/LaunchImage$suffix.png', await logoAt(240.0 * scale, dark: true));
+        await save('$ios/LaunchImage.imageset/LaunchImage$suffix.png', await logoAt(240.0 * scale, dark: false));
       }
 
       // App icons: the mark on white. iOS rounds them itself and wants no
