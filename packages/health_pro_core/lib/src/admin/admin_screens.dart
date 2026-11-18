@@ -75,6 +75,13 @@ class AdminScreen extends ConsumerWidget {
               subtitle: 'Turn gym membership and others on or off',
               onTap: () => context.push(CoreRoutes.adminModules),
             ),
+          if (access.can(PlatformPermission.errors))
+            MenuTile(
+              icon: Icons.bug_report_outlined,
+              title: 'App errors',
+              subtitle: "What went wrong on people's phones and browsers",
+              onTap: () => context.push(CoreRoutes.adminErrors),
+            ),
         ];
         return AppPage(
           title: 'Health Pro admin',

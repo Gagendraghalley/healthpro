@@ -12,6 +12,7 @@ import '../widgets/app_page.dart';
 import '../widgets/common.dart';
 import '../widgets/feedback.dart';
 import '../widgets/motion.dart';
+import '../widgets/page_actions.dart';
 import 'app_notification.dart';
 import 'notification_repository.dart';
 
@@ -23,19 +24,24 @@ class NotificationsScreen extends ConsumerWidget {
     final unread = ref.watch(unreadCountProvider);
     return AppPage(
       title: 'Notifications',
-      actions: [
-        if (unread > 0)
-          TextButton(
-            onPressed: () => runAction(context, () => ref.read(notificationRepositoryProvider).markAllRead()),
-            child: const Text('Mark all read'),
-          ),
-      ],
       body: AsyncValueView<List<AppNotification>>(
         value: ref.watch(notificationsProvider),
         onRetry: () => ref.invalidate(notificationsProvider),
         data: (items) => ListView(
           padding: pagePadding(context),
           children: [
+            if (unread > 0)
+              PageActions(
+                text: unread == 1 ? '1 unread' : '$unread unread',
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () => runAction(context, () => ref.read(notificationRepositoryProvider).markAllRead()),
+                    style: OutlinedButton.styleFrom(minimumSize: PageActions.buttonSize),
+                    icon: const Icon(Icons.done_all_rounded, size: 20),
+                    label: const Text('Mark all read'),
+                  ),
+                ],
+              ),
             const PushSettingCard(),
             if (items.isEmpty)
               const EmptyState(

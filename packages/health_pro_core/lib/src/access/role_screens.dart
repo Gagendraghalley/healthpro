@@ -12,6 +12,7 @@ import '../widgets/common.dart';
 import '../widgets/data_grid.dart';
 import '../widgets/feedback.dart';
 import '../widgets/form_fields.dart';
+import '../widgets/page_actions.dart';
 import '../widgets/responsive.dart';
 import '../widgets/searchable_dropdown.dart';
 
@@ -577,16 +578,23 @@ class _RoleFormState extends ConsumerState<_RoleForm> {
       title: role != null
           ? role.name
           : (org == null ? 'New ${RoleScope.label(widget.scope).toLowerCase()} role' : 'New role for ${org.organisationName}'),
-      actions: [
-        if (role != null && !role.isSystem && !_readOnly)
-          IconButton(tooltip: 'Delete role', icon: const Icon(Icons.delete_outline_rounded), onPressed: _delete),
-      ],
       bottomBar: _readOnly ? null : _SaveBar(label: role == null ? 'Make role' : 'Save', onPressed: _saving ? null : _save),
       body: Form(
         key: _form,
         child: ListView(
           padding: pagePadding(context, bottom: 110),
           children: [
+            if (role != null && !role.isSystem && !_readOnly)
+              PageActions(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _delete,
+                    style: OutlinedButton.styleFrom(minimumSize: PageActions.buttonSize, foregroundColor: context.brand.danger),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                    label: const Text('Delete role'),
+                  ),
+                ],
+              ),
             ResponsiveColumns(
               flex: (2, 3),
               first: [

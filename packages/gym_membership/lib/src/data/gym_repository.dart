@@ -4,9 +4,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'dart:typed_data';
 
+import 'exports.dart';
+import 'follow_ups.dart';
 import 'gym_models.dart';
 import 'joining.dart';
 import 'online_payments.dart';
+import 'receipts.dart';
 import 'trainers.dart';
 import 'member_qr.dart';
 import 'registered_member.dart';
@@ -161,6 +164,23 @@ final gymMemberClaimsProvider =
       ref.watch(gymRepositoryProvider).memberClaims(gymMemberId),
 );
 
+/// A gym's pauses running or planned (one per member at most).
+final gymOpenPausesProvider = FutureProvider.family<List<GymPause>, String>(
+  (ref, venueId) => ref.watch(gymRepositoryProvider).openPauses(venueId),
+);
+
+/// One registered member's pauses, latest first.
+final gymMemberPausesProvider =
+    FutureProvider.autoDispose.family<List<GymPause>, String>(
+  (ref, gymMemberId) =>
+      ref.watch(gymRepositoryProvider).memberPauses(gymMemberId),
+);
+
+/// A payment's receipt.
+final gymReceiptProvider = FutureProvider.autoDispose.family<Receipt, String>(
+  (ref, paymentId) => ref.watch(gymRepositoryProvider).receipt(paymentId),
+);
+
 /// The signed-in trainer's profile, gyms, attendance and reviews.
 final myTrainingProvider = FutureProvider<MyTraining>((ref) async {
   if (ref.watch(currentUserIdProvider) == null) return const MyTraining();
@@ -249,6 +269,11 @@ void refreshGym(WidgetRef ref, String venueId) {
   ref.invalidate(gymTrainersProvider(venueId));
   ref.invalidate(gymVerifiedTrainersProvider(venueId));
   ref.invalidate(memberTrainerProvider);
+  ref.invalidate(gymOpenPausesProvider(venueId));
+  ref.invalidate(gymMemberPausesProvider);
+  // Registering someone marks their enquiry joined; every change is logged.
+  ref.invalidate(gymEnquiriesProvider(venueId));
+  ref.invalidate(gymAuditLogProvider);
 }
 
 /// Gym data. Plans, memberships and check-ins change only through the
@@ -431,9 +456,10 @@ class GymRepository {
   /// ([joinRequestId], which this approves), keeps their QR code.
   Future<String> registerMember(String venueId, MemberDetails details,
       {PackageSale? sale, String? personQr, String? joinRequestId}) async {
+    final discount = sale?.discountDetails;
     final result = await _client.rpc('gym_register_member', params: {
       'venue_id': venueId,
-      'details': details.toJson(),
+      'details': {...details.toJson(), if (discount != null) 'discount': discount},
       'plan_id': sale?.plan.id,
       'months': sale?.months,
       'amount': sale?.amount ?? 0,
@@ -913,15 +939,147 @@ class GymRepository {
 
   /// Sells a registered member another package: from the day after their
   /// current one ends, or today.
-  Future<void> renewMember(String gymMemberId, PackageSale sale) =>
-      _client.rpc('gym_renew_member', params: {
-        'gym_member_id': gymMemberId,
-        'plan_id': sale.plan.id,
-        'months': sale.months,
-        'amount': sale.amount,
-        'method': sale.method?.value,
-        'reference': _clean(sale.reference),
-      });
+  /// Sells [sale]; the payment's id (for its receipt), when they paid.
+  Future<String?> renewMember(String gymMemberId, PackageSale sale) async {
+    final result = await _client.rpc('gym_renew_member', params: {
+      'gym_member_id': gymMemberId,
+      'plan_id': sale.plan.id,
+      'months': sale.months,
+      'amount': sale.amount,
+      'method': sale.method?.value,
+      'reference': _clean(sale.reference),
+      if (sale.discountDetails != null) 'discount': sale.discountDetails,
+    });
+    return (result as Map?)?['payment_id'] as String?;
+  }
+
+  /// Pauses their membership for [days] days from [start]; until when it
+  /// runs now.
+  Future<DateTime> pauseMember(String gymMemberId,
+      {required DateTime start, required int days, String? reason}) async {
+    final result = await _client.rpc('gym_pause_member', params: {
+      'gym_member_id': gymMemberId,
+      'start_on': isoDate(start),
+      'days': days,
+      'reason': _clean(reason),
+    });
+    return BhutanTime.parseDate((result as Map)['runs_until'] as String);
+  }
+
+  /// Ends [pauseId] now (or takes it back, not begun); until when their
+  /// membership runs now.
+  Future<DateTime> resumeMember(String pauseId) async {
+    final result = await _client
+        .rpc('gym_resume_member', params: {'pause_id': pauseId});
+    return BhutanTime.parseDate((result as Map)['runs_until'] as String);
+  }
+
+  /// A gym's pauses running or planned, for its members list.
+  Future<List<GymPause>> openPauses(String venueId) async {
+    final rows = await _client
+        .from('gym_membership_pauses')
+        .select()
+        .eq('venue_id', venueId)
+        .gte('end_date', isoDate(BhutanTime.today()))
+        .order('start_date');
+    return rows.map(GymPause.fromJson).toList();
+  }
+
+  /// One member's pauses, latest first.
+  Future<List<GymPause>> memberPauses(String gymMemberId) async {
+    final rows = await _client
+        .from('gym_membership_pauses')
+        .select()
+        .eq('gym_member_id', gymMemberId)
+        .order('start_date', ascending: false)
+        .limit(20);
+    return rows.map(GymPause.fromJson).toList();
+  }
+
+  /// [paymentId]'s receipt.
+  Future<Receipt> receipt(String paymentId) async {
+    final result = await _client
+        .rpc('gym_payment_receipt', params: {'payment_id': paymentId});
+    return Receipt.fromJson(Map<String, dynamic>.from(result as Map));
+  }
+
+  /// Every row [page] gives, 1,000 at a time (the most the server sends at
+  /// once): for exports, which take everything.
+  Future<List<T>> _everyRow<T>(
+      Future<List<Map<String, dynamic>>> Function(int from, int to) page,
+      T Function(Map<String, dynamic>) parse) async {
+    const size = 1000;
+    final all = <T>[];
+    for (var from = 0;; from += size) {
+      final rows = await page(from, from + size - 1);
+      all.addAll(rows.map(parse));
+      if (rows.length < size) return all;
+    }
+  }
+
+  /// Everything a gym's members export needs: every member, their packages
+  /// and the pauses running or planned.
+  Future<MembersExport> membersExport(String venueId) async {
+    final members = _everyRow(
+        (from, to) => _client
+            .from('gym_members')
+            .select(_gymMemberColumns)
+            .eq('venue_id', venueId)
+            .order('full_name')
+            .order('id')
+            .range(from, to),
+        GymMember.fromJson);
+    final subs = _everyRow(
+        (from, to) => _client
+            .from('gym_subscriptions')
+            .select()
+            .eq('venue_id', venueId)
+            .not('gym_member_id', 'is', null)
+            .order('requested_at', ascending: false)
+            .order('id')
+            .range(from, to),
+        GymSubscription.fromJson);
+    return MembersExport(
+        members: await members,
+        subscriptions: await subs,
+        pauses: await openPauses(venueId));
+  }
+
+  /// A gym's payments from [from] up to (not including) [to], with the
+  /// package each paid for.
+  Future<List<ExportedPayment>> paymentsExport(
+          String venueId, DateTime from, DateTime to) =>
+      _everyRow(
+          (start, end) => _client
+              .from('payments')
+              .select('*, payer:profiles!payments_user_id_fkey(full_name), '
+                  'package:gym_subscriptions!gym_subscriptions_payment_id_fkey(plan_name, start_date, end_date, '
+                  'registered:gym_members!gym_subscriptions_gym_member_id_fkey(code))')
+              .eq('venue_id', venueId)
+              .eq('module_key', gymModuleKey)
+              .gte('created_at', from.toUtc().toIso8601String())
+              .lt('created_at', to.toUtc().toIso8601String())
+              .order('created_at')
+              .order('id')
+              .range(start, end),
+          ExportedPayment.fromJson);
+
+  /// A gym's visits from [from] up to (not including) [to], oldest first.
+  Future<List<ExportedVisit>> visitsExport(
+          String venueId, DateTime from, DateTime to) =>
+      _everyRow(
+          (start, end) => _client
+              .from('gym_check_ins')
+              .select('checked_in_at, '
+                  'member:profiles!gym_check_ins_member_id_fkey(full_name, member_code, phone), '
+                  'registered:gym_members!gym_check_ins_gym_member_id_fkey(full_name, code, phone)')
+              .eq('venue_id', venueId)
+              .gte('checked_in_at', from.toUtc().toIso8601String())
+              .lt('checked_in_at', to.toUtc().toIso8601String())
+              .order('checked_in_at')
+              .order('id')
+              .range(start, end),
+          ExportedVisit.fromJson);
 
   /// A new QR card for them; the old one stops working.
   Future<String> reissueCard(String gymMemberId) async => await _client

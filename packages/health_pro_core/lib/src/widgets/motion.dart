@@ -6,11 +6,12 @@ import '../theme/brand.dart';
 
 // Motion every service shares: numbers that count up, cards that arrive one
 // after another and lift under the mouse, and shimmering shapes where a page
-// is still loading. All of it stands still when the device asks for less
-// motion (MediaQuery.disableAnimations).
+// is still loading. All of it stands still when they ask for less motion
+// (MediaQuery.disableAnimations, which HealthProApp sets from their Reduce
+// motion).
 
-/// Whether the device, or their own Reduce motion (Account -> Appearance),
-/// asks for less motion.
+/// Whether their own Reduce motion (Account -> Appearance) asks for less
+/// motion. Off by default.
 bool reduceMotion(BuildContext context) => MediaQuery.maybeDisableAnimationsOf(context) ?? false;
 
 /// The platform's timings and curves, so every movement feels like one app:

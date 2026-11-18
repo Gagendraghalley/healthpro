@@ -454,6 +454,11 @@ verify_jwt = true
 [functions.ask-health-pro]
 verify_jwt = false
 
+# Connected suppliers' items and stock (a gym's Suppliers page): only for a
+# signed-in user; the database checks they have the gym's Inventory permission.
+[functions.supplier-catalog]
+verify_jwt = true
+
 # Push notifications: the database calls it for each new notification
 # (pg_net), with no token. It only ever sends a notification once, to its own
 # person, so a stranger calling it can't send anything.

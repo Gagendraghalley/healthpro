@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_membership/gym_membership.dart';
 import 'package:gym_membership/src/data/joining.dart';
+import 'package:gym_membership/src/data/receipts.dart';
 import 'package:gym_membership/src/data/trainers.dart';
 import 'package:gym_membership/src/screens/check_in_screen.dart';
 import 'package:gym_membership/src/screens/join_screens.dart';
@@ -261,6 +262,81 @@ void main() {
       }
       expect(tester.takeException(), isNull);
     }
+  });
+
+  group('their pause and receipts', () {
+    final paused = MyMemberships.fromJson({
+      'gyms': [
+        {
+          'venue_id': 'g1', 'venue_name': 'Peak Fitness', 'dzongkhag': 'Thimphu', 'gym_member_id': 'm1',
+          'plan_name': 'Gym', 'start_date': isoDate(day(-5)), 'end_date': isoDate(day(39)),
+          'pause': {
+            'id': 'pz', 'venue_id': 'g1', 'gym_member_id': 'm1', 'start_date': isoDate(day(-2)),
+            'end_date': isoDate(day(11)), 'reason': 'Travelling',
+          },
+          'receipts': [
+            {'payment_id': 'pay2', 'receipt_no': 2, 'amount': 1500, 'method': 'mbob', 'status': 'completed',
+             'paid_at': '2026-11-18T04:30:00Z', 'plan_name': 'Gym'},
+            {'payment_id': 'pay1', 'receipt_no': 1, 'amount': 4500, 'method': 'cash', 'status': 'refunded',
+             'paid_at': '2026-10-18T04:30:00Z', 'plan_name': 'Gym'},
+          ],
+        },
+      ],
+    });
+    final receipt = Receipt.fromJson({
+      'payment_id': 'pay2', 'receipt_no': 2, 'paid_at': '2026-11-18T04:30:00Z', 'amount': 1500, 'method': 'mbob',
+      'status': 'completed', 'gym_name': 'Peak Fitness', 'member_name': 'Karma Wangmo', 'member_phone': '+97517123456',
+    });
+
+    test('read from my_gyms()', () {
+      final g = paused.gyms.single;
+      expect(g.isPausedOn(day(0)), isTrue);
+      expect(g.isPausedOn(day(12)), isFalse);
+      expect(g.pause!.reason, 'Travelling');
+      expect(g.receipts.map((r) => r.receiptNo), [2, 1]);
+      expect(g.receipts.last.isRefunded, isTrue);
+      expect(MyMemberships.fromJson({'gyms': [{'venue_id': 'g2', 'venue_name': 'Beta', 'dzongkhag': 'Paro'}]})
+          .gyms.single.receipts, isEmpty);
+    });
+
+    testWidgets('on the dashboard: paused until when, and why they can\'t check in', (tester) async {
+      await show(tester, const Scaffold(body: SingleChildScrollView(child: MyGymsDashboard())), with_: [
+        ...overrides(),
+        myMembershipsProvider.overrideWith((ref) async => paused),
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.text('Membership paused at Peak Fitness'), findsOneWidget);
+      expect(find.text('Paused until ${formatDate(day(11))}'), findsOneWidget);
+      expect(find.textContaining('you can check in again from ${formatDate(day(12))}'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('on My gym: their receipts, each opening (no WhatsApp to themselves)', (tester) async {
+      for (final size in [const Size(1440, 1000), const Size(390, 844)]) {
+        await show(tester, const MyGymScreen(), size: size, with_: [
+          ...overrides(),
+          venueProvider.overrideWith((ref, id) async => gym),
+          gymVerifiedTrainersProvider.overrideWith((ref, id) async => const <TrainerProfile>[]),
+          myMembershipsProvider.overrideWith((ref) async => paused),
+          gymReceiptProvider.overrideWith((ref, id) async => receipt),
+        ]);
+        await tester.pumpAndSettle();
+        final line = find.text('No. 000002 · Gym');
+        await tester.scrollUntilVisible(line, 200, scrollable: find.byType(Scrollable).first);
+        await Scrollable.ensureVisible(tester.element(line), alignment: 0.5);
+        await tester.pumpAndSettle();
+        expect(find.text('Receipts'), findsOneWidget);
+        expect(find.textContaining('Refunded'), findsOneWidget);
+        await tester.tap(line);
+        await tester.pumpAndSettle();
+        expect(find.text('RECEIPT No. 000002'), findsOneWidget);
+        expect(find.text('WhatsApp'), findsNothing);
+        expect(find.text('Share'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.text('Close'));
+        await tester.pumpAndSettle();
+      }
+    });
   });
 
   testWidgets('My gym, with no gym yet: how to join one', (tester) async {

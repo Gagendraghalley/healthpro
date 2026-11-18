@@ -21,4 +21,13 @@ abstract final class GymPermission {
   /// Verify trainers who ask to train here; their timings and attendance
   /// (20261115000004_trainers.sql).
   static const trainers = 'gym.trainers';
+
+  /// The gym's stock, and items from connected suppliers
+  /// (20261118000009_gym_inventory.sql).
+  static const inventory = 'gym.inventory';
+
+  /// The activity log: who registered, sold, took payments, paused or
+  /// cancelled what (20261118000006_gym_audit_log.sql). Enquiries are
+  /// [register]'s.
+  static const activity = 'gym.activity';
 }

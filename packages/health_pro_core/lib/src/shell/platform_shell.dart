@@ -217,6 +217,8 @@ ServiceNav? adminNav(PlatformAccess access, {int pending = 0}) {
           const NavDestination(label: 'Master data', icon: Icons.account_tree_outlined, route: CoreRoutes.adminMasters),
         if (access.can(PlatformPermission.modules))
           const NavDestination(label: 'Services on/off', icon: Icons.toggle_on_outlined, route: CoreRoutes.adminModules),
+        if (access.can(PlatformPermission.errors))
+          const NavDestination(label: 'App errors', icon: Icons.bug_report_outlined, route: CoreRoutes.adminErrors),
       ]),
     ],
   );

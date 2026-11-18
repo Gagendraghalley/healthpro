@@ -155,6 +155,8 @@ class _GymWelcomePageState extends ConsumerState<GymWelcomePage> {
                       ('FAQs', () => _scrollTo(_faqKey)),
                       ('Log in', _logIn),
                       ('Sign up', _signUp),
+                      ('Privacy', () => context.push(CoreRoutes.privacy)),
+                      ('Terms', () => context.push(CoreRoutes.terms)),
                     ],
                   ),
                 ],
@@ -267,8 +269,8 @@ class _Frame extends StatelessWidget {
 
 // ─── The bar ───────────────────────────────────────────────────────────────
 
-/// The logo, the sections (in a wide window), search, light or dark, Log in
-/// and Sign up, on frosted glass.
+/// The logo, the sections (in a wide window), search, Ask AI, light or dark,
+/// Log in and Sign up, on frosted glass.
 class _NavBar extends StatelessWidget {
   static const height = 72.0;
 
@@ -361,7 +363,24 @@ class _NavBar extends StatelessWidget {
                       icon: const Icon(Icons.search_rounded),
                     ),
                   ],
-                  ThemeModeButton(color: ink.heading),
+                  // Ask AI (Health Pro's assistant, under this bar), then light
+                  // or dark. Their touch areas don't pad out past the buttons
+                  // (as on a computer), leaving a phone's logo room.
+                  IconButtonTheme(
+                    data: IconButtonThemeData(
+                      style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap)
+                          .merge(IconButtonTheme.of(context).style),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AskAiBarButton(
+                            onPressed: () => openAssistant(context, const HealthProAssistantPanel(), underBar: height)),
+                        if (MediaQuery.sizeOf(context).width >= 700) const SizedBox(width: 6),
+                        ThemeModeButton(color: ink.heading),
+                      ],
+                    ),
+                  ),
                   SizedBox(width: layout.medium ? 8 : 4),
                   _PillButton(label: 'Log in', outlined: true, compact: true, onPressed: onLogIn),
                   const SizedBox(width: 10),
@@ -2134,7 +2153,7 @@ class _FloatingNote extends StatelessWidget {
 }
 
 /// Fades [child] up into place the first time it scrolls into view (at
-/// once when the device asks for less motion).
+/// once with Reduce motion on).
 class _Reveal extends StatefulWidget {
   final Widget child;
 
@@ -2216,7 +2235,7 @@ class _Revealed extends InheritedWidget {
 /// The page's beat. On every one the lights on the page (what it does, how
 /// it works) move on together, and what they set moving is still again
 /// within [settle], so the page rests a moment before the next. It counts
-/// nothing when the device asks for less motion.
+/// nothing with Reduce motion on.
 class _Beat extends InheritedNotifier<ValueNotifier<int>> {
   /// Starts the beat again from now.
   final VoidCallback restart;

@@ -179,7 +179,9 @@ class _Welcome extends ConsumerWidget {
       eyebrow: '${weekdays[now.weekday - 1]}, ${formatDate(now)}',
       title: '${greeting(now)}, ${firstName(name)}',
       subtitle: facts.join('  ·  '),
-      leading: name.trim().isEmpty ? null : BandAvatar(initial: BandAvatar.initialOf(name)),
+      leading: name.trim().isEmpty && profile?.avatarUrl == null
+          ? null
+          : BandAvatar(initial: BandAvatar.initialOf(name), photoUrl: profile?.avatarUrl),
       bottom: actions.isEmpty
           ? null
           : Wrap(

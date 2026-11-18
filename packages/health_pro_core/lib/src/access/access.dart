@@ -20,7 +20,10 @@ abstract final class PlatformPermission {
   /// Make organisations and choose which venues belong to each.
   static const organisations = 'organisations.manage';
 
-  static const all = [users, roles, masters, venuesVerify, modules, organisations];
+  /// See errors the app hit on people's phones and browsers; clear fixed ones.
+  static const errors = 'errors.view';
+
+  static const all = [users, roles, masters, venuesVerify, modules, organisations, errors];
 }
 
 /// Running one venue (the core's; modules add their own, e.g. gym.check_in).

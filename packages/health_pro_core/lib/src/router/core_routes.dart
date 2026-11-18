@@ -9,6 +9,11 @@ abstract final class CoreRoutes {
   static const verify = '/verify';
   static const setCode = '/set-code';
 
+  /// How Health Pro looks after people's data, and the rules for using it:
+  /// open to everyone, signed in or not (the app stores link to them).
+  static const privacy = '/privacy';
+  static const terms = '/terms';
+
   /// The platform's Overview, and every service on it.
   static const home = '/home';
   static const services = '/services';
@@ -46,6 +51,9 @@ abstract final class CoreRoutes {
   static const adminOrganisations = '/admin/organisations';
   static const adminOrganisation = '/admin/organisations/:id';
 
+  /// Errors the app hit on people's phones and browsers.
+  static const adminErrors = '/admin/errors';
+
   static String adminUserFor(String id) => '/admin/users/$id';
 
   /// Users: everyone, or the people who work at [organisation]'s venues.
@@ -78,7 +86,7 @@ abstract final class CoreRoutes {
   static String signUpFor(String? next) => next == null ? signUp : '$signUp?next=${Uri.encodeComponent(next)}';
 
   /// Pages visitors can open without an account.
-  static const publicPaths = {welcome, signIn, signUp, verify, registerVenue};
+  static const publicPaths = {welcome, signIn, signUp, verify, registerVenue, privacy, terms};
 
   /// Pages only for visitors: signed-in users go on to their page.
   static const signedOutOnly = {welcome, signIn, signUp};

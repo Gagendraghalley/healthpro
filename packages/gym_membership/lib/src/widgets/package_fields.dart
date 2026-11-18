@@ -5,6 +5,7 @@ import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/gym_models.dart';
 import '../data/gym_repository.dart';
+import '../data/money.dart';
 import '../data/registered_member.dart';
 import 'payment_qr.dart';
 
@@ -42,6 +43,10 @@ class _PackageFieldsState extends ConsumerState<PackageFields> {
   final _reference = TextEditingController();
   PaymentMethod _method = PaymentMethod.cash;
 
+  /// The gym's offer picked, if any, and why they pay less.
+  GymOffer? _offer;
+  final _reason = TextEditingController();
+
   /// Until staff type their own amount, it follows the package and months.
   bool _amountTouched = false;
 
@@ -52,6 +57,7 @@ class _PackageFieldsState extends ConsumerState<PackageFields> {
   void dispose() {
     _amount.dispose();
     _reference.dispose();
+    _reason.dispose();
     super.dispose();
   }
 
@@ -65,7 +71,16 @@ class _PackageFieldsState extends ConsumerState<PackageFields> {
             amount: int.tryParse(_amount.text.trim()) ?? 0,
             method: _method,
             reference: _reference.text,
+            offer: _offer,
+            discountReason: _reason.text,
           ));
+  }
+
+  /// The price the form suggests: the package's for those months, less the
+  /// offer picked.
+  int _suggested(GymPlan plan) {
+    final full = packagePrice(plan, _months);
+    return _offer == null ? full : _offer!.priceFrom(full);
   }
 
   void _choose(GymPlan? plan, {int? months}) {
@@ -73,8 +88,18 @@ class _PackageFieldsState extends ConsumerState<PackageFields> {
       _plan = plan;
       _months = months ?? (plan == null ? 1 : defaultMonths(plan));
       if (plan != null && !_amountTouched) {
-        _amount.text = '${packagePrice(plan, _months)}';
+        _amount.text = '${_suggested(plan)}';
       }
+    });
+    _emit();
+  }
+
+  /// Picking an offer (or none) sets the amount to its price.
+  void _pickOffer(GymOffer? offer) {
+    setState(() {
+      _offer = offer;
+      _amountTouched = false;
+      if (_plan != null) _amount.text = '${_suggested(_plan!)}';
     });
     _emit();
   }
@@ -97,6 +122,12 @@ class _PackageFieldsState extends ConsumerState<PackageFields> {
     final end = packageEnd(widget.start, _months);
     final today = BhutanTime.today();
     final amount = int.tryParse(_amount.text.trim()) ?? 0;
+    final offers = (ref.watch(gymOffersProvider(widget.venueId)).valueOrNull ??
+            const <GymOffer>[])
+        .where((o) => o.isActive)
+        .toList();
+    final full = plan == null ? 0 : packagePrice(plan, _months);
+    final discount = plan != null && amount < full ? full - amount : 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -157,6 +188,20 @@ class _PackageFieldsState extends ConsumerState<PackageFields> {
             child: FormHint(
                 'This package has already ended: they will show as an old member until they renew.'),
           ),
+        if (plan != null && offers.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          SearchableDropdown<String>(
+            value: _offer?.id ?? '',
+            decoration: const InputDecoration(
+                labelText: 'Offer', prefixIcon: Icon(Icons.local_offer_outlined)),
+            options: [
+              const DropdownOption('', 'No offer'),
+              for (final o in offers) DropdownOption(o.id, '${o.name} · ${o.label}'),
+            ],
+            onChanged: (id) =>
+                _pickOffer(offers.where((o) => o.id == id).firstOrNull),
+          ),
+        ],
         const SizedBox(height: 14),
         TextFormField(
           controller: _amount,
@@ -167,7 +212,10 @@ class _PackageFieldsState extends ConsumerState<PackageFields> {
             prefixText: 'Nu. ',
             helperText: plan == null
                 ? null
-                : 'Suggested from the package price: ${formatNu(packagePrice(plan, _months))}',
+                : _offer == null
+                    ? 'Suggested from the package price: ${formatNu(full)}'
+                    : 'Full price ${formatNu(full)}; with ${_offer!.name}: '
+                        '${formatNu(_suggested(plan))}',
           ),
           onChanged: (_) {
             _amountTouched = true;
@@ -177,6 +225,26 @@ class _PackageFieldsState extends ConsumerState<PackageFields> {
           validator: (v) =>
               plan == null ? null : Validators.wholeNumber(v, max: 1000000),
         ),
+        if (discount > 0) ...[
+          const SizedBox(height: 14),
+          TextFormField(
+            controller: _reason,
+            maxLength: 200,
+            decoration: InputDecoration(
+              labelText: _offer == null
+                  ? 'Reason for the discount *'
+                  : 'Note on the discount',
+              hintText: 'Referred by Sonam, staff rate...',
+              helperText: '${formatNu(discount)} off the full price of '
+                  '${formatNu(full)}. The owner sees who gave it and why.',
+              prefixIcon: const Icon(Icons.local_offer_outlined),
+            ),
+            onChanged: (_) => _emit(),
+            validator: (v) => _offer == null && (v ?? '').trim().isEmpty
+                ? 'Say why they pay less (or pick an offer)'
+                : null,
+          ),
+        ],
         if (amount > 0) ...[
           const SizedBox(height: 14),
           Wrap(

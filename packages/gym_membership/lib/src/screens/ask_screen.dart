@@ -35,15 +35,24 @@ class AskScreen extends ConsumerWidget {
       title: 'Ask AI',
       builder: (context, access) => AppPage(
         title: 'Ask AI',
-        actions: [
-          if (chat.turns.isNotEmpty)
-            IconButton(
-              tooltip: 'Start again',
-              icon: const Icon(Icons.restart_alt_rounded),
-              onPressed: chat.busy ? null : ref.read(askChatProvider(venueId).notifier).startAgain,
-            ),
-        ],
-        body: AskChat(access: access),
+        body: AskChat(
+          access: access,
+          // Under the bar, once there's a conversation to clear.
+          header: chat.turns.isEmpty
+              ? null
+              : PageActions(
+                  text: '${access.venue.name} · your gym\'s records',
+                  bottom: 12,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: chat.busy ? null : ref.read(askChatProvider(venueId).notifier).startAgain,
+                      style: OutlinedButton.styleFrom(minimumSize: PageActions.buttonSize),
+                      icon: const Icon(Icons.restart_alt_rounded, size: 20),
+                      label: const Text('Start again'),
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }
@@ -88,7 +97,10 @@ class AskChat extends ConsumerWidget {
   final VenueAccess access;
   final bool compact;
 
-  const AskChat({super.key, required this.access, this.compact = false});
+  /// On the full-size page: its buttons, under the top bar.
+  final Widget? header;
+
+  const AskChat({super.key, required this.access, this.compact = false, this.header});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -102,6 +114,7 @@ class AskChat extends ConsumerWidget {
     ];
     return AssistantConversationView<AskReply>(
       compact: compact,
+      header: header,
       chat: chat,
       hint: 'Ask about your gym…',
       suggestions: suggestions,

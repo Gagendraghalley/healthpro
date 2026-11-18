@@ -11,6 +11,7 @@ import '../gym_routes.dart';
 import '../widgets/gym_widgets.dart';
 import '../widgets/member_card.dart';
 import '../widgets/member_photo.dart';
+import '../widgets/receipt_view.dart';
 import 'members_screens.dart';
 
 /// Straight after the front desk registers a member: it's done, the package
@@ -243,6 +244,17 @@ class _PackageSummary extends StatelessWidget {
         if (ended) ...[
           const SizedBox(height: 10),
           const FormHint('This package had already ended: renew it on their page before they come in.'),
+        ],
+        if (sold.paymentId != null) ...[
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: () => showReceipt(context, sold.paymentId!),
+              icon: const Icon(Icons.receipt_long_outlined),
+              label: const Text('Receipt'),
+            ),
+          ),
         ],
       ],
     );

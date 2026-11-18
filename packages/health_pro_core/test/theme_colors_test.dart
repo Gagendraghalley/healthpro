@@ -204,4 +204,27 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Pick colour theme'), findsNothing);
   });
+
+  testWidgets("Ask AI's icon is in the app's colour, the one they picked too, light and dark", (tester) async {
+    final blue = ThemePalette.primaries.firstWhere((s) => s.id == 'blue');
+    for (final (theme, width) in [
+      (AppTheme.light, 1200.0),
+      (AppTheme.lightWith(ThemeColors(primary: blue)), 1200.0),
+      (AppTheme.darkWith(ThemeColors(primary: blue)), 1200.0),
+      (AppTheme.lightWith(ThemeColors(primary: blue)), 390.0),
+    ]) {
+      tester.view.physicalSize = Size(width, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        theme: theme,
+        home: Scaffold(body: Center(child: AskAiBarButton(onPressed: () {}))),
+      ));
+      await tester.pumpAndSettle(); // the theme eases from the last one
+      final brand = theme.extension<Brand>()!;
+      final icon = tester.widget<RichText>(
+          find.descendant(of: find.byIcon(Icons.auto_awesome_rounded), matching: find.byType(RichText)));
+      expect(icon.text.style?.color, brand.accent, reason: '${theme.brightness} at $width');
+    }
+  });
 }

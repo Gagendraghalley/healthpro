@@ -25,3 +25,6 @@ GoogleService-Info.plist
 
 # Cloudflare
 .wrangler/
+
+# Database backups (scripts/backup_supabase.sh): real people's data, never commit
+backups/

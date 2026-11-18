@@ -65,11 +65,21 @@ class GymSubscription {
   final DateTime requestedAt;
   final DateTime? activatedAt;
 
+  /// The payment for it (its receipt), when one was taken.
+  final String? paymentId;
+
   /// Joined in when the reader may see them.
   final String? gymName;
   final String? memberName;
   final String? memberPhone;
   final String? memberCode;
+
+  /// Its full price (the plan's for those months) when sold at the desk;
+  /// above [price] when a discount was given (20261118000010_gym_discounts.sql),
+  /// with the offer picked and the reason typed.
+  final int? listPrice;
+  final String? offerName;
+  final String? discountReason;
 
   const GymSubscription({
     required this.id,
@@ -85,11 +95,18 @@ class GymSubscription {
     this.startDate,
     this.endDate,
     this.activatedAt,
+    this.paymentId,
     this.gymName,
     this.memberName,
     this.memberPhone,
     this.memberCode,
+    this.listPrice,
+    this.offerName,
+    this.discountReason,
   });
+
+  /// What was taken off the full price; 0 for none.
+  int get discount => listPrice == null || listPrice! <= price ? 0 : listPrice! - price;
 
   bool get isPending => status == SubscriptionStatus.pending;
 
@@ -137,10 +154,14 @@ class GymSubscription {
       endDate: date('end_date'),
       requestedAt: DateTime.parse(json['requested_at'] as String),
       activatedAt: moment('activated_at'),
+      paymentId: json['payment_id'] as String?,
       gymName: gym?['name'] as String?,
       memberName: member?['full_name'] as String?,
       memberPhone: member?['phone'] as String?,
       memberCode: (member?['member_code'] ?? member?['code']) as String?,
+      listPrice: (json['list_price'] as num?)?.toInt(),
+      offerName: json['offer_name'] as String?,
+      discountReason: json['discount_reason'] as String?,
     );
   }
 }

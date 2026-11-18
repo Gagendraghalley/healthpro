@@ -11,6 +11,7 @@ import '../theme/brand.dart';
 import '../widgets/app_page.dart';
 import '../widgets/common.dart';
 import '../widgets/motion.dart';
+import '../widgets/page_actions.dart';
 import '../widgets/responsive.dart';
 import '../widgets/service_cards.dart';
 import 'service_nav.dart';
@@ -26,14 +27,6 @@ class ServicesScreen extends ConsumerWidget {
     final access = ref.watch(myAccessProvider).valueOrNull ?? PlatformAccess.none;
     return AppPage(
       title: 'My services',
-      actions: [
-        if (access.can(PlatformPermission.modules))
-          TextButton.icon(
-            onPressed: () => context.go(CoreRoutes.adminModules),
-            icon: const Icon(Icons.toggle_on_outlined),
-            label: const Text('Turn services on or off'),
-          ),
-      ],
       body: AsyncValueView<List<HealthProModule>>(
         value: ref.watch(enabledModulesProvider),
         onRetry: () => ref.invalidate(appModulesProvider),
@@ -54,9 +47,19 @@ class ServicesScreen extends ConsumerWidget {
           return ListView(
             padding: pagePadding(context, bottom: 40),
             children: [
-              Text(
-                'Open a service to see its dashboard and available tasks. Services you use appear first; other services are ready to set up.',
-                style: TextStyle(color: context.brand.muted, fontSize: 15, height: 1.45),
+              PageActions(
+                text: 'Open a service to see its dashboard and available tasks. Services you use appear first; '
+                    'other services are ready to set up.',
+                bottom: 0,
+                children: [
+                  if (access.can(PlatformPermission.modules))
+                    OutlinedButton.icon(
+                      onPressed: () => context.go(CoreRoutes.adminModules),
+                      style: OutlinedButton.styleFrom(minimumSize: PageActions.buttonSize),
+                      icon: const Icon(Icons.toggle_on_outlined, size: 20),
+                      label: const Text('Turn services on or off'),
+                    ),
+                ],
               ),
               if (inUse.isNotEmpty) ...[SectionTitle('In use (${inUse.length})'), grid(inUse)],
               if (others.isNotEmpty) ...[SectionTitle(inUse.isEmpty ? 'Services' : 'More services'), grid(others)],

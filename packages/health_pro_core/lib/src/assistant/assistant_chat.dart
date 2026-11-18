@@ -153,6 +153,10 @@ class AssistantConversationView<R> extends StatefulWidget {
   final String note;
   final bool compact;
 
+  /// On a page: its buttons (Start again), held under the top bar over the
+  /// conversation; not in the floating panel.
+  final Widget? header;
+
   const AssistantConversationView({
     super.key,
     required this.chat,
@@ -164,6 +168,7 @@ class AssistantConversationView<R> extends StatefulWidget {
     this.hint = 'Ask a question…',
     this.note = 'Only your question goes to the AI',
     this.compact = false,
+    this.header,
   });
 
   @override
@@ -209,11 +214,15 @@ class _AssistantConversationViewState<R> extends State<AssistantConversationView
   @override
   Widget build(BuildContext context) {
     final chat = widget.chat;
-    final padding = widget.compact
+    final header = widget.compact ? null : widget.header;
+    final page = widget.compact
         ? const EdgeInsets.fromLTRB(14, 16, 14, 12)
         : pagePadding(context).copyWith(bottom: 16);
+    // With a header, the conversation starts under it rather than under the bar.
+    final padding = header == null ? page : page.copyWith(top: 0);
     return Column(
       children: [
+        if (header != null) Padding(padding: EdgeInsets.fromLTRB(page.left, page.top, page.right, 0), child: header),
         Expanded(
           child: chat.turns.isEmpty
               ? ListView(padding: padding, children: [FadeSlideIn(child: widget.welcome)])
@@ -584,9 +593,9 @@ class AssistantPanel extends StatelessWidget {
   }
 }
 
-/// Opens [panel] from the floating button: beside the page in its corner on
-/// a computer, the whole screen on a phone.
-Future<void> openAssistant(BuildContext context, Widget panel) {
+/// Opens [panel] from the Ask AI button: in the page's top corner on a
+/// computer, under its bar ([underBar] tall), the whole screen on a phone.
+Future<void> openAssistant(BuildContext context, Widget panel, {double underBar = kToolbarHeight}) {
   final size = MediaQuery.sizeOf(context);
   final scoped = AssistantPanelScope(child: panel);
   if (size.width < 720) {
@@ -608,12 +617,12 @@ Future<void> openAssistant(BuildContext context, Widget panel) {
     transitionDuration: still ? Duration.zero : Motion.modal,
     pageBuilder: (context, _, __) => SafeArea(
       child: Align(
-        alignment: Alignment.bottomRight,
+        alignment: Alignment.topRight,
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.fromLTRB(20, 20 + underBar, 20, 20),
           child: SizedBox(
             width: 420,
-            height: math.min(680, size.height - 40),
+            height: math.min(680, size.height - 40 - underBar),
             child: Material(
               color: context.brand.background,
               elevation: 16,
@@ -632,7 +641,7 @@ Future<void> openAssistant(BuildContext context, Widget panel) {
         opacity: curved,
         child: ScaleTransition(
           scale: Tween(begin: 0.92, end: 1.0).animate(curved),
-          alignment: Alignment.bottomRight,
+          alignment: Alignment.topRight,
           child: child,
         ),
       );
@@ -640,48 +649,80 @@ Future<void> openAssistant(BuildContext context, Widget panel) {
   );
 }
 
-/// The floating Ask AI button, a standard floating action button in the
-/// brand's orange: "Ask AI" beside its icon on a computer, the icon alone on
-/// a phone. No hero, so it never clashes with a page's own button.
-class AssistantButton extends StatelessWidget {
+/// The Ask AI button in the top bar, before light or dark: "Ask AI" beside
+/// its icon on a computer, the icon alone on a phone. The icon in the app's
+/// colour, as the search's and the menu's are; the words a shade deeper, to
+/// read on the tint.
+class AskAiBarButton extends StatelessWidget {
   final VoidCallback onPressed;
 
-  const AssistantButton({super.key, required this.onPressed});
+  const AskAiBarButton({super.key, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 720;
-    final accent = context.brand.accent;
-    const icon = Icon(Icons.auto_awesome_rounded);
-    if (!wide) {
-      return FloatingActionButton(
-        heroTag: null,
-        tooltip: 'Ask AI',
-        backgroundColor: accent,
-        foregroundColor: Colors.white,
-        onPressed: onPressed,
-        child: icon,
-      );
+    final brand = context.brand;
+    const icon = Icon(Icons.auto_awesome_rounded, size: 20);
+    if (MediaQuery.sizeOf(context).width < 700) {
+      return IconButton(tooltip: 'Ask AI', color: brand.accent, icon: icon, onPressed: onPressed);
     }
-    return FloatingActionButton.extended(
-      heroTag: null,
-      tooltip: 'Ask AI',
-      backgroundColor: accent,
-      foregroundColor: Colors.white,
-      extendedTextStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, letterSpacing: 0.1),
-      onPressed: onPressed,
-      icon: icon,
-      label: const Text('Ask AI'),
+    return Tooltip(
+      message: 'Ask AI',
+      child: Pressable(
+        child: TextButton.icon(
+          onPressed: onPressed,
+          style: TextButton.styleFrom(
+            minimumSize: const Size(0, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            foregroundColor: brand.accentText,
+            iconColor: brand.accent,
+            backgroundColor: brand.accent.withValues(alpha: 0.10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: brand.accent.withValues(alpha: 0.28)),
+            ),
+            textStyle: const TextStyle(fontFamily: brandFont, fontWeight: FontWeight.w700, fontSize: 14),
+          ),
+          icon: icon,
+          label: const Text('Ask AI'),
+        ),
+      ),
     );
   }
 }
 
-/// The core's pages with a bar of buttons along the bottom: a role's editor.
-final _barPages = RegExp(r'^/(manage/[^/]+/roles|admin/roles)/[^/]+$');
+/// Whether a module keeps the Ask AI button off [location] (its chat is open
+/// full size there).
+bool assistantHiddenAt(String location, List<HealthProModule> modules) =>
+    modules.any((m) => m.hidesAssistantButton(location));
 
-/// [child] with the floating Ask AI button in its corner. On a module's
-/// pages with an assistant of its own, the button opens that one; elsewhere
-/// Health Pro's. Not on pages it would get in the way of.
+/// Opens Ask AI for [location]: on a module's pages with an assistant of its
+/// own, that one; elsewhere Health Pro's.
+Future<void> openAssistantAt(BuildContext context, String location, List<HealthProModule> modules) {
+  Widget? panel;
+  for (final m in modules) {
+    panel = m.buildAssistant(context, location);
+    if (panel != null) break;
+  }
+  return openAssistant(context, panel ?? const HealthProAssistantPanel());
+}
+
+/// What the pages in [AssistantFrame] read for their bar's Ask AI button.
+class AskAiScope extends InheritedWidget {
+  /// Opens Ask AI; null on pages it isn't offered on.
+  final VoidCallback? open;
+
+  const AskAiScope({super.key, required this.open, required super.child});
+
+  /// Ask AI for the page's bar ([AppPage]); null without one.
+  static VoidCallback? of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<AskAiScope>()?.open;
+
+  @override
+  bool updateShouldNotify(AskAiScope oldWidget) => open != oldWidget.open;
+}
+
+/// Gives the pages in [child] the Ask AI button in their top bar ([AppPage]),
+/// signed in or not: on a module's pages with an assistant of its own, it
+/// opens that one; elsewhere Health Pro's. Not on pages its chat fills.
 class AssistantFrame extends ConsumerWidget {
   /// The page's path.
   final String location;
@@ -692,28 +733,11 @@ class AssistantFrame extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final modules = ref.watch(enabledModulesProvider).valueOrNull ?? const <HealthProModule>[];
-    final hidden = _barPages.hasMatch(location) || modules.any((m) => m.hidesAssistantButton(location));
-    // The same Stack with the button or without, so the page (and the menu
-    // around it) isn't built afresh, losing what was open, on going between.
-    return Stack(
-      children: [
-        Positioned.fill(child: child),
-        if (!hidden)
-          Positioned(
-            right: 16,
-            bottom: 16 + MediaQuery.paddingOf(context).bottom,
-            child: FadeSlideIn(
-              child: AssistantButton(onPressed: () {
-                Widget? panel;
-                for (final m in modules) {
-                  panel = m.buildAssistant(context, location);
-                  if (panel != null) break;
-                }
-                openAssistant(context, panel ?? const HealthProAssistantPanel());
-              }),
-            ),
-          ),
-      ],
+    // The scope is always there, so the page isn't built afresh, losing what
+    // was open, on going to or from a page without the button.
+    return AskAiScope(
+      open: assistantHiddenAt(location, modules) ? null : () => openAssistantAt(context, location, modules),
+      child: child,
     );
   }
 }

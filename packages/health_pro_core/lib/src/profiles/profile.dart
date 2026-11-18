@@ -16,6 +16,9 @@ class Profile {
   final String? dzongkhag;
   final String role;
 
+  /// Public address of their profile photo; null shows their initials.
+  final String? avatarUrl;
+
   /// Short code gym staff can type at check-in instead of scanning
   /// ('4K7P9Q'). Shown under the member's QR code.
   final String memberCode;
@@ -32,6 +35,7 @@ class Profile {
     this.email,
     this.phone,
     this.dzongkhag,
+    this.avatarUrl,
     this.isActive = true,
   });
 
@@ -46,6 +50,7 @@ class Profile {
         email: json['email'] as String?,
         phone: json['phone'] as String?,
         dzongkhag: json['dzongkhag'] as String?,
+        avatarUrl: json['avatar_url'] as String?,
         role: json['role'] as String? ?? PlatformRole.user,
         memberCode: json['member_code'] as String? ?? '',
         isActive: json['is_active'] as bool? ?? true,

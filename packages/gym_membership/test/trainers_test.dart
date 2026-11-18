@@ -109,6 +109,8 @@ void main() {
         gymTrainersProvider.overrideWith((ref, id) async => [gymTrainer(status: 'pending'), gymTrainer()]),
       ]);
       await tester.pumpAndSettle();
+      expect(find.text('Add trainer'), findsOneWidget, reason: 'the gym can add one itself, under the bar');
+      expect(find.descendant(of: find.byType(GlassAppBar), matching: find.text('Add trainer')), findsNothing);
       expect(find.text('Asking to train here (1)'), findsOneWidget);
       expect(find.textContaining('NSCA CSCS'), findsOneWidget);
       expect(find.text('Verify'), findsOneWidget);
@@ -118,7 +120,6 @@ void main() {
       expect(find.text('2 pm–3 pm · Not available').evaluate().isNotEmpty || find.text('2–3 pm · Not available').evaluate().isNotEmpty,
           isTrue, reason: 'their time at another gym, unnamed');
       expect(find.text('Days attended'), findsOneWidget);
-      expect(find.text('Add trainer'), findsOneWidget, reason: 'the gym can add one itself');
       expect(tester.takeException(), isNull);
     }
   });

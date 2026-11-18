@@ -28,14 +28,14 @@ class HealthProApp extends ConsumerWidget {
       // cards' own, through Brand.darkness) glides to its other self.
       themeAnimationDuration: lessMotion ? Duration.zero : Motion.theme,
       themeAnimationCurve: Motion.easeInOut,
-      // Their own Reduce motion joins the device's: everything that asks
-      // reduceMotion(context) stands still. On a phone, everything is a
-      // little smaller (PhoneSized).
-      builder: (context, child) {
-        final sized = PhoneSized(child: child!);
-        if (!lessMotion) return sized;
-        return MediaQuery(data: MediaQuery.of(context).copyWith(disableAnimations: true), child: sized);
-      },
+      // Their own Reduce motion decides, off until they turn it on; the
+      // phone's accessibility setting doesn't switch it on. On, everything
+      // that asks reduceMotion(context) stands still. On a phone, everything
+      // is a little smaller (PhoneSized).
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(disableAnimations: lessMotion),
+        child: PhoneSized(child: child!),
+      ),
       routerConfig: ref.watch(appRouterProvider),
     );
   }

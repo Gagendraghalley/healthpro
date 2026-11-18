@@ -8,9 +8,12 @@ import '../access/organisation_screens.dart';
 import '../access/role_screens.dart';
 import '../access/user_screens.dart';
 import '../admin/admin_screens.dart';
+import '../admin/app_errors_screen.dart';
 import '../masters/master_screens.dart';
 import '../auth/auth_repository.dart';
 import '../auth/auth_screens.dart';
+import '../errors/error_reporter.dart';
+import '../legal/legal_pages.dart';
 import '../module/module_providers.dart';
 import '../notifications/notifications_screen.dart';
 import '../people/my_qr_screen.dart';
@@ -44,7 +47,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   // copied link opens that page rather than the one under it.
   GoRouter.optionURLReflectsImperativeAPIs = true;
 
-  return GoRouter(
+  final router = GoRouter(
     initialLocation: CoreRoutes.root,
     // Supabase.initialize has already read an email link's result; one that
     // failed stays in the address ('#error=...'). Start at '/' then.
@@ -76,6 +79,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: CoreRoutes.setCode,
         builder: (_, s) => SetCodeScreen(next: safeNext(s.uri.queryParameters['next'])),
       ),
+      GoRoute(path: CoreRoutes.privacy, builder: (_, __) => const PrivacyPolicyScreen()),
+      GoRoute(path: CoreRoutes.terms, builder: (_, __) => const TermsScreen()),
       // Signed in, in the platform's frame: its menu of services stays while
       // the page beside it changes.
       ShellRoute(
@@ -136,12 +141,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: CoreRoutes.adminOrganisation,
             builder: (_, s) => AdminOrganisationScreen(organisationId: s.pathParameters['id']!),
           ),
+          GoRoute(path: CoreRoutes.adminErrors, builder: (_, __) => const AdminErrorsScreen()),
           for (final m in modules) ...m.routes,
         ],
       ),
       for (final m in modules) ...m.fullScreenRoutes,
     ],
   );
+  // An error report says which page it happened on: its path only.
+  ErrorReporter.currentPage = () => router.routerDelegate.currentConfiguration.uri.path;
+  return router;
 });
 
 /// Tells the router to check its redirect again: on every sign-in and

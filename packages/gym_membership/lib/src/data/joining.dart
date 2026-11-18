@@ -1,6 +1,7 @@
 import 'package:health_pro_core/health_pro_core.dart';
 
 import 'online_payments.dart';
+import 'receipts.dart';
 import 'registered_member.dart';
 
 /// A scanned QR code whose person isn't a member of this gym yet: the desk
@@ -156,6 +157,13 @@ class MyGym {
   /// Their trainer there, if they have one.
   final ({String id, String name, String? photoUrl})? trainer;
 
+  /// Their pause there, running or planned; their package's [endDate]
+  /// already counts it.
+  final GymPause? pause;
+
+  /// Their last payments there, latest first.
+  final List<ReceiptLine> receipts;
+
   const MyGym({
     required this.venueId,
     required this.venueName,
@@ -172,7 +180,12 @@ class MyGym {
     this.paymentInfo,
     this.claim,
     this.trainer,
+    this.pause,
+    this.receipts = const [],
   });
+
+  /// Paused on [today]: they can't check in until the pause ends.
+  bool isPausedOn(DateTime today) => pause?.coversOn(today) ?? false;
 
   /// They can pay this gym online: registered here, the gym has set up its
   /// bank account, and nothing is waiting already.
@@ -230,6 +243,13 @@ class MyGym {
               photoUrl: (json['trainer'] as Map)['photo_url'] as String?,
             )
           : null,
+      pause: json['pause'] is Map
+          ? GymPause.fromJson(Map<String, dynamic>.from(json['pause'] as Map))
+          : null,
+      receipts: [
+        for (final r in (json['receipts'] as List? ?? const []))
+          ReceiptLine.fromJson(Map<String, dynamic>.from(r as Map)),
+      ],
     );
   }
 }

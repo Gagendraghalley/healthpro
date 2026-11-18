@@ -39,11 +39,21 @@ final frontDesk = [
 /// The platform's frame (the gym is one service in it) with a stand-in for
 /// each page.
 Future<GoRouter> showApp(WidgetTester tester, Size size, List<Override> who,
-    {bool dark = false, String at = '/gyms/$gymId/manage'}) async {
+    {bool dark = false, String at = '/gyms/$gymId/manage', bool withNewMenu = false}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  Widget page(String name) => AppPage(title: name, body: Center(child: Text('Page: $name')));
+  // [withNewMenu]: each page offers the gym's New menu under the bar, as
+  // Members and Check-in do.
+  Widget page(String name) => AppPage(
+        title: name,
+        body: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('Page: $name'),
+            if (withNewMenu) Builder(builder: (context) => ServiceActionsButton.onPage(context) ?? const SizedBox()),
+          ]),
+        ),
+      );
   final router = GoRouter(
     initialLocation: at,
     routes: [
@@ -68,6 +78,8 @@ Future<GoRouter> showApp(WidgetTester tester, Size size, List<Override> who,
             (GymRoutes.plans, 'Packages'),
             (GymRoutes.income, 'Income'),
             (GymRoutes.reports, 'Reports'),
+            (GymRoutes.inventory, 'Inventory'),
+            (GymRoutes.suppliers, 'Suppliers'),
           ])
             GoRoute(path: path, builder: (_, __) => page(name)),
         ],
@@ -115,7 +127,7 @@ void main() {
     for (final label in [
       'Dashboard', 'Check-in', 'Members', 'Register member', 'Join requests', 'Gym QR code', 'Memberships & packages',
       'Payments & income',
-      'Reports & analytics', 'Staff', 'Roles & permissions', 'Gym settings',
+      'Reports & analytics', 'Inventory', 'Suppliers', 'Staff', 'Roles & permissions', 'Gym settings',
     ]) {
       expect(inMenu(label), findsOneWidget, reason: label);
     }
@@ -151,6 +163,20 @@ void main() {
     expect(inMenu('Paro Power Gym'), findsOneWidget, reason: 'the gym in the address');
   });
 
+  testWidgets('Suppliers is its own entry, though its page is under Inventory', (tester) async {
+    await showApp(tester, computer, person(gyms: owner), at: GymRoutes.suppliersFor(gymId));
+    await openGym(tester);
+    expect(selected(tester, 'Suppliers'), isTrue);
+    expect(selected(tester, 'Inventory'), isFalse);
+    // Below the fold of the menu on this screen, as on a laptop.
+    await tester.ensureVisible(inMenu('Inventory'));
+    await tester.pumpAndSettle();
+    await tester.tap(inMenu('Inventory'));
+    await tester.pumpAndSettle();
+    expect(find.text('Page: Inventory'), findsOneWidget);
+    expect(selected(tester, 'Inventory'), isTrue);
+  });
+
   testWidgets("its organisation's roles are the gym's page too", (tester) async {
     await showApp(tester, computer, person(gyms: owner), at: CoreRoutes.venueRolesFor(otherId));
     await openGym(tester);
@@ -164,7 +190,10 @@ void main() {
     for (final label in ['Check-in', 'Members', 'Register member', 'Reports & analytics']) {
       expect(inMenu(label), findsOneWidget, reason: label);
     }
-    for (final hidden in ['Memberships & packages', 'Payments & income', 'Staff', 'Roles & permissions', 'Gym settings', 'Manage']) {
+    for (final hidden in [
+      'Memberships & packages', 'Payments & income', 'Inventory', 'Suppliers', 'Staff', 'Roles & permissions', 'Gym settings',
+      'Manage',
+    ]) {
       expect(inMenu(hidden), findsNothing, reason: hidden);
     }
     expect(inMenu('Front desk'), findsWidgets, reason: 'their role, and the heading');
@@ -204,13 +233,24 @@ void main() {
     expect(inMenu('Paro Power Gym'), findsOneWidget);
   });
 
-  testWidgets('the New menu has the gym shortcuts the role allows', (tester) async {
-    await showApp(tester, computer, person(gyms: frontDesk));
+  testWidgets('the New menu, on a page under the bar, has the gym shortcuts the role allows', (tester) async {
+    await showApp(tester, computer, person(gyms: frontDesk), at: GymRoutes.membersFor(gymId), withNewMenu: true);
     await tester.tap(find.text('New'));
     await tester.pumpAndSettle();
     expect(find.text('Check in a member'), findsOneWidget);
     expect(find.text('Register a member'), findsOneWidget);
     expect(find.text('New package'), findsNothing);
+  });
+
+  testWidgets('the top bar never has New: not on Members or Check-in either', (tester) async {
+    for (final at in [
+      GymRoutes.membersFor(gymId), GymRoutes.registerMemberFor(gymId), GymRoutes.checkInFor(gymId),
+      GymRoutes.dashboardFor(gymId), GymRoutes.plansFor(gymId), GymRoutes.inventoryFor(gymId),
+    ]) {
+      await showApp(tester, computer, person(gyms: owner), at: at, withNewMenu: true);
+      expect(find.descendant(of: find.byType(GlassAppBar), matching: find.text('New')), findsNothing, reason: at);
+      expect(find.text('New'), findsOneWidget, reason: '$at: the page can still offer it');
+    }
   });
 
   testWidgets('the menu folds to its icons and opens out again', (tester) async {

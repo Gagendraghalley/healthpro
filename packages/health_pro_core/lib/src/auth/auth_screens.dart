@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../assistant/assistant_chat.dart';
+import '../legal/legal_pages.dart';
 import '../module/module_providers.dart';
 import '../module/health_pro_module.dart';
 import '../router/core_routes.dart';
@@ -48,21 +49,23 @@ class WelcomeScreen extends ConsumerWidget {
     final enabled = ref.watch(enabledModulesProvider);
     // The splash while the modules load, rather than flashing the plain page
     // before a module's own.
-    // With the floating Ask AI button: Health Pro's assistant, for visitors.
     return SplashGate(
       ready: enabled.hasValue || !enabled.isLoading,
-      builder: (context) => AssistantFrame(
-        location: CoreRoutes.welcome,
-        child: _page(context, enabled.valueOrNull ?? const <HealthProModule>[]),
-      ),
+      builder: (context) => _page(context, enabled.valueOrNull ?? const <HealthProModule>[]),
     );
   }
 
   Widget _page(BuildContext context, List<HealthProModule> modules) {
+    // A module's Welcome has Ask AI in its own header.
     for (final m in modules) {
       final page = m.buildWelcome(context);
       if (page != null) return page;
     }
+    // Health Pro's, with Ask AI in its bar: Health Pro's assistant, for visitors.
+    return AssistantFrame(location: CoreRoutes.welcome, child: _plainWelcome(context, modules));
+  }
+
+  Widget _plainWelcome(BuildContext context, List<HealthProModule> modules) {
     return AppPage(
       body: ListView(
         padding: pagePadding(context, horizontal: 20),
@@ -354,7 +357,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         if (_error != null) ...[const SizedBox(height: 14), AuthError(_error!)],
         const SizedBox(height: 22),
         AuthPrimaryButton(label: 'Register account', icon: Icons.person_add_alt_1_rounded, busy: _busy, onPressed: _submit),
-        const SizedBox(height: 14),
+        const SizedBox(height: 8),
+        const LegalLinks(lead: 'By registering, you agree to the'),
+        const SizedBox(height: 6),
         AuthSwitchLink(
           question: 'Already have an account?',
           action: 'Sign in here',

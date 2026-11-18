@@ -215,12 +215,16 @@ class _Rings extends CustomPainter {
   bool shouldRepaint(_Rings old) => false;
 }
 
-/// An initial in a bright ringed circle on the band, popping in.
+/// Their photo, or an initial, in a bright ringed circle on the band,
+/// popping in. The initial shows while the photo loads, and when it won't.
 class BandAvatar extends StatelessWidget {
   final String initial;
   final double size;
 
-  const BandAvatar({super.key, required this.initial, this.size = 68});
+  /// Address of their profile photo; null for the initial.
+  final String? photoUrl;
+
+  const BandAvatar({super.key, required this.initial, this.size = 68, this.photoUrl});
 
   /// The first letter of [name], or '?'.
   static String initialOf(String name) => name.trim().isEmpty ? '?' : name.trim().characters.first.toUpperCase();
@@ -228,6 +232,19 @@ class BandAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
+    final letter = Container(
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [brand.themedShade(const Color(0xFFFFA24D)), brand.highlight],
+        ),
+      ),
+      child: Text(initial, style: TextStyle(color: Colors.white, fontSize: size * 0.4, fontWeight: FontWeight.w800)),
+    );
+    final url = photoUrl;
     return PopIn(
       delay: const Duration(milliseconds: 180),
       child: Container(
@@ -239,18 +256,17 @@ class BandAvatar extends StatelessWidget {
           border: Border.all(color: Colors.white.withValues(alpha: 0.22), width: 1.5),
           boxShadow: [BoxShadow(color: brand.highlight.withValues(alpha: 0.35), blurRadius: 22, offset: const Offset(0, 8))],
         ),
-        child: Container(
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [brand.themedShade(const Color(0xFFFFA24D)), brand.highlight],
-            ),
-          ),
-          child: Text(initial, style: TextStyle(color: Colors.white, fontSize: size * 0.4, fontWeight: FontWeight.w800)),
-        ),
+        child: url == null || url.isEmpty
+            ? letter
+            : ClipOval(
+                child: Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
+                  frameBuilder: (context, child, frame, sync) => frame == null && !sync ? letter : child,
+                  errorBuilder: (_, __, ___) => letter,
+                ),
+              ),
       ),
     );
   }

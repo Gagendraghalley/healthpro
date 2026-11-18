@@ -89,7 +89,9 @@ Future<void> openAssistant(WidgetTester tester) async {
 void main() {
   testWidgets("on a gym's pages it opens that gym's Ask AI, not a menu entry", (tester) async {
     final router = await showApp(tester, userId: 'u1');
-    expect(find.text('Ask AI'), findsOneWidget, reason: 'the button, labelled, on a computer');
+    expect(find.descendant(of: find.byType(GlassAppBar), matching: find.text('Ask AI')), findsOneWidget,
+        reason: 'the button, labelled, in the top bar on a computer');
+    expect(find.byType(FloatingActionButton), findsNothing, reason: 'not floating when signed in');
     expect(find.descendant(of: find.byType(PlatformSidebar), matching: find.text('Ask AI')), findsNothing);
 
     await openAssistant(tester);
@@ -105,9 +107,18 @@ void main() {
     expect(find.byTooltip('Ask AI'), findsNothing, reason: 'not over Ask AI itself');
   });
 
-  testWidgets('it stays out of the way of the register form\'s Save bar', (tester) async {
+  testWidgets('in the top bar it stays clear of the register form\'s Save bar', (tester) async {
     await showApp(tester, userId: 'u1', at: GymRoutes.registerMemberFor(gymId));
-    expect(find.byTooltip('Ask AI'), findsNothing);
+    expect(find.descendant(of: find.byType(GlassAppBar), matching: find.byTooltip('Ask AI')), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
+  });
+
+  testWidgets('on a phone, signed in, it is an icon in the top bar', (tester) async {
+    await showApp(tester, userId: 'u1', size: const Size(390, 844));
+    expect(find.descendant(of: find.byType(GlassAppBar), matching: find.byTooltip('Ask AI')), findsOneWidget);
+    expect(find.text('Ask AI'), findsNothing);
+    await openAssistant(tester);
+    expect(find.text('Ask about Druk Fitness Club'), findsOneWidget);
   });
 
   testWidgets('visitors get Health Pro\'s assistant: suggestions, gyms near them, and questions', (tester) async {
@@ -170,7 +181,7 @@ void main() {
     expect(module.assistantLinks['gyms']?.route, GymRoutes.gyms);
     expect(module.publicVenueRoute(venue('g-a', 'Peak Fitness')), GymRoutes.gymFor('g-a'));
     expect(module.hidesAssistantButton(GymRoutes.askFor(gymId)), isTrue);
-    expect(module.hidesAssistantButton(GymRoutes.editMemberFor(gymId, 'm1')), isTrue);
+    expect(module.hidesAssistantButton(GymRoutes.editMemberFor(gymId, 'm1')), isFalse);
     expect(module.hidesAssistantButton(GymRoutes.membersFor(gymId)), isFalse);
     expect(askChatProvider, isNotNull);
   });

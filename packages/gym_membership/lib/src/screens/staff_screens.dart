@@ -3,11 +3,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
+import '../data/exports.dart';
 import '../data/gym_models.dart';
 import '../data/gym_repository.dart';
+import '../data/receipts.dart';
 import '../data/registered_member.dart';
 import '../gym_permissions.dart';
+import '../widgets/export_button.dart';
 import '../widgets/gym_widgets.dart';
+import '../widgets/receipt_view.dart';
 
 // ─── Memberships & packages ───────────────────────────────────────────────
 
@@ -85,18 +89,6 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
       permission: GymPermission.plans,
       builder: (context, access) => AppPage(
         title: 'Memberships & packages',
-        actions: [
-          if (wide)
-            Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: OutlinedButton.icon(
-                onPressed: () => _edit(null),
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
-                icon: const Icon(Icons.add_rounded, size: 20),
-                label: const Text('Add package'),
-              ),
-            ),
-        ],
         floatingActionButton: wide
             ? null
             : FloatingActionButton.extended(
@@ -138,6 +130,19 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
               child: ListView(
                 padding: pagePadding(context, bottom: 96),
                 children: [
+                  // On a phone, Add package floats instead.
+                  if (wide)
+                    PageActions(
+                      text: 'What the front desk sells, and how each is doing.',
+                      children: [
+                        FilledButton.icon(
+                          onPressed: () => _edit(null),
+                          style: FilledButton.styleFrom(minimumSize: PageActions.buttonSize),
+                          icon: const Icon(Icons.add_rounded, size: 20),
+                          label: const Text('Add package'),
+                        ),
+                      ],
+                    ),
                   LayoutBuilder(
                     builder: (context, c) => ConsoleCells(
                       columns: c.maxWidth >= 900 ? 4 : 2,
@@ -828,9 +833,31 @@ class _IncomeScreenState extends ConsumerState<IncomeScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Text('Statement of payments recorded by this gym',
+                  Text('Statement of payments recorded by this gym. Tap a payment for its receipt.',
                       style: TextStyle(
                           color: context.brand.muted, fontSize: 13)),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: ExportButton(
+                      label: 'Export ${_periodLabel()}',
+                      fileName:
+                          '${access.venue.name} payments ${_periodLabel()}',
+                      load: () async {
+                        // The month on screen, or the day or dates chosen.
+                        final from = _period == _IncomePeriod.monthly
+                            ? _month
+                            : start;
+                        final to = _period == _IncomePeriod.monthly
+                            ? DateTime(_month.year, _month.month + 1)
+                            : endExclusive;
+                        return paymentsSheet(await ref
+                            .read(gymRepositoryProvider)
+                            .paymentsExport(widget.venueId,
+                                bhutanMidnightUtc(from), bhutanMidnightUtc(to)));
+                      },
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   if (_period == _IncomePeriod.monthly)
                     Row(
@@ -1122,6 +1149,8 @@ class _PaymentsTable extends StatelessWidget {
     return DataGrid<Payment>(
       rows: payments,
       noun: 'payments',
+      rowLabel: (p) => 'Receipt for ${name(p).isEmpty ? 'Member' : name(p)}',
+      onRowTap: (p) => showReceipt(context, p.id),
       columns: [
         GridColumn(
           key: 'payer',
@@ -1132,6 +1161,8 @@ class _PaymentsTable extends StatelessWidget {
             final color = methodColor(p.method);
             final n = name(p);
             final carry = [
+              if (!DataGrid.shows(context, 'receipt') && p.receiptNo != null)
+                'No. ${receiptNumber(p.receiptNo!)}',
               if (!DataGrid.shows(context, 'method')) p.method.label,
               if (!DataGrid.shows(context, 'reference') && p.reference != null)
                 p.reference!,
@@ -1168,6 +1199,20 @@ class _PaymentsTable extends StatelessWidget {
               ],
             );
           },
+        ),
+        GridColumn(
+          key: 'receipt',
+          label: 'Receipt',
+          width: 96,
+          showFrom: 1100,
+          sortBy: (p) => p.receiptNo ?? 0,
+          cell: (context, p) => Text(
+            p.receiptNo == null ? '—' : receiptNumber(p.receiptNo!),
+            style: TextStyle(
+              color: brand.body,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
         ),
         GridColumn(
           key: 'method',

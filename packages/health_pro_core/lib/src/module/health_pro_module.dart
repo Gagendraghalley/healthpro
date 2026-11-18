@@ -94,14 +94,13 @@ abstract class HealthProModule {
   /// numbers); null for nothing.
   Widget? buildManagerSection(BuildContext context, Venue venue, VenueAccess access) => null;
 
-  /// What the floating Ask AI button opens on [location] when this module
-  /// has its own assistant there (a gym's Ask AI on that gym's staff pages),
-  /// as an [AssistantPanel]; null for Health Pro's assistant, which answers
-  /// questions about the platform.
+  /// What the Ask AI button (in the top bar) opens on [location] when this
+  /// module has its own assistant there (a gym's Ask AI on that gym's staff
+  /// pages), as an [AssistantPanel]; null for Health Pro's assistant, which
+  /// answers questions about the platform.
   Widget? buildAssistant(BuildContext context, String location) => null;
 
-  /// Pages the floating Ask AI button would get in the way on: its chat is
-  /// open full size, or a bar of buttons runs along the bottom.
+  /// Pages without the Ask AI button: its chat is open full size there.
   bool hidesAssistantButton(String location) => false;
 
   /// Pages Health Pro's assistant may point people to, by the keys its guide

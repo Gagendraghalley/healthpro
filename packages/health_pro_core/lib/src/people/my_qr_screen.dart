@@ -121,9 +121,9 @@ class _Dashboard extends ConsumerWidget {
   }
 }
 
-/// The top of their dashboard: the deep band with their initial, today's
-/// date, the greeting, and how many of their updates are new (a tap opens
-/// them all).
+/// The top of their dashboard: the deep band with their photo (or initial),
+/// today's date and the greeting. New updates are the bar's bell, and Latest
+/// updates below.
 class _Hero extends ConsumerWidget {
   final MyPerson me;
 
@@ -133,20 +133,16 @@ class _Hero extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final unread = ref.watch(unreadCountProvider);
     final now = BhutanTime.now();
     final wide = MediaQuery.sizeOf(context).width >= 760;
     return WelcomeBand(
       eyebrow: '${_weekdays[now.weekday - 1]}, ${formatDate(now)}',
       title: '${greeting(now)}, ${firstName(me.name)}',
       subtitle: 'Your memberships, visits and updates in one place.',
-      leading: BandAvatar(initial: BandAvatar.initialOf(me.name), size: wide ? 68 : 52),
-      trailing: BandPill(
-        icon: unread == 0 ? Icons.notifications_none_rounded : Icons.notifications_active_rounded,
-        label: switch (unread) { 0 => 'All caught up', 1 => '1 new update', _ => '$unread new updates' },
-        dot: unread > 0,
-        onTap: () => context.go(CoreRoutes.notifications),
-      ),
+      leading: BandAvatar(
+          initial: BandAvatar.initialOf(me.name),
+          size: wide ? 68 : 52,
+          photoUrl: ref.watch(myProfileProvider).valueOrNull?.avatarUrl),
     );
   }
 }

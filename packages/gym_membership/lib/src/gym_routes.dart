@@ -60,11 +60,47 @@ abstract final class GymRoutes {
   static const trainerHome = '/gyms/trainer';
   static const trainerProfile = '/gyms/trainer/profile';
 
+  /// A trainer's members, and one of them: progress and plans.
+  static const trainerMembers = '/gyms/trainer/members';
+  static const trainerMember = '/gyms/trainer/members/:memberId';
+  static String trainerMemberFor(String gymMemberId) => '/gyms/trainer/members/$gymMemberId';
+
   /// A gym's trainers, for its staff: verify them, their times, attendance.
   static const gymTrainers = '/gyms/:id/manage/trainers';
 
   /// The gym adds a trainer itself, with all their details.
   static const addTrainer = '/gyms/:id/manage/trainers/new';
+
+  /// The gym's stock (owner and managers), and what connected suppliers
+  /// have: shown only, bought in the supplier's own system.
+  static const inventory = '/gyms/:id/manage/inventory';
+  static const suppliers = '/gyms/:id/manage/inventory/suppliers';
+  static String inventoryFor(String id) => '/gyms/$id/manage/inventory';
+  static String suppliersFor(String id) => '/gyms/$id/manage/inventory/suppliers';
+
+  /// People who asked about the gym, on a free trial or to follow up.
+  static const enquiries = '/gyms/:id/manage/enquiries';
+  static String enquiriesFor(String id) => '/gyms/$id/manage/enquiries';
+
+  /// Who did what at the gym (owner and managers).
+  static const activity = '/gyms/:id/manage/activity';
+  static String activityFor(String id) => '/gyms/$id/manage/activity';
+
+  /// The gym's offers, and the discounts given (who sets prices).
+  static const offers = '/gyms/:id/manage/offers';
+  static String offersFor(String id) => '/gyms/$id/manage/offers';
+
+  /// What the gym spends, and its profit (who sees income).
+  static const expenses = '/gyms/:id/manage/expenses';
+  static String expensesFor(String id) => '/gyms/$id/manage/expenses';
+
+  /// The gym's weekly timetable, and who's booked into each class.
+  static const classes = '/gyms/:id/manage/classes';
+  static String classesFor(String id) => '/gyms/$id/manage/classes';
+
+  /// Register member, filled in from an enquiry: their name and phone.
+  static String registerEnquiryFor(String id, {required String name, required String phone}) =>
+      Uri(path: '/gyms/$id/manage/members/new', queryParameters: {'name': name, 'phone': phone}).toString();
 
   /// A trainer's public profile (certificates, gyms, times, reviews); seen
   /// from a gym with `?gym=<its id>`.

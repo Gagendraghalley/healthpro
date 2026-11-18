@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
+import '../data/follow_ups.dart';
 import '../data/gym_repository.dart';
+import '../data/inventory.dart';
 import '../data/online_payments.dart';
 import '../data/trainers.dart';
 import '../gym_permissions.dart';
@@ -60,6 +62,16 @@ ServiceNav gymNavigation(WidgetRef ref, String location,
   final trainersWaiting = a.can(GymPermission.trainers)
       ? (ref.watch(gymTrainersProvider(id)).valueOrNull ?? const []).where((t) => t.status == TrainerStatus.pending).length
       : 0;
+  // Items low or out of stock.
+  final lowStock = a.can(GymPermission.inventory)
+      ? (ref.watch(gymInventoryProvider(id)).valueOrNull ?? const []).where((i) => i.level != StockLevel.ok).length
+      : 0;
+  final suppliers = GymRoutes.suppliersFor(id);
+  // Enquiries to follow up today (or missed), and trials that have ended.
+  final today = BhutanTime.today();
+  final followUps = a.can(GymPermission.register)
+      ? (ref.watch(gymEnquiriesProvider(id)).valueOrNull ?? const <GymEnquiry>[]).where((e) => e.needsActionOn(today)).length
+      : 0;
   final sections = [
     NavSection(items: [
       NavDestination(label: 'Dashboard', icon: Icons.space_dashboard_outlined, route: GymRoutes.dashboardFor(id), exact: true),
@@ -71,6 +83,11 @@ ServiceNav gymNavigation(WidgetRef ref, String location,
         NavDestination(label: 'Members', icon: Icons.groups_outlined, route: GymRoutes.membersFor(id), notUnder: [register]),
       if (a.can(GymPermission.register))
         NavDestination(label: 'Register member', icon: Icons.person_add_alt_1_outlined, route: register),
+      if (a.can(GymPermission.members))
+        NavDestination(label: 'Classes', icon: Icons.event_note_outlined, route: GymRoutes.classesFor(id)),
+      if (a.can(GymPermission.register))
+        NavDestination(
+            label: 'Enquiries & trials', icon: Icons.contact_phone_outlined, route: GymRoutes.enquiriesFor(id), badge: followUps),
       if (a.can(GymPermission.payments))
         NavDestination(
             label: 'Payments to confirm', icon: Icons.fact_check_outlined, route: GymRoutes.paymentsFor(id), badge: toConfirm),
@@ -84,10 +101,23 @@ ServiceNav gymNavigation(WidgetRef ref, String location,
     NavSection(title: 'Business', items: [
       if (a.can(GymPermission.plans))
         NavDestination(label: 'Memberships & packages', icon: Icons.sell_outlined, route: GymRoutes.plansFor(id)),
+      if (a.can(GymPermission.plans))
+        NavDestination(label: 'Offers & discounts', icon: Icons.local_offer_outlined, route: GymRoutes.offersFor(id)),
       if (a.can(VenuePermission.income))
         NavDestination(label: 'Payments & income', icon: Icons.payments_outlined, route: GymRoutes.incomeFor(id)),
+      if (a.can(VenuePermission.income))
+        NavDestination(label: 'Expenses & profit', icon: Icons.receipt_long_outlined, route: GymRoutes.expensesFor(id)),
       if (a.can(GymPermission.members))
         NavDestination(label: 'Reports & analytics', icon: Icons.insights_rounded, route: GymRoutes.reportsFor(id)),
+      if (a.can(GymPermission.inventory))
+        NavDestination(
+            label: 'Inventory',
+            icon: Icons.inventory_2_outlined,
+            route: GymRoutes.inventoryFor(id),
+            notUnder: [suppliers],
+            badge: lowStock),
+      if (a.can(GymPermission.inventory))
+        NavDestination(label: 'Suppliers', icon: Icons.storefront_outlined, route: suppliers),
     ]),
     NavSection(title: 'Manage', items: [
       if (a.can(VenuePermission.staff))
@@ -98,6 +128,8 @@ ServiceNav gymNavigation(WidgetRef ref, String location,
         NavDestination(label: 'Gym settings', icon: Icons.tune_rounded, route: CoreRoutes.editVenueFor(id)),
       if (a.can(VenuePermission.edit))
         NavDestination(label: 'Membership settings', icon: Icons.card_membership_rounded, route: GymRoutes.settingsFor(id)),
+      if (a.can(GymPermission.activity))
+        NavDestination(label: 'Activity log', icon: Icons.manage_history_rounded, route: GymRoutes.activityFor(id)),
     ]),
   ];
   return ServiceNav(
@@ -120,6 +152,9 @@ ServiceNav gymNavigation(WidgetRef ref, String location,
       addRoute: setUp,
     ),
     sections: [for (final s in sections) if (s.items.isNotEmpty) s],
+    // Never in the top bar: Members and Check-in show the New menu under it
+    // (ServiceActionsButton.onPage); Overview and search keep the shortcuts.
+    actionsInBar: false,
     actions: [
       if (a.can(GymPermission.checkIn))
         ServiceAction(

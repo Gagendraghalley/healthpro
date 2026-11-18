@@ -29,6 +29,23 @@ void main() {
     }
   }
 
+  testWidgets("Ask AI is in the header, before light or dark, and opens Health Pro's assistant", (tester) async {
+    await show(tester, sizes['computer']!);
+    final askAi = find.text('Ask AI');
+    expect(askAi, findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
+    expect(tester.getCenter(askAi).dx, lessThan(tester.getCenter(find.byType(ThemeModeButton)).dx));
+    await tester.tap(askAi);
+    await tester.pumpAndSettle();
+    expect(find.text('Health Pro assistant'), findsOneWidget);
+  });
+
+  testWidgets('on a phone Ask AI is an icon in the header', (tester) async {
+    await show(tester, sizes['phone']!);
+    expect(find.byTooltip('Ask AI'), findsOneWidget);
+    expect(find.text('Ask AI'), findsNothing);
+  });
+
   testWidgets('a question opens to its answer', (tester) async {
     await show(tester, sizes['computer']!);
     const question = 'What payment methods are accepted?';

@@ -215,7 +215,7 @@ void main() {
       ]);
       expect(find.textContaining("Only people who manage this organisation's roles"), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Save'), findsNothing);
-      expect(find.byTooltip('Delete role'), findsNothing);
+      expect(find.text('Delete role'), findsNothing);
     });
 
     testWidgets('organisations and one organisation fit a $at', (tester) async {

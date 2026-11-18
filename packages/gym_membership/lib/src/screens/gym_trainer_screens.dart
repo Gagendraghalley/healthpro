@@ -31,14 +31,6 @@ class GymTrainersScreen extends ConsumerWidget {
       permission: GymPermission.trainers,
       builder: (context, access) => AppPage(
         title: 'Trainers',
-        actions: [
-          FilledButton.icon(
-            onPressed: () => context.go(GymRoutes.addTrainerFor(venueId)),
-            icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
-            label: const Text('Add trainer'),
-          ),
-          const SizedBox(width: 8),
-        ],
         body: AsyncValueView<List<GymTrainer>>(
           value: ref.watch(gymTrainersProvider(venueId)),
           onRetry: () => ref.invalidate(gymTrainersProvider(venueId)),
@@ -52,6 +44,17 @@ class GymTrainersScreen extends ConsumerWidget {
               child: ListView(
                 padding: pagePadding(context),
                 children: [
+                  PageActions(
+                    text: 'Trainers who work here: verify them, their times and attendance.',
+                    children: [
+                      FilledButton.icon(
+                        onPressed: () => context.go(GymRoutes.addTrainerFor(venueId)),
+                        style: FilledButton.styleFrom(minimumSize: PageActions.buttonSize),
+                        icon: const Icon(Icons.person_add_alt_1_rounded, size: 20),
+                        label: const Text('Add trainer'),
+                      ),
+                    ],
+                  ),
                   _Notice(
                     icon: Icons.qr_code_scanner_rounded,
                     color: context.brand.accent,

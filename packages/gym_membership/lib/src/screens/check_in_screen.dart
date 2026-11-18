@@ -330,9 +330,13 @@ class _CheckInBodyState extends ConsumerState<_CheckInBody> {
             ),
     );
 
+    // The gym's New menu (register a member...), under the bar.
+    final newMenu = ServiceActionsButton.onPage(context);
     return ListView(
       padding: pagePadding(context),
       children: [
+        if (newMenu != null)
+          PageActions(text: 'Scan the member\'s QR card, or type their code.', stretch: false, children: [newMenu]),
         ResponsiveColumns(
           breakpoint: 980,
           flex: (6, 5),

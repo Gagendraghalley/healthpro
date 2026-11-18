@@ -4,12 +4,14 @@ import 'package:go_router/go_router.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/dashboard_data.dart';
+import '../data/exports.dart';
 import '../data/gym_models.dart';
 import '../data/gym_repository.dart';
 import '../data/registered_member.dart';
 import '../data/reports_data.dart';
 import '../gym_permissions.dart';
 import '../gym_routes.dart';
+import '../widgets/export_button.dart';
 import '../widgets/gym_widgets.dart';
 
 /// Reports & analytics: how the gym is doing over 30 days, 90 days or a
@@ -40,25 +42,46 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       permission: GymPermission.members,
       builder: (context, access) {
         final checkIns = ref.watch(gymCheckInsSinceProvider((venueId: _id, since: from)));
-        return AppPage(
-          title: 'Reports & analytics',
-          actions: [
+        // Under the bar: the period and the export, kept while a new period loads.
+        final toolbar = PageActions(
+          text: '${access.venue.name} · ${_range.description}',
+          stretch: false,
+          children: [
             ConsoleRangePicker<ReportRange>(
               values: ReportRange.values,
               value: _range,
               label: (r) => r.label,
               onChanged: (r) => setState(() => _range = r),
             ),
+            // Every visit in the range, to Excel.
+            ExportButton(
+              compact: true,
+              label: 'Export visits, ${_range.description}',
+              fileName: '${access.venue.name} visits ${isoDate(from)} to ${isoDate(today)}',
+              load: () async => visitsSheet(await ref.read(gymRepositoryProvider).visitsExport(
+                    _id,
+                    bhutanMidnightUtc(from),
+                    bhutanMidnightUtc(DateTime(today.year, today.month, today.day + 1)),
+                  )),
+            ),
           ],
+        );
+        return AppPage(
+          title: 'Reports & analytics',
           body: AsyncValueView<List<GymCheckIn>>(
             value: checkIns,
             onRetry: () => ref.invalidate(gymCheckInsSinceProvider((venueId: _id, since: from))),
+            loading: ListView(
+              padding: pagePadding(context),
+              children: [toolbar, const Padding(padding: EdgeInsets.only(top: 48), child: Center(child: CircularProgressIndicator()))],
+            ),
             data: (visits) => _Report(
               access: access,
               range: _range,
               from: from,
               today: today,
               visits: visits,
+              toolbar: toolbar,
             ),
           ),
         );
@@ -74,7 +97,11 @@ class _Report extends ConsumerWidget {
   final DateTime today;
   final List<GymCheckIn> visits;
 
-  const _Report({required this.access, required this.range, required this.from, required this.today, required this.visits});
+  /// The period and the export, at the top.
+  final Widget toolbar;
+
+  const _Report(
+      {required this.access, required this.range, required this.from, required this.today, required this.visits, required this.toolbar});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -120,8 +147,7 @@ class _Report extends ConsumerWidget {
           return ListView(
             padding: pagePadding(context, bottom: 40),
             children: [
-              Text('${access.venue.name} · ${range.description}', style: TextStyle(color: context.brand.muted, fontSize: 15)),
-              const SizedBox(height: 16),
+              toolbar,
               ConsoleCells(
                 columns: c.maxWidth >= 900 ? 4 : 2,
                 children: staggered([

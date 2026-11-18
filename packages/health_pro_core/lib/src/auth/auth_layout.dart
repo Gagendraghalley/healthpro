@@ -4,6 +4,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../assistant/assistant_chat.dart';
+import '../assistant/public_assistant.dart';
 import '../theme/brand.dart';
 import '../widgets/logo.dart';
 import '../widgets/motion.dart';
@@ -15,7 +17,8 @@ enum AuthSide { signIn, join }
 /// The frame of the sign-in, sign-up and code pages: a sports
 /// photo across the window with the logo and what Health Pro offers on it,
 /// and the form on a white card at the right. On a phone the photo is a
-/// banner and the form a sheet under it.
+/// banner and the form a sheet under it. Back at the top left, Ask AI at the
+/// top right.
 class AuthLayout extends StatelessWidget {
   final AuthSide side;
   final String title;
@@ -129,7 +132,8 @@ class AuthLayout extends StatelessWidget {
               ),
               Center(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 24, 48, 24),
+                  // Room at the top for Ask AI over it.
+                  padding: const EdgeInsets.fromLTRB(16, 88, 48, 24),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -184,6 +188,13 @@ class AuthLayout extends StatelessWidget {
             ],
           ),
         ),
+        // Ask AI in the top corner, level with Back, over the card's edge.
+        const SafeArea(
+          child: Align(
+            alignment: Alignment.topRight,
+            child: Padding(padding: EdgeInsets.fromLTRB(16, 28, 48, 0), child: FadeSlideIn(child: _AskAiButton())),
+          ),
+        ),
       ],
     );
   }
@@ -213,6 +224,7 @@ class AuthLayout extends StatelessWidget {
                   ),
                 ),
                 if (backButton != null) Positioned(top: insets.top + 8, left: 12, child: backButton),
+                Positioned(top: insets.top + 8, right: 12, child: const _AskAiButton()),
               ],
             ),
           ),
@@ -854,6 +866,46 @@ class _BackButton extends StatelessWidget {
         color: Colors.white,
         icon: const Icon(Icons.arrow_back_rounded),
         onPressed: onPressed,
+      ),
+    );
+  }
+}
+
+/// Ask AI (Health Pro's assistant), frosted on the photo like Back: "Ask AI"
+/// beside its icon on a computer, the icon alone on a phone.
+class _AskAiButton extends StatelessWidget {
+  const _AskAiButton();
+
+  @override
+  Widget build(BuildContext context) {
+    // The panel opens under the button.
+    void open() => openAssistant(context, const HealthProAssistantPanel(), underBar: 64);
+    final icon = Icon(Icons.auto_awesome_rounded, size: 20, color: context.brand.highlight);
+    final side = BorderSide(color: Colors.white.withValues(alpha: 0.22));
+    final glass = Colors.white.withValues(alpha: 0.14);
+    if (MediaQuery.sizeOf(context).width < 700) {
+      return Material(
+        color: glass,
+        shape: CircleBorder(side: side),
+        child: IconButton(tooltip: 'Ask AI', color: Colors.white, icon: icon, onPressed: open),
+      );
+    }
+    return Tooltip(
+      message: 'Ask AI',
+      child: Pressable(
+        child: TextButton.icon(
+          onPressed: open,
+          style: TextButton.styleFrom(
+            minimumSize: const Size(0, 48),
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            foregroundColor: Colors.white,
+            backgroundColor: glass,
+            shape: StadiumBorder(side: side),
+            textStyle: const TextStyle(fontFamily: brandFont, fontWeight: FontWeight.w700, fontSize: 14),
+          ),
+          icon: icon,
+          label: const Text('Ask AI'),
+        ),
       ),
     );
   }

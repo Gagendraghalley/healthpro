@@ -40,8 +40,8 @@ class ThemeModeController extends Notifier<ThemeMode> {
 }
 
 /// Less motion (Account -> Appearance): the decorative animations stand
-/// still, on top of the device's own reduce-motion setting. Kept on the
-/// device.
+/// still. Off until they turn it on, whatever the phone's own setting. Kept
+/// on the device.
 final reduceMotionProvider = NotifierProvider<ReduceMotionController, bool>(ReduceMotionController.new);
 
 class ReduceMotionController extends Notifier<bool> {

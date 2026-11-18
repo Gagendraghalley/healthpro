@@ -24,6 +24,8 @@ Future<void> main() async {
   final themeMode = await ThemeModeController.saved();
   final splashLogo = HealthProSplash.precacheLogo(dark: themeMode == ThemeMode.dark);
   await Supabase.initialize(url: Env.supabaseUrl, publishableKey: Env.supabaseAnonKey);
+  // From here, what goes wrong reaches Admin -> App errors (release builds).
+  ErrorReporter.install(Supabase.instance.client);
   final reduceMotion = await ReduceMotionController.saved();
   // Whoever is still signed in opens in their own colours.
   final signedIn = Supabase.instance.client.auth.currentUser?.id;

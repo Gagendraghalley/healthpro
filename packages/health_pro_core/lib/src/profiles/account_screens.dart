@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../auth/auth_repository.dart';
+import '../legal/legal_pages.dart';
 import '../router/core_routes.dart';
 import '../theme/brand.dart';
 import '../theme/theme_mode.dart';
@@ -68,6 +70,8 @@ class AccountScreen extends ConsumerWidget {
               delay: const Duration(milliseconds: 240),
               child: _AccountCard(onSignOut: () => _signOut(context, ref), onDelete: () => _deleteAccount(context, ref)),
             ),
+            const SizedBox(height: 12),
+            const LegalLinks(),
           ],
         ),
       ),
@@ -209,7 +213,10 @@ class _ProfileHero extends StatelessWidget {
                         children: [identity, const SizedBox(height: 18), edit],
                       ),
               ),
-              Positioned(left: side, top: cover - avatar / 2, child: _Avatar(name: profile.displayName, size: avatar)),
+              Positioned(
+                  left: side,
+                  top: cover - avatar / 2,
+                  child: _Avatar(name: profile.displayName, size: avatar, photo: _networkPhoto(profile.avatarUrl))),
             ],
           ),
         );
@@ -265,50 +272,63 @@ class _Cover extends StatelessWidget {
   }
 }
 
-/// Their initials in a circle; [raised] over the cover, ringed in the card's
-/// colour with a shadow so it stands off it.
+/// Their photo, or their initials, in a circle, raised over the cover:
+/// ringed in the card's colour with a shadow so it stands off it. The
+/// initials show while the photo loads, and when it won't.
 class _Avatar extends StatelessWidget {
   final String name;
   final double size;
-  final bool raised;
+  final ImageProvider? photo;
 
-  const _Avatar({required this.name, required this.size, this.raised = true});
+  const _Avatar({required this.name, required this.size, this.photo});
 
   @override
   Widget build(BuildContext context) {
     final from = _leadColour(context);
     // White on a deep colour; dark ink on a pale one (cocoa in the dark is beige).
     final letters = ThemeData.estimateBrightnessForColor(from) == Brightness.dark ? Colors.white : LightColors.ink;
-    return Container(
-      width: size,
-      height: size,
-      padding: EdgeInsets.all(raised ? 4 : 0),
-      decoration: raised
-          ? BoxDecoration(
-              color: ConsoleInk.of(context).card,
-              shape: BoxShape.circle,
-              boxShadow: const [BoxShadow(color: Color(0x26000000), blurRadius: 18, offset: Offset(0, 6))],
-            )
-          : null,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color.lerp(from, Colors.white, 0.12)!, Color.lerp(from, Colors.black, 0.18)!],
-          ),
+    final initials = DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color.lerp(from, Colors.white, 0.12)!, Color.lerp(from, Colors.black, 0.18)!],
         ),
-        child: Center(
-          child: Text(
-            _initials(name),
-            style: TextStyle(color: letters, fontSize: size * 0.32, fontWeight: FontWeight.w800, letterSpacing: 0.6),
-          ),
+      ),
+      child: Center(
+        child: Text(
+          _initials(name),
+          style: TextStyle(color: letters, fontSize: size * 0.32, fontWeight: FontWeight.w800, letterSpacing: 0.6),
         ),
       ),
     );
+    return Container(
+      width: size,
+      height: size,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: ConsoleInk.of(context).card,
+        shape: BoxShape.circle,
+        boxShadow: const [BoxShadow(color: Color(0x26000000), blurRadius: 18, offset: Offset(0, 6))],
+      ),
+      child: photo == null
+          ? initials
+          : ClipOval(
+              child: Image(
+                image: photo!,
+                fit: BoxFit.cover,
+                semanticLabel: name,
+                frameBuilder: (context, child, frame, sync) => frame == null && !sync ? initials : child,
+                errorBuilder: (_, __, ___) => initials,
+              ),
+            ),
+    );
   }
 }
+
+/// The saved photo at [url], if there is one.
+ImageProvider? _networkPhoto(String? url) => url == null || url.isEmpty ? null : NetworkImage(url);
 
 /// 'Pema Dorji' -> 'PD'; one word or an email -> its first letter.
 String _initials(String name) {
@@ -486,7 +506,7 @@ class _PreferencesCard extends ConsumerWidget {
             const SizedBox(height: 14),
             const ThemeColorsTile(),
             Divider(height: 9, color: brand.glassBorder),
-            // On top of the device's own setting, which always counts.
+            // Off until they turn it on, whatever the device's own setting.
             MergeSemantics(
               child: SettingRow(
                 icon: Icons.motion_photos_paused_outlined,
@@ -718,6 +738,11 @@ class _AccountCard extends StatelessWidget {
   }
 }
 
+/// Their own profile, across the whole page: a cover with their photo (which
+/// they add, change or take off here), then their personal details and the
+/// email they sign in with, each beside what it's for on a wide window.
+/// Cancel and Save stay at the foot of the page; a new photo is only uploaded
+/// when they save.
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
 
@@ -732,6 +757,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   String? _dzongkhag;
   bool _loaded = false;
   bool _busy = false;
+
+  /// A photo they picked, uploaded when they save.
+  ({Uint8List bytes, String contentType})? _newPhoto;
+
+  /// They took their saved photo off; it goes when they save.
+  bool _photoRemoved = false;
+
+  /// The profile-photos bucket takes up to this.
+  static const _maxPhotoBytes = 5 * 1024 * 1024;
 
   @override
   void dispose() {
@@ -748,13 +782,56 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _dzongkhag = p.dzongkhag;
   }
 
+  /// The photo as it will be once they save: the one just picked, the saved
+  /// one, or none.
+  ImageProvider? _shownPhoto(Profile p) {
+    final picked = _newPhoto;
+    if (picked != null) return MemoryImage(picked.bytes);
+    return _photoRemoved ? null : _networkPhoto(p.avatarUrl);
+  }
+
+  bool _changed(Profile p) =>
+      _name.text.trim() != p.fullName.trim() ||
+      _phone.text.trim() != (p.phone ?? '') ||
+      _dzongkhag != p.dzongkhag ||
+      _newPhoto != null ||
+      (_photoRemoved && p.avatarUrl != null);
+
+  Future<void> _pickPhoto({bool camera = false}) async {
+    ({Uint8List bytes, String contentType})? picked;
+    await runAction(context, () async => picked = await pickPhoto(context, camera: camera, imageQuality: 85));
+    final photo = picked;
+    if (photo == null || !mounted) return;
+    if (photo.bytes.length > _maxPhotoBytes) {
+      showFeedback(context, 'That photo is too big. Choose one of up to 5 MB.', problem: true);
+      return;
+    }
+    setState(() {
+      _newPhoto = photo;
+      _photoRemoved = false;
+    });
+  }
+
+  void _removePhoto() => setState(() {
+        _newPhoto = null;
+        _photoRemoved = true;
+      });
+
   Future<void> _save(Profile p) async {
-    if (!_form.currentState!.validate()) return;
+    if (!(_form.currentState?.validate() ?? false)) return;
     setState(() => _busy = true);
+    final repo = ref.read(profileRepositoryProvider);
     final phone = _phone.text.trim().isEmpty ? null : Validators.normalizePhone(_phone.text);
+    final picked = _newPhoto;
     final ok = await runAction(
       context,
-      () => ref.read(profileRepositoryProvider).update(p.id, fullName: _name.text, phone: phone, dzongkhag: _dzongkhag),
+      () async {
+        var photo = _photoRemoved ? null : p.avatarUrl;
+        if (picked != null) photo = await repo.uploadPhoto(p.id, picked);
+        await repo.update(p.id, fullName: _name.text, phone: phone, dzongkhag: _dzongkhag, avatarUrl: photo);
+        final old = p.avatarUrl;
+        if (old != null && old != photo) await repo.removePhoto(p.id, old);
+      },
       success: 'Profile saved',
     );
     if (!mounted) return;
@@ -771,69 +848,28 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final profile = ref.watch(myProfileProvider);
+    final me = profile.valueOrNull;
+    if (me != null) _fill(me);
     return AppPage(
       title: 'Edit profile',
+      bottomBar: me == null ? null : _actionBar(me),
       body: AsyncValueView<Profile?>(
-        value: ref.watch(myProfileProvider),
+        value: profile,
+        onRetry: () => ref.invalidate(myProfileProvider),
         data: (p) {
           if (p == null) return const SizedBox.shrink();
-          _fill(p);
-          final brand = context.brand;
-          final line = Divider(height: 1, color: brand.glassBorder);
           return Form(
             key: _form,
             child: ListView(
               padding: pagePadding(context),
               children: [
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 760),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const FadeSlideIn(
-                          child: _Heading(title: 'Edit profile', note: 'Your name, phone number and dzongkhag.'),
-                        ),
-                        FadeSlideIn(
-                          delay: const Duration(milliseconds: 60),
-                          child: Container(
-                            clipBehavior: Clip.antiAlias,
-                            decoration: _cardDecoration(context),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Padding(padding: const EdgeInsets.all(24), child: _EditingWho(profile: p, name: _name)),
-                                line,
-                                Padding(padding: const EdgeInsets.fromLTRB(24, 22, 24, 24), child: _fields()),
-                                line,
-                                Container(
-                                  color: ConsoleInk.of(context).tint,
-                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                                  child: Wrap(
-                                    alignment: WrapAlignment.end,
-                                    spacing: 12,
-                                    runSpacing: 10,
-                                    children: [
-                                      OutlinedButton(onPressed: _busy ? null : _leave, child: const Text('Cancel')),
-                                      FilledButton.icon(
-                                        onPressed: _busy ? null : () => _save(p),
-                                        icon: _busy
-                                            ? const SizedBox(
-                                                width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                                            : const Icon(Icons.check_rounded, size: 18),
-                                        label: const Text('Save changes'),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                const FadeSlideIn(
+                  child: _Heading(title: 'Edit profile', note: 'Your photo, name, phone number and dzongkhag.'),
                 ),
+                FadeSlideIn(delay: const Duration(milliseconds: 60), child: _photoCard(p)),
+                const SizedBox(height: 20),
+                FadeSlideIn(delay: const Duration(milliseconds: 120), child: _detailsCard(p)),
               ],
             ),
           );
@@ -842,9 +878,174 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
   }
 
+  /// The cover in their theme's colours, their photo over its edge (tap it,
+  /// or its camera badge, for a new one), who they are, and the photo's
+  /// buttons.
+  Widget _photoCard(Profile p) {
+    final ink = ConsoleInk.of(context);
+    final brand = context.brand;
+    final photo = _shownPhoto(p);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 760;
+        final cover = wide ? 136.0 : 100.0;
+        final avatar = wide ? 132.0 : 104.0;
+        final side = wide ? 32.0 : 20.0;
+        final who = ListenableBuilder(
+          listenable: _name,
+          builder: (context, _) {
+            final shown = _name.text.trim().isEmpty ? p.displayName : _name.text.trim();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(shown,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: ink.heading,
+                        fontSize: wide ? 24 : 21,
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
+                        letterSpacing: -0.2)),
+                if (p.email != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.mail_outline_rounded, size: 16, color: brand.muted),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(p.email!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: brand.muted, fontSize: 14.5)),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            );
+          },
+        );
+        final buttons = Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            FilledButton.icon(
+              onPressed: _busy ? null : _pickPhoto,
+              icon: const Icon(Icons.file_upload_outlined, size: 18),
+              label: Text(photo == null ? 'Upload photo' : 'Change photo'),
+            ),
+            if (!kIsWeb)
+              OutlinedButton.icon(
+                onPressed: _busy ? null : () => _pickPhoto(camera: true),
+                icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                label: const Text('Take photo'),
+              ),
+            if (photo != null)
+              TextButton.icon(
+                onPressed: _busy ? null : _removePhoto,
+                style: TextButton.styleFrom(foregroundColor: brand.danger),
+                icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                label: const Text('Remove'),
+              ),
+          ],
+        );
+        final hint = Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline_rounded, size: 15, color: brand.muted),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                _newPhoto != null
+                    ? 'New photo picked. It\'s saved when you save your changes.'
+                    : 'JPG, PNG or WebP, up to 5 MB. A clear photo of your face works best.',
+                style: TextStyle(color: brand.muted, fontSize: 13, height: 1.35),
+              ),
+            ),
+          ],
+        );
+        return Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: _cardDecoration(context),
+          child: Stack(
+            children: [
+              Positioned(left: 0, top: 0, right: 0, height: cover, child: const _Cover()),
+              Padding(
+                padding: wide
+                    ? EdgeInsets.fromLTRB(side + avatar + 24, cover + 20, side, 26)
+                    : EdgeInsets.fromLTRB(side, cover + avatar / 2 + 14, side, 22),
+                child: wide
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [who, const SizedBox(height: 14), hint])),
+                          const SizedBox(width: 24),
+                          Flexible(child: Align(alignment: Alignment.topRight, child: buttons)),
+                        ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [who, const SizedBox(height: 18), buttons, const SizedBox(height: 14), hint],
+                      ),
+              ),
+              Positioned(
+                left: side,
+                top: cover - avatar / 2,
+                child: _PhotoPicker(
+                  name: _name,
+                  fallbackName: p.displayName,
+                  size: avatar,
+                  photo: photo,
+                  onPick: _busy ? null : _pickPhoto,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Their details, then the email they sign in with, each a section with
+  /// what it's for.
+  Widget _detailsCard(Profile p) {
+    final line = Divider(height: 1, color: context.brand.glassBorder);
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: _cardDecoration(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _FormSection(
+            icon: Icons.person_outline_rounded,
+            title: 'Personal details',
+            note: 'Your name, phone number and dzongkhag.',
+            child: _fields(),
+          ),
+          line,
+          _FormSection(
+            icon: Icons.lock_outline_rounded,
+            title: 'Sign-in',
+            note: 'You sign in with this email.',
+            child: TextFormField(
+              initialValue: p.email ?? '',
+              enabled: false,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                prefixIcon: Icon(Icons.mail_outline_rounded),
+                suffixIcon: Icon(Icons.lock_outline_rounded, size: 18),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Name and phone side by side where there's room, the dzongkhag under them.
   Widget _fields() {
-    final muted = context.brand.muted;
     final name = TextFormField(
       controller: _name,
       textCapitalization: TextCapitalization.words,
@@ -869,9 +1070,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('PERSONAL DETAILS',
-            style: TextStyle(color: muted, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 1.1)),
-        const SizedBox(height: 14),
         LayoutBuilder(
           builder: (context, constraints) => constraints.maxWidth < 520
               ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [name, gap, phone])
@@ -885,45 +1083,187 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ],
     );
   }
+
+  /// At the foot of the page: whether anything changed, Cancel and Save.
+  Widget _actionBar(Profile p) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([_name, _phone]),
+      builder: (context, _) {
+        final brand = context.brand;
+        final changed = _changed(p);
+        final cancel = OutlinedButton(onPressed: _busy ? null : _leave, child: const Text('Cancel'));
+        final save = FilledButton.icon(
+          onPressed: _busy ? null : () => _save(p),
+          icon: _busy
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.check_rounded, size: 18),
+          label: const Text('Save changes'),
+        );
+        return Padding(
+          padding: EdgeInsets.symmetric(horizontal: pageGutter(context), vertical: 12),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 560) {
+                return Row(children: [Expanded(child: cancel), const SizedBox(width: 12), Expanded(flex: 2, child: save)]);
+              }
+              return Row(
+                children: [
+                  Expanded(
+                    child: AnimatedOpacity(
+                      opacity: changed ? 1 : 0,
+                      duration: reduceMotion(context) ? Duration.zero : Motion.hover,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(color: brand.warning, shape: BoxShape.circle),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text('You have unsaved changes',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: brand.muted, fontSize: 13.5, fontWeight: FontWeight.w600)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  cancel,
+                  const SizedBox(width: 12),
+                  save,
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
 }
 
-/// Whose profile this is, at the top of the form: their initials and name,
-/// following what's typed, and their email.
-class _EditingWho extends StatelessWidget {
-  final Profile profile;
+/// Their photo (or initials, following the name being typed) over the
+/// cover, with a camera badge; tapping either picks a new photo.
+class _PhotoPicker extends StatelessWidget {
   final TextEditingController name;
+  final String fallbackName;
+  final double size;
+  final ImageProvider? photo;
+  final VoidCallback? onPick;
 
-  const _EditingWho({required this.profile, required this.name});
+  const _PhotoPicker({required this.name, required this.fallbackName, required this.size, this.photo, this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final badge = size * 0.3;
+    return Semantics(
+      button: true,
+      label: photo == null ? 'Upload a profile photo' : 'Change your profile photo',
+      onTap: onPick,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          ListenableBuilder(
+            listenable: name,
+            builder: (context, _) => _Avatar(
+              name: name.text.trim().isEmpty ? fallbackName : name.text.trim(),
+              size: size,
+              photo: photo,
+            ),
+          ),
+          Positioned.fill(
+            child: Material(
+              type: MaterialType.transparency,
+              shape: const CircleBorder(),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(onTap: onPick, excludeFromSemantics: true),
+            ),
+          ),
+          Positioned(
+            right: 2,
+            bottom: 2,
+            child: Tooltip(
+              message: photo == null ? 'Upload photo' : 'Change photo',
+              child: Material(
+                color: brand.highlight,
+                shape: CircleBorder(side: BorderSide(color: ConsoleInk.of(context).card, width: 3)),
+                elevation: 2,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: onPick,
+                  excludeFromSemantics: true,
+                  child: SizedBox.square(
+                    dimension: badge,
+                    child: Icon(Icons.photo_camera_rounded, color: Colors.white, size: badge * 0.48),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A part of the form: its icon, title and what it's for at the left on a
+/// wide window (above it on a narrow one), its fields beside them.
+class _FormSection extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String note;
+  final Widget child;
+
+  const _FormSection({required this.icon, required this.title, required this.note, required this.child});
 
   @override
   Widget build(BuildContext context) {
     final ink = ConsoleInk.of(context);
-    final muted = context.brand.muted;
-    return ListenableBuilder(
-      listenable: name,
-      builder: (context, _) {
-        final shown = name.text.trim().isEmpty ? profile.displayName : name.text.trim();
-        return Row(
+    final brand = context.brand;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 860;
+        final label = Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _Avatar(name: shown, size: 60, raised: false),
-            const SizedBox(width: 16),
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(color: brand.accent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(11)),
+              child: Icon(icon, size: 19, color: brand.accentText),
+            ),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(shown,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: ink.heading, fontSize: 19, fontWeight: FontWeight.w800)),
-                  if (profile.email != null) ...[
-                    const SizedBox(height: 2),
-                    Text(profile.email!,
-                        maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 14)),
-                  ],
+                  Text(title, style: TextStyle(color: ink.heading, fontSize: 16, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 4),
+                  Text(note, style: TextStyle(color: brand.muted, fontSize: 13.5, height: 1.4)),
                 ],
               ),
             ),
           ],
+        );
+        return Padding(
+          padding: EdgeInsets.all(wide ? 30 : 20),
+          child: wide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(width: 300, child: label),
+                    const SizedBox(width: 48),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.topLeft,
+                        child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 860), child: child),
+                      ),
+                    ),
+                  ],
+                )
+              : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [label, const SizedBox(height: 20), child]),
         );
       },
     );

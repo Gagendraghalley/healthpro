@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -23,13 +25,45 @@ class ProfileRepository {
     return row == null ? null : Profile.fromJson(row);
   }
 
-  /// Only these can be changed by the user (the role can't).
-  Future<void> update(String userId, {required String fullName, String? phone, String? dzongkhag}) =>
+  /// Only these can be changed by the user (the role can't). [avatarUrl] is
+  /// their photo's address (from [uploadPhoto]); null takes it off.
+  Future<void> update(String userId,
+          {required String fullName, String? phone, String? dzongkhag, required String? avatarUrl}) =>
       _client.from('profiles').update({
         'full_name': fullName.trim(),
         'phone': phone,
         'dzongkhag': dzongkhag,
+        'avatar_url': avatarUrl,
       }).eq('id', userId);
+
+  /// Where profile photos are kept: public, a folder per account that only
+  /// its owner changes.
+  static const photoBucket = 'profile-photos';
+
+  /// A new profile photo in their own folder; returns its public address.
+  Future<String> uploadPhoto(String userId, ({Uint8List bytes, String contentType}) photo) async {
+    final ext = switch (photo.contentType) { 'image/png' => 'png', 'image/webp' => 'webp', _ => 'jpg' };
+    final path = '$userId/${DateTime.now().microsecondsSinceEpoch}.$ext';
+    await _client.storage
+        .from(photoBucket)
+        .uploadBinary(path, photo.bytes, fileOptions: FileOptions(contentType: photo.contentType, upsert: false));
+    return _client.storage.from(photoBucket).getPublicUrl(path);
+  }
+
+  /// Takes their old photo at [url] out of storage once it's been replaced
+  /// or removed. Anything that isn't in their own folder is left alone.
+  Future<void> removePhoto(String userId, String url) async {
+    const marker = '/$photoBucket/';
+    final at = url.indexOf(marker);
+    if (at < 0) return;
+    final path = Uri.decodeComponent(url.substring(at + marker.length).split('?').first);
+    if (!path.startsWith('$userId/')) return;
+    try {
+      await _client.storage.from(photoBucket).remove([path]);
+    } catch (_) {
+      // An old picture left behind is harmless; their profile is saved.
+    }
+  }
 
   /// Their app colours on their account (Account -> Appearance): palette ids,
   /// null for Health Pro's own. Null when there's no profile.

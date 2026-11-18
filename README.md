@@ -67,11 +67,38 @@ SUPABASE_ACCESS_TOKEN=sbp_... SUPABASE_DB_PASSWORD=... scripts/deploy_supabase.s
 
 The script applies only the migrations that aren't on the project yet, deploys the Edge Functions, pushes the auth settings in `supabase/config.toml`, and writes `env.json`. Run it again after any change in `supabase/`.
 
-Rules for database changes: every change is a new file in `supabase/migrations/` (never edit one that's applied). Try it on a development project or with `scripts/test_database.sh` first, and back up before applying to the live project (Database → Backups).
+Rules for database changes: every change is a new file in `supabase/migrations/` (never edit one that's applied). Try it on a development project or with `scripts/test_database.sh` first, and back up before applying to the live project ([Backups](#backups)).
 
 ### Email: set up SMTP before real users sign up
 
 There are no passwords: people sign in with their email and a 6-digit code they choose. Signing up, and choosing a new one ("Forgot code?"), use a 6-digit code sent by email. An account an admin or a gym owner makes for someone starts with the code `123456`; they must choose their own the first time they sign in. Accounts from before sign-in codes have no code: run `supabase/default_code_for_old_users.sql` once in the SQL Editor to start them on `123456` the same way. Supabase's built-in email sender is only for trying things out: it sends a few emails an hour, and only to your team's addresses. Before launch, add an email provider (Resend, Brevo, Amazon SES...) under Authentication → Emails → SMTP Settings, sending from your Health Pro domain.
+
+Check it on the live project (reads the settings, never prints the password):
+
+```sh
+SUPABASE_ACCESS_TOKEN=sbp_... scripts/check_email.sh                     # how it sends: test sender or your SMTP
+SUPABASE_ACCESS_TOKEN=sbp_... scripts/check_email.sh someone@example.com # and sends that account a real code
+```
+
+The address needs an account already (nothing is made). Send it to an account outside the Supabase team, then look in that inbox and its spam folder: a code that arrives there is the real test.
+
+### Backups
+
+On Supabase's free plan you can't download or restore a backup yourself; Pro keeps 7 days of daily ones (Database → Backups). Either way, keep a copy of your own somewhere else, at least weekly and before every migration:
+
+```sh
+SUPABASE_DB_PASSWORD=... SUPABASE_ACCESS_TOKEN=sbp_... scripts/backup_supabase.sh [folder]
+```
+
+It reads only, and writes `<folder>/<date-time>/` (`backups/` by default, which git ignores; a synced Google Drive folder is a good place): `database.dump` (the `public` and `private` schemas: tables, data, functions and rules), `accounts.sql` (sign-in accounts) and `files/` (every photo, certificate and payment QR code; skipped without `SUPABASE_ACCESS_TOKEN`). It needs `pg_dump` as new as the database: `brew install postgresql@17`. These are real people's details: keep them private.
+
+To restore into a new, empty Supabase project (with its Session pooler string as `$DB`; `pg_restore` and `psql` from `postgresql@17`):
+
+1. `psql "$DB" -f accounts.sql`: the accounts first.
+2. `pg_restore --no-owner --no-privileges -d "$DB" database.dump`: the app's tables and data. "schema public already exists" is expected.
+3. `SUPABASE_PROJECT_REF=<new ref> SUPABASE_DB_URL=... scripts/deploy_supabase.sh`: the migrations again (safe to re-run; they put back the triggers, storage rules, buckets and the daily job), the Edge Functions and the auth settings.
+4. Upload each `files/<bucket>/` folder's contents to the bucket of that name, keeping the folders inside (Storage in the dashboard takes folders, or the CLI's `storage cp -r`).
+5. Point the app at the new project (`env.json`) and rebuild the website.
 
 ### Make yourself an admin
 
@@ -113,6 +140,12 @@ It starts off (`app_modules.is_enabled = false`). While it's off, everyone excep
 
 ```sql
 select cron.schedule('gym-daily-maintenance', '5 18 * * *', 'select public.gym_daily_maintenance()');
+```
+
+`gym_birthday_wishes()` runs every day at 08:05 Bhutan time: members with the app and a package running get a birthday wish from their gym (born on 29 February: the 28th in other years), once a year. If it isn't scheduled:
+
+```sql
+select cron.schedule('gym-birthday-wishes', '5 2 * * *', 'select public.gym_birthday_wishes()');
 ```
 
 ## How it fits together
@@ -199,7 +232,20 @@ Members walk in (they need no account), or ask to join in the app. Either way ea
 1. **Register** (Register member, `gym.register`): the front desk fills in the client's form (name, phone, email, dzongkhag, gewog and village, occupation, emergency contact, blood group, date of birth, date of joining, medical issues), snaps their photo with the webcam (the camera on a phone; Retake before saving, or Upload), and sells a package (`gym.payments`): the package, how many months (1 to 24), and what they paid. The **expiry date** is worked out, not typed: the same date, months later (joining 8 Nov 2026 for 3 months expires on 8 Feb 2027, and they can still come in that day). `gym_register_member` saves it all in `gym_members`, `gym_subscriptions` and `payments`.
 2. **Card**: the page after registering shows the package, its expiry date, their details and their **QR card**: Download card (in a browser) or Share card (on a phone, WhatsApp is in the share sheet), and WhatsApp, which opens their chat with a message ready. The card holds only `sportshub:gym-member:<random token>`: no phone, birthday or medical notes. New card (on their page) makes the old one stop working.
 3. **Check in** (`gym.check_in`): scan the card with the camera, a USB QR scanner (it types into the member code box, which keeps the cursor on a computer), or type the 6-character member code (`gym_check_in_member`, `gym_check_in_by_code`). It's recorded only if a package at that gym covers today. The desk sees **Checked in** with their photo, days left and medical notes, or **Not checked in** with why ("…'s package ended on …") and a button to renew.
-4. **Renew**: on their page. A renewal starts on the day the current package expires, so the dates don't drift (8 Feb, 8 May, 8 Aug), or today once it has ended (`gym_renew_member`).
+4. **Renew**: on their page. A renewal starts on the day the current package expires, so the dates don't drift (8 Feb, 8 May, 8 Aug), or today once it has ended (`gym_renew_member`). Its receipt opens straight after.
+   - **Pause** (`gym.payments`, on their page): travel, illness or an injury, from today or a later day, 1 to 180 days, with a reason. The running package ends that many days later and any renewal after it moves too, so nothing paid for is lost (`gym_pause_member`, `gym_membership_pauses`). While paused, check-in refuses them ("…'s membership is paused until …"). Back early, **Resume** gives the unused days back off the dates; before it begins, **Take back** undoes it (`gym_resume_member`). One pause at a time; a member with an account is told both times, and sees it on My dashboard and My gym ("Paused until …", when they can check in again, until when their package runs).
+   - **Receipts**: every payment gets the gym's next receipt number (1, 2, 3… per gym, `payments.receipt_no`; older payments were numbered oldest first). Open one from the payment's package on the member's page, any row of Payments & income, or the page after registering: **Print** (website), **Save picture** / **Share** (phone), and **WhatsApp** with the receipt as a message (`gym_payment_receipt`, for staff who see members, payments or income, and the member who paid). Members find their last 10 under Receipts on My gym, to print or keep (`my_gyms()` lists them).
+   - **Export to Excel** (.xlsx): Members (everyone: details, package, until when, standing), Payments & income (the month, day or dates on screen, with receipt numbers and packages) and Reports (every visit in the range). A download in a browser, the share sheet on a phone.
+   - **Reminders on WhatsApp** (`gym.members`): a chat button on the dashboard's Ending soon list, on Members under "Ending in 7 days" and "Ended", and on the member's page opens WhatsApp on the desk's phone with a renewal reminder ready to send. It's free and reaches members without the app. The app notes each one (`gym_note_message`, `gym_member_messages`), so the button shows "Reminded yesterday" for a week.
+   - **Birthdays**: the dashboard lists birthdays in the next 7 days (members with a package now or in the last 90 days); today's have a wish on WhatsApp, as does the member's page on the day. Members with the app also get a wish by notification (see [Daily job](#daily-job)).
+   - **Enquiries & trials** (`gym.register`, Front desk menu): walk-ins, calls and messages from people who haven't joined: how they heard of the gym, what they're after, a free trial (first day, 1 to 30 days), the day to follow up, and notes (`gym_enquiries`, `gym_save_enquiry`). The menu counts those due today (a follow-up today or missed, or a trial that has ended). **Register** opens Register member with their name and phone filled in. Registering anyone with the same phone number marks the enquiry joined.
+   - **Activity log** (`gym.activity`: owners, and managers by default; Manage menu): who registered, edited or gave a new card to whom, sold or renewed what, took which payment (with its journal number and receipt), confirmed or turned down online payments, paused, resumed or cancelled, changed a package's price, or added staff. Triggers write it (`gym_audit_log`, 20261118000006), so every function's changes are in. One action is one line (registering with a package and cash is one entry). Nobody can change or delete it, the owner included. The daily job's changes aren't in it. Filter by kind, by who, or by a name. A member's page shows their own history.
+   - **Offers & discounts** (`gym.plans`, Business menu): the gym's offers, a percentage or an amount off ('Student', 10%; 'Couple', Nu. 500), kept with `gym_save_offer` (`gym_offers`). Selling a package, the desk picks one (the amount follows), or takes less and must say why ('Referred by Sonam'). Every package sold at the desk now keeps its full price (`gym_subscriptions.list_price`, the plan's price for those months as `gym_package_price` works it out, the same as the form), with the offer and reason (`gym_add_membership`'s `discount`: `gym_register_member` takes it in its details, `gym_renew_member` as a last argument). The receipt shows the full price and the discount; the activity log says what was taken off and why, or "no reason given". The page lists the month's discounts with totals, and flags any without a reason. Online payments aren't offered discounts.
+   - **Expenses & profit** (`venue.income`, Business menu): the gym's expenses (rent, salaries, equipment, repairs, utilities, supplies, marketing, other), each with its day, amount, how it was paid, to whom and a note (`gym_expenses`, `gym_save_expense`). The page shows the month's payments in, expenses out and profit (or loss), the last 12 months side by side, and what the money went on. Every change is in the activity log. Export to Excel.
+   - **Body progress** (`gym_body_measurements`, `gym_save_measurement`): weight, height, body fat and tape measurements (chest, waist, hips, arm, thigh) on a day. Recorded by the gym's staff who see members, the member's trainer (`trainer_links`), or the member on My gym ("Log my weight"; they change only their own). Shown on the member's page, My gym and the trainer's page: weight now, the change since the first, BMI from the latest height (WHO bands), a line of their weight and the latest entries.
+   - **Workout & diet plans** (`gym_member_plans`, `gym_save_member_plan`): a title and the plan in words, written for one member by their trainer or the gym's staff. The member reads them on My gym ("My plans") and is told when one is given or its words change. Old ones are put away, not lost.
+   - **Trainers' members**: a trainer verified at a gym gets **My members** in their menu (`trainer_my_members()`): each member's package, latest weight and plans, and each one's page to record progress and write plans.
+   - **Group classes** (Classes on the Front desk menu; `gym_classes`, `gym_class_bookings`): a weekly timetable (day, time, length, trainer, places) kept by who sets packages (`gym.plans`; `gym_save_class`), public to read. Members book on My gym up to two weeks ahead, before the class starts, when a package covers that day and they're not paused (`gym_book_class`); never more than the places (counted under a lock). The desk sees who's booked each day, books anyone in and takes them out (`gym_cancel_class_booking`); members cancel their own before it starts. Taking a class off the timetable, or moving its day, cancels its bookings to come and tells members with the app.
 5. **Owner**: a dashboard (today's numbers, shortcuts, what needs attention, a getting-started checklist for a new gym), packages and prices (members on each, times sold), the members register (search, status filters with counts, sort, table or cards), income (12 months, by method, every payment), **reports & analytics** (new members, visits by day and hour, renewal rate, package mix, most regular members, and what it all says) and staff with their roles.
 
 6. **Ask AI** (every staff member; the floating Ask AI button on the gym's pages): questions in their own words, in English or Dzongkha. Questions about the gym ("busiest hours this month?", "who hasn't come in two weeks?", "when did Pema last come?", "revenue by payment method this year?") are answered with a chart or a list of members. How-to questions ("how do I renew a member?") get a short answer and a button to the page that does it. See [Ask AI](#ask-ai-cloudflare-workers-ai).
@@ -248,6 +294,22 @@ Migration `20261115000004_trainers.sql`, checks in `tests/database/trainers_test
 - **Attendance** (`trainer_check_ins`), as the client asked on 15 Nov (instead of working it out from members' check-ins): the front desk scans the trainer's Health Pro QR code at **Check-in** when they arrive, as for members, or uses **Mark arrived**. A trainer gets at most one attendance record per gym per Bhutan day; a repeat scan says **Already marked today**, and the staff button disables after the first record. A trainer verified there is recorded as **Trainer arrived** (with their times there today), not checked in as a member; a trainer who is also a member there gets "check in as a member" instead. Each gym sees only its own record (Trainers: days here in the last 30, recent arrivals); the trainer sees all of them, gym by gym, on their own page.
 - **Members and trainers** (`trainer_links`, with history): a member chooses a trainer at each of their gyms (My dashboard → My gyms → Choose / Change), or the front desk assigns one (under a member's check-in, or on their page). The old and the new trainer are told (Trainer changed / New member), and the member when the desk chose.
 - **Reviews** (`trainer_reviews`): only members who have had them as their trainer review a trainer (stars and a comment), on the trainer's profile; the trainer is told; no replies.
+
+### Inventory and suppliers
+
+Migration `20261118000009_gym_inventory.sql`, the `supplier-catalog` Edge Function, checks in `tests/database/inventory_test.sql` and `tests/functions/supplier_catalog_test.ts`.
+
+- **Who**: staff with `gym.inventory` (new; the Owner and Manager roles have it). Both pages are under **Business** in the gym's menu; Inventory shows a count of items low or out.
+- **Inventory** (`/gyms/<id>/manage/inventory`): what the gym keeps (equipment, supplements, towels...), how many, a low-stock level and an optional cost each (stock value). Counts change only through **Stock in**, **Take out** (used, sold, damaged) and **Recount** (`gym_move_stock`), each kept in the item's **History** with who and when (`gym_inventory_moves`).
+- **Suppliers** (`/gyms/<id>/manage/inventory/suppliers`): items and live stock from systems connected to Health Pro (`inventory_suppliers`). Health Pro only shows them: **View in <supplier>** opens the item in the supplier's own system, where it's ordered and paid for. Nothing is bought or paid here.
+- **For now** the one connected supplier is a test: the public DummyJSON API (its sports-accessories items, prices in USD).
+
+**Connecting the real supplier** (when their API is ready):
+
+1. Add an adapter for their API in `supabase/functions/supplier-catalog/catalog.ts` (`catalogUrl` and `read`, into the same item shape), with tests in `tests/functions/supplier_catalog_test.ts`, and allow its `api_kind` in a new migration.
+2. In that migration, add their row to `inventory_suppliers` (name, website, API address, kind) and set the test one's `is_active` to false.
+3. If their API needs a key, store it as the secret `SUPPLIER_<KEY>_TOKEN` (e.g. `supabase secrets set SUPPLIER_SPORTS_BT_TOKEN=...`); it is sent as a Bearer token and never reaches the app.
+4. Deploy (`scripts/deploy_supabase.sh`). The app doesn't change.
 
 ### Push notifications
 
@@ -353,6 +415,8 @@ When it moves to its own domain, add the domain to the Pages project (Custom dom
 
 ## Releasing
 
+- **Privacy policy and terms**: `/#/privacy` and `/#/terms`, open to everyone and linked from the landing page's footer, the sign-up form and Account. Google Play and the App Store ask for the privacy policy's address. Set `LegalInfo.contactEmail` in `packages/health_pro_core/lib/src/legal/legal_pages.dart` before publishing (until then the pages say an address is coming), and change the pages (and `LegalInfo.updated`) whenever what the app collects or who it's shared with changes. Have them checked by someone who knows Bhutan's law.
+- **App errors**: release builds send errors the app didn't handle to the database (`app_errors`, through `report_app_error`); the team sees them under Admin → App errors (permission `errors.view`, which the Administrator role has). A lost connection isn't sent; each kind goes once per run, ten at most; one not seen for 90 days is cleared. On the web the stack is the compiled JavaScript's, so the message and the page say most.
 - **Website**: see [Website on Cloudflare](#website-on-cloudflare). `scripts/build_web.sh` builds `apps/health_pro_app/build/web`, which any static host can serve; URLs use `/#/`, so no rewrites are needed.
 - **Android**: application id `bt.healthpro.app`. Add a release signing key before uploading to Google Play.
 - **iOS**: bundle id `bt.healthpro.app`. Set your team in Xcode (`ios/Runner.xcworkspace`).
@@ -368,4 +432,4 @@ scripts/test_database.sh      # needs a local PostgreSQL (brew install postgresq
 deno test tests/functions/    # the Edge Functions' own logic (brew install deno)
 ```
 
-`scripts/test_database.sh` runs `tests/database/scenario_test.sql` (memberships end to end), `access_test.sql` (master data, roles and permissions), and the organisations, registration and Ask AI (`ai_test.sql`: the daily question allowance) checks.
+`scripts/test_database.sh` runs `tests/database/scenario_test.sql` (memberships end to end), `access_test.sql` (master data, roles and permissions), and the organisations, registration, Ask AI (`ai_test.sql`: the daily question allowance) and app errors (`app_errors_test.sql`) checks, among others.

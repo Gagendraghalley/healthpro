@@ -13,6 +13,7 @@ import '../widgets/data_grid.dart';
 import '../widgets/feedback.dart';
 import '../widgets/form_fields.dart';
 import '../widgets/motion.dart';
+import '../widgets/page_actions.dart';
 import '../widgets/searchable_dropdown.dart';
 
 import 'access.dart';
@@ -206,15 +207,6 @@ class AdminOrganisationScreen extends ConsumerWidget {
           final venues = ref.watch(organisationVenuesProvider(org.id));
           return AppPage(
             title: org.name,
-            actions: [
-              IconButton(tooltip: 'Rename', icon: const Icon(Icons.edit_outlined), onPressed: () => _edit(context, ref, org)),
-              if (org.venueCount == 0)
-                IconButton(
-                  tooltip: 'Delete organisation',
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  onPressed: () => _delete(context, ref, org),
-                ),
-            ],
             body: RefreshIndicator(
               onRefresh: () async {
                 ref.invalidate(organisationsProvider);
@@ -223,6 +215,24 @@ class AdminOrganisationScreen extends ConsumerWidget {
               child: ListView(
                 padding: pagePadding(context, bottom: 48),
                 children: [
+                  PageActions(
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () => _edit(context, ref, org),
+                        style: OutlinedButton.styleFrom(minimumSize: PageActions.buttonSize),
+                        icon: const Icon(Icons.edit_outlined, size: 20),
+                        label: const Text('Rename'),
+                      ),
+                      if (org.venueCount == 0)
+                        OutlinedButton.icon(
+                          onPressed: () => _delete(context, ref, org),
+                          style: OutlinedButton.styleFrom(
+                              minimumSize: PageActions.buttonSize, foregroundColor: context.brand.danger),
+                          icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                          label: const Text('Delete organisation'),
+                        ),
+                    ],
+                  ),
                   SectionCard(
                     child: Row(
                       children: [

@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../assistant/assistant_chat.dart';
 import '../notifications/notifications_screen.dart';
 import '../search/global_search.dart';
 import '../shell/account_menu.dart';
@@ -23,6 +24,10 @@ import 'motion.dart';
 class AppPage extends StatelessWidget {
   final String? title;
   final Widget? titleWidget;
+
+  /// Extra buttons in the top bar. Pages don't use it: their own buttons go
+  /// under the bar, at the top of their content ([PageActions]), so the bar
+  /// keeps room for the title, search and the app's buttons.
   final List<Widget>? actions;
   final Widget? leading;
   final Widget body;
@@ -78,6 +83,7 @@ class AppPage extends StatelessWidget {
     final searchField = openSearch != null && GlobalSearchBox.shows(context);
     final gutter = pageGutter(context);
     final wide = MediaQuery.sizeOf(context).width >= 700;
+    final askAi = AskAiScope.of(context);
     return Scaffold(
       extendBodyBehindAppBar: true,
       extendBody: true,
@@ -94,12 +100,23 @@ class AppPage extends StatelessWidget {
         endSpacing: scope == null ? 8 : gutter - 6,
         actions: [
           ...?actions,
-          if (service != null && service.actions.isNotEmpty) ServiceActionsButton(service: service),
+          if (service != null && service.actionsInBar && service.actions.isNotEmpty) ServiceActionsButton(service: service),
           if (scope != null) ...[
             SizedBox(width: wide ? 10 : 4),
-            const _BarTray(children: [ThemeModeButton(), NotificationBell()]),
+            // Ask AI before light or dark: its own button on a computer, an
+            // icon with the others on a phone.
+            if (wide && askAi != null) ...[AskAiBarButton(onPressed: askAi), const SizedBox(width: 10)],
+            _BarTray(children: [
+              if (!wide && askAi != null) AskAiBarButton(onPressed: askAi),
+              const ThemeModeButton(),
+              const NotificationBell(),
+            ]),
             if (wide) const _BarDivider(),
             const AccountButton(),
+          ] else if (askAi != null) ...[
+            // Visitors: Ask AI at the end of the bar.
+            SizedBox(width: wide ? 10 : 4),
+            AskAiBarButton(onPressed: askAi),
           ],
         ],
         leading: lead,
@@ -240,11 +257,23 @@ class _BarDivider extends StatelessWidget {
 class ServiceActionsButton extends StatelessWidget {
   final ServiceNav service;
 
-  const ServiceActionsButton({super.key, required this.service});
+  /// In the top bar (an icon on a phone), or on a page under it, where it's
+  /// always the New button.
+  final bool inBar;
+
+  const ServiceActionsButton({super.key, required this.service, this.inBar = true});
+
+  /// The open service's New menu, for a page to show under the bar (in its
+  /// [PageActions]); null when the service has no shortcuts.
+  static Widget? onPage(BuildContext context) {
+    final service = AppShellScope.maybeOf(context)?.service;
+    if (service == null || service.actions.isEmpty) return null;
+    return ServiceActionsButton(service: service, inBar: false);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 700;
+    final wide = !inBar || MediaQuery.sizeOf(context).width >= 700;
     return MenuAnchor(
       alignmentOffset: const Offset(0, 6),
       style: MenuStyle(
@@ -266,7 +295,7 @@ class ServiceActionsButton extends StatelessWidget {
           return IconButton(tooltip: 'New', icon: const Icon(Icons.add_circle_outline_rounded), onPressed: toggle);
         }
         return Padding(
-          padding: const EdgeInsets.only(left: 8),
+          padding: EdgeInsets.only(left: inBar ? 8 : 0),
           child: Pressable(
             child: FilledButton.icon(
               onPressed: toggle,

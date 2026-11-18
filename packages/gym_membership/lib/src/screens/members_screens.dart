@@ -5,17 +5,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
+import '../data/exports.dart';
+import '../data/follow_ups.dart';
 import '../data/gym_models.dart';
 import '../data/gym_repository.dart';
 import '../data/joining.dart';
 import '../data/registered_member.dart';
 import '../gym_permissions.dart';
 import '../gym_routes.dart';
+import '../widgets/coaching_widgets.dart';
+import '../widgets/export_button.dart';
+import '../widgets/follow_up_widgets.dart';
 import '../widgets/gym_widgets.dart';
 import '../widgets/member_card.dart';
 import '../widgets/member_photo.dart';
 import '../widgets/package_fields.dart';
+import '../widgets/pause_widgets.dart';
+import '../widgets/receipt_view.dart';
 import '../widgets/trainer_widgets.dart';
+import 'activity_screen.dart';
 import 'payment_screens.dart';
 
 /// [member]'s memberships at the gym, newest first.
@@ -30,6 +38,19 @@ DateTime? paidUntil(Iterable<GymSubscription> subs, DateTime today) {
     if ((s.isCurrentOn(today) || s.isUpcomingOn(today)) && (until == null || s.endDate!.isAfter(until))) until = s.endDate;
   }
   return until;
+}
+
+/// Their paid package that ends last (running, to come or ended), if any.
+GymSubscription? latestPackage(Iterable<GymSubscription> subs) {
+  GymSubscription? latest;
+  for (final s in subs) {
+    if ((s.status == SubscriptionStatus.active || s.status == SubscriptionStatus.expired) &&
+        s.endDate != null &&
+        (latest == null || s.endDate!.isAfter(latest.endDate!))) {
+      latest = s;
+    }
+  }
+  return latest;
 }
 
 /// Their package in a line: 'Gym · until 7 Feb 2027', 'Gym from 1 Dec',
@@ -50,7 +71,10 @@ class StandingChip extends StatelessWidget {
   final MemberStanding standing;
   final int? daysLeft;
 
-  const StandingChip({super.key, required this.standing, this.daysLeft});
+  /// The last paused day, while [standing] is paused.
+  final DateTime? pausedUntil;
+
+  const StandingChip({super.key, required this.standing, this.daysLeft, this.pausedUntil});
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +84,11 @@ class StandingChip extends StatelessWidget {
           label: daysLeft == null ? 'Active' : (daysLeft == 1 ? 'Last day' : '$daysLeft days left'),
           color: (daysLeft ?? 99) <= 7 ? brand.warning : brand.success,
           icon: Icons.check_circle_rounded,
+        ),
+      MemberStanding.paused => StatusChip(
+          label: pausedUntil == null ? 'Paused' : 'Paused to ${formatShortDate(pausedUntil!)}',
+          color: brand.warning,
+          icon: Icons.pause_circle_rounded,
         ),
       MemberStanding.upcoming => StatusChip(label: 'Starts soon', color: context.colors.tertiary, icon: Icons.event_rounded),
       MemberStanding.ended => StatusChip(label: 'Ended', color: brand.danger, icon: Icons.history_rounded),
@@ -147,6 +176,7 @@ enum _Filter {
   all('All'),
   active('Active'),
   ending('Ending in 7 days'),
+  paused('Paused'),
   ended('Ended'),
   none('No package');
 
@@ -163,15 +193,19 @@ enum _Sort {
   final String label;
 }
 
-/// Whether [subs] (one member's) pass [filter] on [today].
-bool _passes(_Filter filter, List<GymSubscription> subs, DateTime today) {
-  final standing = standingOf(subs, today);
+/// Whether [r] (one member's packages and pause) passes [filter] on [today].
+/// A paused member still counts as active (they've paid).
+bool _passes(_Filter filter, _MemberRow r, DateTime today) {
+  final subs = r.subs;
+  final standing = standingOf(subs, today, pause: r.pause);
   return switch (filter) {
     _Filter.all => true,
-    _Filter.active => standing == MemberStanding.active || standing == MemberStanding.upcoming,
+    _Filter.active =>
+      standing == MemberStanding.active || standing == MemberStanding.upcoming || standing == MemberStanding.paused,
     _Filter.ending => standing == MemberStanding.active &&
         !subs.any((s) => s.isUpcomingOn(today)) &&
         BhutanTime.daysBetween(today, paidUntil(subs, today)!) < 7,
+    _Filter.paused => standing == MemberStanding.paused,
     _Filter.ended => standing == MemberStanding.ended,
     _Filter.none => standing == MemberStanding.none,
   };
@@ -211,8 +245,14 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
       builder: (context, access) {
         final members = ref.watch(gymMembersProvider(id));
         final subs = ref.watch(gymSubscriptionsProvider(id)).valueOrNull ?? const <GymSubscription>[];
+        final pauses = ref.watch(gymOpenPausesProvider(id)).valueOrNull ?? const <GymPause>[];
         final today = BhutanTime.today();
         final canRegister = access.can(GymPermission.register);
+        // The gym's New menu as buttons on the band; registering has its own.
+        final shortcuts = [
+          for (final s in AppShellScope.maybeOf(context)?.service?.actions ?? const <ServiceAction>[])
+            if (s.route != GymRoutes.registerMemberFor(id)) s,
+        ];
         return AppPage(
           title: 'Members',
           floatingActionButton: canRegister && !wide
@@ -226,11 +266,14 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
             value: members,
             onRetry: () => ref.invalidate(gymMembersProvider(id)),
             data: (all) {
-              final everyone = [for (final m in all) (member: m, subs: membershipsOf(subs, m.id))];
+              final everyone = [
+                for (final m in all)
+                  (member: m, subs: membershipsOf(subs, m.id), pause: openPauseOf(pauses, m.id, today)),
+              ];
               final counts = {
-                for (final f in _Filter.values) f: everyone.where((r) => _passes(f, r.subs, today)).length,
+                for (final f in _Filter.values) f: everyone.where((r) => _passes(f, r, today)).length,
               };
-              final rows = everyone.where((r) => _matches(r.member) && _passes(_filter, r.subs, today)).toList();
+              final rows = everyone.where((r) => _matches(r.member) && _passes(_filter, r, today)).toList();
               rows.sort((a, b) => switch (_sort) {
                     _Sort.name => a.member.fullName.toLowerCase().compareTo(b.member.fullName.toLowerCase()),
                     _Sort.newest => b.member.joinedOn.compareTo(a.member.joinedOn),
@@ -252,15 +295,23 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
                         subtitle: all.isEmpty
                             ? 'No members yet.'
                             : '${all.length} registered  ·  $active active now',
-                        bottom: canRegister && wide
-                            ? Align(
-                                alignment: Alignment.centerLeft,
-                                child: BandAction(
-                                  icon: Icons.person_add_alt_1_rounded,
-                                  label: 'Register member',
-                                  main: true,
-                                  onPressed: () => context.go(GymRoutes.registerMemberFor(id)),
-                                ),
+                        // With the gym's other shortcuts (the New menu), here
+                        // under the bar rather than in it.
+                        bottom: (canRegister && wide) || shortcuts.isNotEmpty
+                            ? Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: [
+                                  if (canRegister && wide)
+                                    BandAction(
+                                      icon: Icons.person_add_alt_1_rounded,
+                                      label: 'Register member',
+                                      main: true,
+                                      onPressed: () => context.go(GymRoutes.registerMemberFor(id)),
+                                    ),
+                                  for (final s in shortcuts)
+                                    BandAction(icon: s.icon, label: s.label, onPressed: () => context.go(s.route)),
+                                ],
                               )
                             : null,
                       ),
@@ -276,7 +327,8 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
                         onAction: () => context.go(GymRoutes.registerMemberFor(id)),
                       )
                     else ...[
-                      LayoutBuilder(builder: (context, c) => _toolbar(context, wide: c.maxWidth >= 760)),
+                      LayoutBuilder(
+                          builder: (context, c) => _toolbar(context, wide: c.maxWidth >= 760, gymName: access.venue.name)),
                       const SizedBox(height: 14),
                       SizedBox(
                         height: 40,
@@ -330,6 +382,9 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
                                       rows: rows,
                                       today: today,
                                       onOpen: (m) => context.go(GymRoutes.memberFor(id, m.id)),
+                                      venueId: id,
+                                      gymName: access.venue.name,
+                                      remind: _filter == _Filter.ending || _filter == _Filter.ended,
                                     )
                                   : ResponsiveGrid(
                                       minItemWidth: 360,
@@ -339,6 +394,7 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
                                           _MemberTile(
                                             member: r.member,
                                             subs: r.subs,
+                                            pause: r.pause,
                                             today: today,
                                             onTap: () => context.go(GymRoutes.memberFor(id, r.member.id)),
                                           ),
@@ -357,8 +413,8 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
     );
   }
 
-  /// Search, sort, and (on a computer) table or cards.
-  Widget _toolbar(BuildContext context, {required bool wide}) {
+  /// Search, sort, (on a computer) table or cards, and exporting everyone.
+  Widget _toolbar(BuildContext context, {required bool wide, required String gymName}) {
     final search = TextField(
       decoration: InputDecoration(
         prefixIcon: const Icon(Icons.search_rounded),
@@ -399,11 +455,21 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
       selected: {_cards},
       onSelectionChanged: (v) => setState(() => _cards = v.first),
     );
+    final today = BhutanTime.today();
+    final export = ExportButton(
+      compact: !wide,
+      label: 'Export members',
+      fileName: '$gymName members ${isoDate(today)}',
+      load: () async =>
+          membersSheet(await ref.read(gymRepositoryProvider).membersExport(widget.venueId), BhutanTime.today()),
+    );
     return Row(
       children: [
         Expanded(child: search),
         const SizedBox(width: 10),
         sort,
+        const SizedBox(width: 10),
+        export,
         if (MediaQuery.sizeOf(context).width >= 1300) ...[const SizedBox(width: 10), view],
       ],
     );
@@ -418,7 +484,7 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
   }
 }
 
-typedef _MemberRow = ({GymMember member, List<GymSubscription> subs});
+typedef _MemberRow = ({GymMember member, List<GymSubscription> subs, GymPause? pause});
 
 /// The register as a table: who (photo, name, code), phone, package, expiry
 /// date and standing, 25 to a page; a row opens the member. The headers sort
@@ -428,8 +494,20 @@ class _MembersTable extends StatelessWidget {
   final List<_MemberRow> rows;
   final DateTime today;
   final ValueChanged<GymMember> onOpen;
+  final String venueId;
+  final String gymName;
 
-  const _MembersTable({required this.rows, required this.today, required this.onOpen});
+  /// A renewal reminder on WhatsApp in each row (ending soon, or ended).
+  final bool remind;
+
+  const _MembersTable({
+    required this.rows,
+    required this.today,
+    required this.onOpen,
+    required this.venueId,
+    required this.gymName,
+    this.remind = false,
+  });
 
   String _package(_MemberRow r) =>
       r.subs.firstWhere((s) => s.isCurrentOn(today), orElse: () => r.subs.isEmpty ? _none : r.subs.first).planName;
@@ -445,8 +523,9 @@ class _MembersTable extends StatelessWidget {
   Widget _standing(_MemberRow r) {
     final until = paidUntil(r.subs, today);
     return StandingChip(
-      standing: standingOf(r.subs, today),
+      standing: standingOf(r.subs, today, pause: r.pause),
       daysLeft: until == null ? null : BhutanTime.daysBetween(today, until) + 1,
+      pausedUntil: r.pause?.endDate,
     );
   }
 
@@ -534,6 +613,26 @@ class _MembersTable extends StatelessWidget {
           sortBy: (r) => paidUntil(r.subs, today) ?? DateTime(9999),
           cell: (context, r) => _standing(r),
         ),
+        if (remind)
+          GridColumn(
+            key: 'remind',
+            label: '',
+            width: 48,
+            alignEnd: true,
+            cell: (context, r) {
+              final last = latestPackage(r.subs);
+              final end = paidUntil(r.subs, today) ?? last?.endDate;
+              if (last == null || end == null) return const SizedBox.shrink();
+              return WhatsAppFollowUpButton(
+                venueId: venueId,
+                gymMemberId: r.member.id,
+                phone: r.member.phone,
+                message: renewalMessage(name: r.member.fullName, gym: gymName, plan: last.planName, end: end, today: today),
+                kind: MessageKind.renewal,
+                compact: true,
+              );
+            },
+          ),
         GridColumn(
           key: 'open',
           label: '',
@@ -560,14 +659,15 @@ class _MembersTable extends StatelessWidget {
 class _MemberTile extends StatelessWidget {
   final GymMember member;
   final List<GymSubscription> subs;
+  final GymPause? pause;
   final DateTime today;
   final VoidCallback onTap;
 
-  const _MemberTile({required this.member, required this.subs, required this.today, required this.onTap});
+  const _MemberTile({required this.member, required this.subs, this.pause, required this.today, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final standing = standingOf(subs, today);
+    final standing = standingOf(subs, today, pause: pause);
     final until = paidUntil(subs, today);
     return SectionCard(
       padding: const EdgeInsets.all(14),
@@ -588,7 +688,11 @@ class _MemberTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          StandingChip(standing: standing, daysLeft: until == null ? null : BhutanTime.daysBetween(today, until) + 1),
+          StandingChip(
+            standing: standing,
+            daysLeft: until == null ? null : BhutanTime.daysBetween(today, until) + 1,
+            pausedUntil: pause?.endDate,
+          ),
         ],
       ),
     );
@@ -613,7 +717,19 @@ class RegisterMemberScreen extends ConsumerWidget {
   /// the form, from their last gym (or their account).
   final String? requestId;
 
-  const RegisterMemberScreen({super.key, required this.venueId, this.memberId, this.personQr, this.requestId});
+  /// From an enquiry: their name and phone, to start the form with.
+  final String? prefillName;
+  final String? prefillPhone;
+
+  const RegisterMemberScreen({
+    super.key,
+    required this.venueId,
+    this.memberId,
+    this.personQr,
+    this.requestId,
+    this.prefillName,
+    this.prefillPhone,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -643,7 +759,7 @@ class RegisterMemberScreen extends ConsumerWidget {
                 : _MemberForm(venueId: venueId, access: access, person: person, personQr: personQr, requestId: requestId),
           );
         }
-        if (!editing) return _MemberForm(venueId: venueId, access: access);
+        if (!editing) return _MemberForm(venueId: venueId, access: access, prefillName: prefillName, prefillPhone: prefillPhone);
         return AsyncValueView<GymMember?>(
           value: ref.watch(gymMemberProvider(memberId!)),
           onRetry: () => ref.invalidate(gymMemberProvider(memberId!)),
@@ -667,7 +783,20 @@ class _MemberForm extends ConsumerStatefulWidget {
   final String? personQr;
   final String? requestId;
 
-  const _MemberForm({required this.venueId, required this.access, this.member, this.person, this.personQr, this.requestId});
+  /// A new member's name and phone, from their enquiry.
+  final String? prefillName;
+  final String? prefillPhone;
+
+  const _MemberForm({
+    required this.venueId,
+    required this.access,
+    this.member,
+    this.person,
+    this.personQr,
+    this.requestId,
+    this.prefillName,
+    this.prefillPhone,
+  });
 
   @override
   ConsumerState<_MemberForm> createState() => _MemberFormState();
@@ -679,8 +808,8 @@ class _MemberFormState extends ConsumerState<_MemberForm> {
   /// Each section of the form, to scroll to it from the summary.
   final _sectionKeys = List.generate(5, (_) => GlobalKey());
   late final MemberDetails? _old = widget.member?.details ?? widget.person?.details;
-  late final _name = TextEditingController(text: _old?.fullName ?? '');
-  late final _phone = TextEditingController(text: _old?.phone ?? '');
+  late final _name = TextEditingController(text: _old?.fullName ?? widget.prefillName ?? '');
+  late final _phone = TextEditingController(text: _old?.phone ?? widget.prefillPhone ?? '');
   late final _email = TextEditingController(text: _old?.email ?? '');
   final _emailFocus = FocusNode();
   late final _occupation = TextEditingController(text: _old?.occupation ?? '');
@@ -1361,10 +1490,14 @@ class _MemberPageState extends ConsumerState<_MemberPage> {
     final today = BhutanTime.today();
     final all = ref.watch(gymSubscriptionsProvider(_venueId)).valueOrNull ?? const <GymSubscription>[];
     final subs = membershipsOf(all, m.id);
-    final standing = standingOf(subs, today);
+    final pauses = ref.watch(gymMemberPausesProvider(m.id)).valueOrNull ?? const <GymPause>[];
+    final pause = openPauseOf(pauses, m.id, today);
+    final standing = standingOf(subs, today, pause: pause);
     final until = paidUntil(subs, today);
     final visits = ref.watch(gymMemberCheckInsProvider(m.id)).valueOrNull ?? const <GymCheckIn>[];
     final a = widget.access;
+    // A package runs today or later, and nothing's paused or planned.
+    final canPause = a.can(GymPermission.payments) && pause == null && until != null;
 
     final header = SectionCard(
       padding: const EdgeInsets.all(18),
@@ -1384,7 +1517,11 @@ class _MemberPageState extends ConsumerState<_MemberPage> {
                   runSpacing: 6,
                   children: [
                     StatusChip(label: 'Member code ${m.code}', color: context.colors.tertiary),
-                    StandingChip(standing: standing, daysLeft: until == null ? null : BhutanTime.daysBetween(today, until) + 1),
+                    StandingChip(
+                      standing: standing,
+                      daysLeft: until == null ? null : BhutanTime.daysBetween(today, until) + 1,
+                      pausedUntil: pause?.endDate,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -1397,6 +1534,7 @@ class _MemberPageState extends ConsumerState<_MemberPage> {
                       icon: const Icon(Icons.call_outlined),
                       label: Text(m.phone),
                     ),
+                    _whatsApp(today, subs, standing, until),
                     if (a.can(GymPermission.register))
                       OutlinedButton.icon(
                         onPressed: () => context.go(GymRoutes.editMemberFor(_venueId, m.id)),
@@ -1417,9 +1555,21 @@ class _MemberPageState extends ConsumerState<_MemberPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Expanded(child: Text(packageLine(subs, today), style: context.text.titleMedium)),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 200),
+                child: Text(packageLine(subs, today), style: context.text.titleMedium),
+              ),
+              if (canPause)
+                OutlinedButton.icon(
+                  onPressed: () => _pause(context),
+                  icon: const Icon(Icons.pause_circle_outline_rounded),
+                  label: const Text('Pause'),
+                ),
               if (a.can(GymPermission.payments))
                 FilledButton.icon(
                   onPressed: () => _renew(context),
@@ -1427,6 +1577,12 @@ class _MemberPageState extends ConsumerState<_MemberPage> {
                   label: Text(standing == MemberStanding.none ? 'Sell a package' : 'Renew'),
                 ),
             ],
+          ),
+          MemberPauses(
+            venueId: _venueId,
+            gymMemberId: m.id,
+            memberName: m.fullName,
+            canChange: a.can(GymPermission.payments),
           ),
           if (subs.isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -1436,7 +1592,13 @@ class _MemberPageState extends ConsumerState<_MemberPage> {
                 contentPadding: EdgeInsets.zero,
                 title: Text('${s.planName} · ${s.price == 0 ? 'Free' : formatNu(s.price)}'),
                 subtitle: Text(s.startDate == null ? 'Not started' : '${formatDate(s.startDate!)} to ${formatDate(s.endDate!)}'),
-                trailing: SubscriptionStatusChip(subscription: s),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SubscriptionStatusChip(subscription: s),
+                    if (s.paymentId != null) ReceiptButton(paymentId: s.paymentId!),
+                  ],
+                ),
               ),
           ],
         ],
@@ -1478,6 +1640,10 @@ class _MemberPageState extends ConsumerState<_MemberPage> {
                 package,
                 const SectionTitle('Details'),
                 details,
+                const SectionTitle('Progress'),
+                MemberProgress(gymMemberId: m.id, coach: true),
+                const SectionTitle('Workout & diet plans'),
+                MemberPlans(gymMemberId: m.id, coach: true),
                 SectionTitle('Visits', trailing: Text('${visits.length} recorded', style: TextStyle(color: context.brand.muted))),
                 if (visits.isEmpty)
                   const FormHint('No visits yet.')
@@ -1496,6 +1662,10 @@ class _MemberPageState extends ConsumerState<_MemberPage> {
                       ],
                     ),
                   ),
+                if (a.can(GymPermission.activity)) ...[
+                  const SectionTitle('History'),
+                  MemberActivity(venueId: _venueId, gymMemberId: m.id),
+                ],
               ],
               second: [const SectionTitle('Member card'), card],
             ),
@@ -1505,13 +1675,58 @@ class _MemberPageState extends ConsumerState<_MemberPage> {
     );
   }
 
+  /// WhatsApp: a birthday wish on their birthday; a renewal reminder when
+  /// their package ends within 7 days or has ended; a plain chat otherwise.
+  Widget _whatsApp(DateTime today, List<GymSubscription> subs, MemberStanding standing, DateTime? until) {
+    final gym = widget.access.venue.name;
+    final dob = m.dateOfBirth;
+    if (dob != null && birthdayIn(dob, today.year) == today) {
+      return WhatsAppFollowUpButton(
+        venueId: _venueId,
+        gymMemberId: m.id,
+        phone: m.phone,
+        message: birthdayMessage(name: m.fullName, gym: gym),
+        kind: MessageKind.birthday,
+      );
+    }
+    final last = latestPackage(subs);
+    final end = until ?? last?.endDate;
+    final due = last != null &&
+        end != null &&
+        (standing == MemberStanding.ended || (standing == MemberStanding.active && BhutanTime.daysBetween(today, end) < 7));
+    if (due) {
+      return WhatsAppFollowUpButton(
+        venueId: _venueId,
+        gymMemberId: m.id,
+        phone: m.phone,
+        message: renewalMessage(name: m.fullName, gym: gym, plan: last.planName, end: end, today: today),
+        kind: MessageKind.renewal,
+      );
+    }
+    return OutlinedButton.icon(
+      onPressed: () => openWhatsApp(context, m.phone),
+      icon: const Icon(Icons.chat_outlined),
+      label: const Text('WhatsApp'),
+    );
+  }
+
   Future<void> _renew(BuildContext context) async {
     final subs = membershipsOf(ref.read(gymSubscriptionsProvider(_venueId)).valueOrNull ?? const [], m.id);
     final start = renewalStart(subs, BhutanTime.today());
-    final done = await showAppDialog<bool>(
+    // The new payment, or '' for a package given free.
+    final paid = await showAppDialog<String>(
       context: context,
       builder: (_) => _RenewDialog(member: m, venueId: _venueId, start: start),
     );
+    if (paid == null) return;
+    refreshGym(ref, _venueId);
+    // Its receipt, to print or send while they're at the desk.
+    if (paid.isNotEmpty && context.mounted) await showReceipt(context, paid);
+  }
+
+  Future<void> _pause(BuildContext context) async {
+    final subs = membershipsOf(ref.read(gymSubscriptionsProvider(_venueId)).valueOrNull ?? const [], m.id);
+    final done = await showPauseDialog(context, member: m, subscriptions: subs);
     if (done == true) refreshGym(ref, _venueId);
   }
 }
@@ -1560,21 +1775,22 @@ class _RenewDialogState extends ConsumerState<_RenewDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: _saving ? null : () => Navigator.pop(context, false), child: const Text('Cancel')),
+        TextButton(onPressed: _saving ? null : () => Navigator.pop(context), child: const Text('Cancel')),
         FilledButton(
           onPressed: _saving
               ? null
               : () async {
                   if (!_form.currentState!.validate() || _sale == null) return;
                   setState(() => _saving = true);
+                  String? paymentId;
                   final ok = await runAction(
                     context,
-                    () => ref.read(gymRepositoryProvider).renewMember(widget.member.id, _sale!),
+                    () async => paymentId = await ref.read(gymRepositoryProvider).renewMember(widget.member.id, _sale!),
                     success: 'Package added',
                   );
                   if (!context.mounted) return;
                   setState(() => _saving = false);
-                  if (ok) Navigator.pop(context, true);
+                  if (ok) Navigator.pop(context, paymentId ?? '');
                 },
           child: const Text('Save package'),
         ),

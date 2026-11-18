@@ -37,6 +37,8 @@ class _Service extends HealthProModule {
           NavSection(title: 'Work', items: [NavDestination(label: '$name orders', icon: Icons.list_rounded, route: '/$key/orders')]),
         ],
         actions: [ServiceAction(label: 'New $name order', icon: Icons.add_rounded, route: '/$key/orders')],
+        // Its reports page keeps the shortcuts out of the bar.
+        actionsInBar: location != '/$key/reports',
       );
 
   /// One customer, Pema Dorji, for the search in the bar.
@@ -124,6 +126,13 @@ void main() {
     ));
     expect(find.byType(PlatformSidebar), findsNothing);
     expect(find.text('the page'), findsOneWidget);
+  });
+
+  testWidgets('a service shows its New button only on the pages it chooses', (tester) async {
+    await showShell(tester, const [shop, cafe], at: '/cafe/orders');
+    expect(find.text('New'), findsOneWidget);
+    await showShell(tester, const [shop, cafe], at: '/cafe/reports');
+    expect(find.text('New'), findsNothing);
   });
 
   testWidgets("every service starts closed; opened, the page's is marked, and it follows the page", (tester) async {
@@ -286,7 +295,9 @@ void main() {
     }
 
     testWidgets("finds the menu's pages and shortcuts, and opens one", (tester) async {
-      await showShell(tester, const [shop, cafe], at: '/shop');
+      // Wide enough for New, Ask AI and the icons beside a centred search (the
+      // test font draws every letter full width).
+      await showShell(tester, const [shop, cafe], at: '/shop', size: const Size(1800, 1000));
       final box = tester.getCenter(find.byType(GlobalSearchBox)).dx;
       expect(box, closeTo(tester.getCenter(find.byType(AppBar)).dx, 1), reason: 'in the middle of the bar');
       expect(box, greaterThan(tester.getCenter(find.text('Page /shop')).dx), reason: 'after the title');

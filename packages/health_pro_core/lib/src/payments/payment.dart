@@ -27,6 +27,9 @@ class Payment {
   final String status;
   final DateTime createdAt;
 
+  /// The venue's receipt number (1, 2, 3... per venue).
+  final int? receiptNo;
+
   /// From profiles, when the reader may see it (the venue's staff).
   final String? payerName;
 
@@ -41,6 +44,7 @@ class Payment {
     this.userId,
     this.referenceId,
     this.reference,
+    this.receiptNo,
     this.payerName,
   });
 
@@ -57,6 +61,7 @@ class Payment {
         reference: json['reference'] as String?,
         status: json['status'] as String,
         createdAt: DateTime.parse(json['created_at'] as String),
+        receiptNo: (json['receipt_no'] as num?)?.toInt(),
         // Their account's name, or the name written down for payers without
         // one (a gym's walk-in members).
         payerName: (json['payer'] as Map<String, dynamic>?)?['full_name'] as String? ?? json['payer_name'] as String?,

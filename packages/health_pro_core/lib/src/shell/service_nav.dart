@@ -130,6 +130,10 @@ class ServiceNav {
   final List<NavSection> sections;
   final List<ServiceAction> actions;
 
+  /// Whether the open page's top bar offers [actions] (its New button). They
+  /// stay on Overview and in search either way.
+  final bool actionsInBar;
+
   /// Whether they have something running in it (a gym), rather than only the
   /// way to start.
   final bool isSetUp;
@@ -144,6 +148,7 @@ class ServiceNav {
     this.homeRoute,
     this.scope,
     this.actions = const [],
+    this.actionsInBar = true,
     this.isSetUp = true,
   });
 

@@ -347,14 +347,6 @@ class GymDetailsScreen extends ConsumerWidget {
               icon: const Icon(Icons.arrow_back_rounded),
               onPressed: () => context.go(GymRoutes.gyms),
             ),
-      actions: [
-        if (access != null)
-          TextButton.icon(
-            onPressed: () => context.go(GymRoutes.dashboardFor(venueId)),
-            icon: const Icon(Icons.space_dashboard_rounded),
-            label: const Text('Dashboard'),
-          ),
-      ],
       body: AsyncValueView<Venue?>(
         value: venue,
         onRetry: () => ref.invalidate(venueProvider(venueId)),
@@ -456,6 +448,19 @@ class GymDetailsScreen extends ConsumerWidget {
             child: ListView(
               padding: pagePadding(context),
               children: [
+                // For its staff: the way to their dashboard, under the bar.
+                if (access != null)
+                  PageActions(
+                    text: 'You work at this gym. This is its page as members see it.',
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () => context.go(GymRoutes.dashboardFor(venueId)),
+                        style: OutlinedButton.styleFrom(minimumSize: PageActions.buttonSize),
+                        icon: const Icon(Icons.space_dashboard_rounded, size: 20),
+                        label: const Text('Dashboard'),
+                      ),
+                    ],
+                  ),
                 if (!gym.isVerified)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),

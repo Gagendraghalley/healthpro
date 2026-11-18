@@ -34,13 +34,6 @@ class JoinRequestsScreen extends ConsumerWidget {
         final requests = ref.watch(gymJoinRequestsProvider(venueId));
         return AppPage(
           title: 'Join requests',
-          actions: [
-            TextButton.icon(
-              onPressed: () => context.go(GymRoutes.gymQrFor(venueId)),
-              icon: const Icon(Icons.qr_code_2_rounded),
-              label: const Text('Gym QR code'),
-            ),
-          ],
           body: AsyncValueView<List<JoinRequest>>(
             value: requests,
             onRetry: () => ref.invalidate(gymJoinRequestsProvider(venueId)),
@@ -52,6 +45,17 @@ class JoinRequestsScreen extends ConsumerWidget {
                 child: ListView(
                   padding: pagePadding(context),
                   children: [
+                    PageActions(
+                      text: 'People who scanned the gym\'s QR code and asked to join.',
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => context.go(GymRoutes.gymQrFor(venueId)),
+                          style: OutlinedButton.styleFrom(minimumSize: PageActions.buttonSize),
+                          icon: const Icon(Icons.qr_code_2_rounded, size: 20),
+                          label: const Text('Gym QR code'),
+                        ),
+                      ],
+                    ),
                     if (waiting.isEmpty)
                       EmptyState(
                         icon: Icons.mark_email_read_outlined,

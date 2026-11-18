@@ -80,9 +80,10 @@ class _MenuRow extends StatelessWidget {
 class _AccountHeader extends StatelessWidget {
   final String name;
   final String email;
+  final String? photoUrl;
   final bool superAdmin;
 
-  const _AccountHeader({required this.name, required this.email, required this.superAdmin});
+  const _AccountHeader({required this.name, required this.email, required this.photoUrl, required this.superAdmin});
 
   @override
   Widget build(BuildContext context) {
@@ -91,7 +92,7 @@ class _AccountHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       child: Row(
         children: [
-          AccountAvatar(name: name, radius: 21),
+          AccountAvatar(name: name, photoUrl: photoUrl, radius: 21),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -138,25 +139,42 @@ Future<void> chooseFromAccountMenu(BuildContext context, WidgetRef ref, String v
   }
 }
 
-/// Their initial in an orange circle.
+/// Their profile photo in a circle; their initial in an orange one when they
+/// have no photo, while it loads, or when it won't.
 class AccountAvatar extends StatelessWidget {
   final String name;
+  final String? photoUrl;
   final double radius;
 
-  const AccountAvatar({super.key, required this.name, this.radius = 17});
+  const AccountAvatar({super.key, required this.name, this.photoUrl, this.radius = 17});
 
   @override
   Widget build(BuildContext context) {
     final initial = name.trim().isEmpty ? '?' : name.trim().characters.first.toUpperCase();
-    return CircleAvatar(
+    final letter = CircleAvatar(
       radius: radius,
       backgroundColor: context.brand.highlight,
       child: Text(initial, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: radius * 0.85)),
     );
+    final url = photoUrl;
+    if (url == null || url.isEmpty) return letter;
+    return ClipOval(
+      child: SizedBox.square(
+        dimension: radius * 2,
+        child: Image.network(
+          url,
+          fit: BoxFit.cover,
+          semanticLabel: name,
+          cacheWidth: (radius * 2 * MediaQuery.devicePixelRatioOf(context)).round(),
+          frameBuilder: (context, child, frame, sync) => frame == null && !sync ? letter : child,
+          errorBuilder: (_, __, ___) => letter,
+        ),
+      ),
+    );
   }
 }
 
-/// Top right of a signed-in page: their initial, opening the account menu
+/// Top right of a signed-in page: their photo (or initial), opening the account menu
 /// under who is signed in.
 class AccountButton extends ConsumerWidget {
   const AccountButton({super.key});
@@ -180,7 +198,7 @@ class AccountButton extends ConsumerWidget {
           enabled: false,
           height: 0,
           padding: EdgeInsets.zero,
-          child: _AccountHeader(name: name, email: email, superAdmin: superAdmin),
+          child: _AccountHeader(name: name, email: email, photoUrl: profile?.avatarUrl, superAdmin: superAdmin),
         ),
         const PopupMenuDivider(height: 9),
         ...accountMenuEntries(),
@@ -195,7 +213,7 @@ class AccountButton extends ConsumerWidget {
             border: Border.all(
                 color: context.brand.pick(context.brand.accent.withValues(alpha: 0.35), Colors.transparent), width: 1.5),
           ),
-          child: AccountAvatar(name: name, radius: 15),
+          child: AccountAvatar(name: name, photoUrl: profile?.avatarUrl, radius: 15),
         ),
       ),
     );

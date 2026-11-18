@@ -1,6 +1,7 @@
 import 'package:health_pro_core/health_pro_core.dart';
 
 import 'gym_models.dart';
+import 'money.dart';
 
 /// Blood groups the registration form offers (gym_members.blood_group).
 const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -178,15 +179,35 @@ class MemberDetails {
 }
 
 /// A package sold at the desk: which plan, for how many months, from when,
-/// and what they paid.
+/// and what they paid; with an [offer] picked or a [discountReason] typed
+/// when they paid less than the full price.
 class PackageSale {
   final GymPlan plan;
   final int months;
   final int amount;
   final PaymentMethod? method;
   final String? reference;
+  final GymOffer? offer;
+  final String? discountReason;
 
-  const PackageSale({required this.plan, required this.months, required this.amount, this.method, this.reference});
+  const PackageSale({
+    required this.plan,
+    required this.months,
+    required this.amount,
+    this.method,
+    this.reference,
+    this.offer,
+    this.discountReason,
+  });
+
+  /// The full price for those months (gym_package_price).
+  int get listPrice => packagePrice(plan, months);
+
+  /// What's taken off it; 0 for none.
+  int get discount => amount < listPrice ? listPrice - amount : 0;
+
+  /// What gym_add_membership is told about the discount, or null.
+  Map<String, dynamic>? get discountDetails => discount == 0 ? null : discountJson(offer: offer, reason: discountReason);
 }
 
 /// '2026-11-08'.
@@ -238,14 +259,89 @@ int defaultMonths(GymPlan plan) {
   return packageMonthOptions.reduce((a, b) => (a - m).abs() <= (b - m).abs() ? a : b);
 }
 
-/// A registered member's standing today, from their memberships here.
-enum MemberStanding { active, upcoming, ended, none }
+/// A registered member's standing today, from their memberships here:
+/// [paused] while a pause of theirs runs (they can't check in).
+enum MemberStanding { active, paused, upcoming, ended, none }
 
-MemberStanding standingOf(Iterable<GymSubscription> subscriptions, DateTime today) {
+MemberStanding standingOf(Iterable<GymSubscription> subscriptions, DateTime today, {GymPause? pause}) {
+  if (pause != null && pause.coversOn(today)) return MemberStanding.paused;
   if (subscriptions.any((s) => s.isCurrentOn(today))) return MemberStanding.active;
   if (subscriptions.any((s) => s.isUpcomingOn(today))) return MemberStanding.upcoming;
   if (subscriptions.any((s) => s.status == SubscriptionStatus.expired || s.status == SubscriptionStatus.active)) {
     return MemberStanding.ended;
   }
   return MemberStanding.none;
+}
+
+/// A registered member's membership paused (gym_membership_pauses) from
+/// [startDate] to [endDate], both paused: their packages run that many days
+/// longer, and they can't check in meanwhile. Resumed early, [endDate] is the
+/// day before and [endedAt] says when.
+class GymPause {
+  final String id;
+  final String venueId;
+  final String gymMemberId;
+  final DateTime startDate;
+  final DateTime endDate;
+  final String? reason;
+  final DateTime? endedAt;
+
+  const GymPause({
+    required this.id,
+    required this.venueId,
+    required this.gymMemberId,
+    required this.startDate,
+    required this.endDate,
+    this.reason,
+    this.endedAt,
+  });
+
+  int get days => BhutanTime.daysBetween(startDate, endDate) + 1;
+
+  /// Paused on [day].
+  bool coversOn(DateTime day) => !day.isBefore(startDate) && !day.isAfter(endDate);
+
+  /// Planned: it starts after [today].
+  bool isUpcomingOn(DateTime today) => startDate.isAfter(today);
+
+  /// Running or planned on [today]: one the desk can still resume.
+  bool isOpenOn(DateTime today) => !endDate.isBefore(today);
+
+  factory GymPause.fromJson(Map<String, dynamic> json) => GymPause(
+        id: json['id'] as String,
+        venueId: json['venue_id'] as String,
+        gymMemberId: json['gym_member_id'] as String,
+        startDate: BhutanTime.parseDate(json['start_date'] as String),
+        endDate: BhutanTime.parseDate(json['end_date'] as String),
+        reason: json['reason'] as String?,
+        endedAt: json['ended_at'] == null ? null : DateTime.parse(json['ended_at'] as String),
+      );
+}
+
+/// The pause running or planned for [gymMemberId] on [today], if any (one at
+/// a time).
+GymPause? openPauseOf(Iterable<GymPause> pauses, String gymMemberId, DateTime today) =>
+    pauses.where((p) => p.gymMemberId == gymMemberId && p.isOpenOn(today)).firstOrNull;
+
+/// The longest a pause can be (gym_pause_member takes 1 to 180 days).
+const maxPauseDays = 180;
+
+/// Until when [subscriptions] would run after a pause of [days] from
+/// [start]: every package running on or after [start] moves [days] later,
+/// as gym_pause_member does. Null when none runs on [start] or after.
+DateTime? runsUntilAfterPause(Iterable<GymSubscription> subscriptions, DateTime start, int days) {
+  DateTime? until;
+  for (final s in subscriptions) {
+    if (s.status != SubscriptionStatus.active || s.endDate == null || s.endDate!.isBefore(start)) continue;
+    if (until == null || s.endDate!.isAfter(until)) until = s.endDate;
+  }
+  return until == null ? null : DateTime(until.year, until.month, until.day + days);
+}
+
+/// The package running on [day], the earliest if two do: the one a pause
+/// from [day] would pause. Null when none runs that day.
+GymSubscription? runningOn(Iterable<GymSubscription> subscriptions, DateTime day) {
+  final running = subscriptions.where((s) => s.isCurrentOn(day)).toList()
+    ..sort((a, b) => a.startDate!.compareTo(b.startDate!));
+  return running.firstOrNull;
 }

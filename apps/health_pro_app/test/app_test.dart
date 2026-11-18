@@ -126,6 +126,25 @@ void main() {
     }
   });
 
+  testWidgets('visitors ask AI from the top of the gym list and the sign-in pages, nothing floating', (tester) async {
+    final container = await pumpApp(tester);
+    final router = container.read(appRouterProvider);
+    for (final page in [GymRoutes.gyms, CoreRoutes.signIn, CoreRoutes.signUp]) {
+      router.go(page);
+      await tester.pumpAndSettle();
+      expect(find.byType(FloatingActionButton), findsNothing, reason: page);
+      if (page == GymRoutes.gyms) {
+        expect(find.descendant(of: find.byType(GlassAppBar), matching: find.text('Ask AI')), findsOneWidget);
+      }
+      await tester.tap(find.byTooltip('Ask AI'));
+      await tester.pumpAndSettle();
+      expect(find.text('Health Pro assistant'), findsOneWidget, reason: page);
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+      expect(find.text('Health Pro assistant'), findsNothing, reason: page);
+    }
+  });
+
   testWidgets('the super admin, running no gym yet: Overview shows how to start', (tester) async {
     final container = await pumpApp(tester, userId: 'u1', superAdmin: true);
     expect(container.read(appRouterProvider).routerDelegate.currentConfiguration.uri.path, CoreRoutes.home);

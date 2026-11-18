@@ -7,8 +7,14 @@ import '../data/gym_models.dart';
 import '../data/gym_repository.dart';
 import '../data/joining.dart';
 import '../data/online_payments.dart';
+import '../data/receipts.dart';
+import '../data/registered_member.dart';
 import '../data/trainers.dart';
 import '../gym_routes.dart';
+import '../widgets/pause_widgets.dart' show pauseSpan;
+import '../widgets/receipt_view.dart';
+import '../widgets/class_widgets.dart';
+import '../widgets/coaching_widgets.dart';
 import '../widgets/trainer_widgets.dart';
 
 /// My gym, in a member's menu: the gym they belong to, in full. Its photos,
@@ -91,13 +97,18 @@ class _MyGymDetails extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final today = BhutanTime.today();
     final membership = _MyGymCard(gym: mine, today: today, toPublicPage: true);
+    final receipts = [
+      if (mine.receipts.isNotEmpty) ...[const SectionTitle('Receipts'), _MyReceipts(receipts: mine.receipts)],
+    ];
     return AsyncValueView<Venue?>(
       value: ref.watch(venueProvider(mine.venueId)),
       onRetry: () => ref.invalidate(venueProvider(mine.venueId)),
       loading: const LoadingSkeleton.rows(),
       data: (gym) {
         // The gym's page is gone (closed, or hidden): their membership alone.
-        if (gym == null) return membership;
+        if (gym == null) {
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [membership, ...receipts]);
+        }
         final trainers =
             ref.watch(gymVerifiedTrainersProvider(gym.id)).valueOrNull ?? const <TrainerProfile>[];
         return ResponsiveColumns(
@@ -148,6 +159,11 @@ class _MyGymDetails extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Column(children: [for (final t in trainers) TrainerTile(trainer: t, venueId: gym.id)]),
               ),
+            MyClassesCard(venueId: gym.id),
+            if (mine.gymMemberId != null) ...[
+              const SectionTitle('My plans'),
+              MemberPlans(gymMemberId: mine.gymMemberId!),
+            ],
             if (gym.videos.isNotEmpty) ...[
               const SectionTitle('Videos'),
               VenueVideosView(videos: gym.videos),
@@ -156,6 +172,11 @@ class _MyGymDetails extends ConsumerWidget {
           second: [
             const SectionTitle('My membership'),
             membership,
+            if (mine.gymMemberId != null) ...[
+              const SectionTitle('My progress'),
+              MemberProgress(gymMemberId: mine.gymMemberId!, self: true),
+            ],
+            ...receipts,
             if (gym.openingHours != null) ...[
               const SectionTitle('Opening hours'),
               OpeningHoursView(hours: gym.openingHours!),
@@ -219,6 +240,19 @@ class _MyGymsBody extends StatelessWidget {
       void open() => context.go(g.canPayOnline ? GymRoutes.payFor(g.venueId) : GymRoutes.gymFor(g.venueId));
       final renew = g.canPayOnline ? 'Pay online' : 'View gym';
       final claim = g.claim;
+      if (g.isPausedOn(today)) {
+        rows.add((
+          2,
+          _AttentionRow(
+            icon: Icons.pause_circle_outline_rounded,
+            color: brand.warning,
+            title: 'Membership paused at ${g.venueName}',
+            text: 'Until ${formatDate(g.pause!.endDate)}: no check-in till then. Back sooner? The front desk can resume it.',
+            action: 'View gym',
+            onTap: () => context.go(GymRoutes.myGymFor(g.venueId)),
+          ),
+        ));
+      }
       if (claim?.status == ClaimStatus.rejected) {
         rows.add((
           0,
@@ -788,6 +822,8 @@ class _MyGymCard extends ConsumerWidget {
     final active = gym.isActiveOn(today);
     final (String label, Color color) = gym.endDate == null
         ? ('No package yet', brand.muted)
+        : gym.isPausedOn(today)
+            ? ('Paused until ${formatDate(gym.pause!.endDate)}', brand.warning)
         : active
             ? ('Active until ${formatDate(gym.endDate!)}', brand.success)
             : gym.hasEndedBy(today)
@@ -884,6 +920,10 @@ class _MyGymCard extends ConsumerWidget {
                         style: TextStyle(color: brand.muted, fontSize: 12.5, fontWeight: FontWeight.w600),
                       ),
                     ],
+                    if (gym.pause != null && gym.endDate != null) ...[
+                      const SizedBox(height: 10),
+                      _PauseNote(pause: gym.pause!, runsUntil: gym.endDate!, today: today),
+                    ],
                   ];
                   final paying = <Widget>[
                     if (gym.claim != null) _ClaimLine(gym: gym, claim: gym.claim!),
@@ -961,6 +1001,66 @@ class _MyGymCard extends ConsumerWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Their pause at a gym, in words: running (no check-in until it ends) or
+/// planned, and until when their package runs because of it.
+class _PauseNote extends StatelessWidget {
+  final GymPause pause;
+  final DateTime runsUntil;
+  final DateTime today;
+
+  const _PauseNote({required this.pause, required this.runsUntil, required this.today});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final back = DateTime(pause.endDate.year, pause.endDate.month, pause.endDate.day + 1);
+    final text = pause.isUpcomingOn(today)
+        ? 'Pause planned ${pauseSpan(pause)}. Your package then runs until ${formatDate(runsUntil)}.'
+        : 'Paused ${pauseSpan(pause)}: you can check in again from ${formatDate(back)}. Your package now runs '
+            'until ${formatDate(runsUntil)}. Back sooner? The front desk can resume it.';
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.pause_circle_outline_rounded, size: 18, color: brand.warning),
+        const SizedBox(width: 8),
+        Expanded(child: Text(text, style: TextStyle(color: brand.body, fontSize: 13, height: 1.35))),
+      ],
+    );
+  }
+}
+
+/// Their receipts at a gym, latest first: each opens to print or keep.
+class _MyReceipts extends StatelessWidget {
+  final List<ReceiptLine> receipts;
+
+  const _MyReceipts({required this.receipts});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return SectionCard(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        children: [
+          for (final r in receipts)
+            ListTile(
+              leading: Icon(Icons.receipt_long_outlined, color: brand.muted),
+              title: Text('No. ${receiptNumber(r.receiptNo)}${r.planName == null ? '' : ' · ${r.planName}'}',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text([
+                formatDate(BhutanTime.toBhutan(r.paidAt)),
+                r.method.label,
+                if (r.isRefunded) 'Refunded',
+              ].join(' · ')),
+              trailing: Text(formatNu(r.amount), style: TextStyle(fontWeight: FontWeight.w800, color: brand.ink)),
+              onTap: () => showReceipt(context, r.paymentId, forMember: true),
+            ),
+        ],
       ),
     );
   }

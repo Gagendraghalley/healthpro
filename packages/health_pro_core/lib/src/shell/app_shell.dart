@@ -21,7 +21,7 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // The floating Ask AI button over every page, for visitors too.
+    // Ask AI in every page's top bar, for visitors too.
     if (ref.watch(currentUserIdProvider) == null) return AssistantFrame(location: location, child: child);
     final enabled = ref.watch(enabledModulesProvider);
     // The splash while the services load, rather than the page flashing up
@@ -54,7 +54,8 @@ class AppShellScope extends InheritedWidget {
   bool updateShouldNotify(AppShellScope oldWidget) =>
       (oldWidget.openMenu == null) != (openMenu == null) || oldWidget.service?.key != service?.key ||
       (oldWidget.openSearch == null) != (openSearch == null) ||
-      oldWidget.service?.actions.length != service?.actions.length;
+      oldWidget.service?.actions.length != service?.actions.length ||
+      oldWidget.service?.actionsInBar != service?.actionsInBar;
 }
 
 /// Whether the side menu is folded to its icons. Kept on the device.

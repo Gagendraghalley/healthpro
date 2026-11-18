@@ -4,10 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/dashboard_data.dart';
+import '../data/follow_ups.dart';
 import '../data/gym_models.dart';
 import '../data/gym_repository.dart';
 import '../gym_permissions.dart';
 import '../gym_routes.dart';
+import '../widgets/follow_up_widgets.dart';
 import '../widgets/gym_type.dart';
 import '../widgets/gym_widgets.dart';
 
@@ -255,7 +257,20 @@ class _ConsoleState extends ConsumerState<_Console> {
       activity: recentActivity(subs: subs, checkIns: checkIns, payments: payments?.valueOrNull),
       today: today,
     );
-    final endingCard = _EndingCard(ending: ending, today: today, venueId: _id);
+    final endingCard = _EndingCard(ending: ending, today: today, venueId: _id, gymName: venue.name);
+    // Birthdays this week, of members with a package now or lately.
+    final birthdays = birthdaysWithin(registered ?? const [], today, 7,
+        include: (m) => isRecentMember(subs.where((s) => s.gymMemberId == m.id), today));
+    final soonCards = birthdays.isEmpty
+        ? endingCard
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              endingCard,
+              const SizedBox(height: 20),
+              BirthdaysCard(venueId: _id, gymName: venue.name, birthdays: birthdays, today: today),
+            ],
+          );
     final checkInCard = _CheckInsCard(checkIns: checkIns, today: today, venueId: _id);
 
     Widget sideBySide(List<(int, Widget)> cards, {double? height}) {
@@ -312,12 +327,12 @@ class _ConsoleState extends ConsumerState<_Console> {
         FadeSlideIn(
           delay: const Duration(milliseconds: 180),
           child: contentWidth >= 900
-              ? sideBySide([if (revenue != null) (3, checkInCard) else (3, activity), (2, endingCard)])
+              ? sideBySide([if (revenue != null) (3, checkInCard) else (3, activity), (2, soonCards)])
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (revenue != null || contentWidth < 900) ...[checkInCard, const SizedBox(height: 16)],
-                    endingCard,
+                    soonCards,
                   ],
                 ),
         ),
@@ -797,8 +812,9 @@ class _EndingCard extends StatelessWidget {
   final List<GymSubscription> ending;
   final DateTime today;
   final String venueId;
+  final String gymName;
 
-  const _EndingCard({required this.ending, required this.today, required this.venueId});
+  const _EndingCard({required this.ending, required this.today, required this.venueId, required this.gymName});
 
   @override
   Widget build(BuildContext context) {
@@ -864,6 +880,17 @@ class _EndingCard extends StatelessWidget {
                             ),
                           );
                         }(),
+                        // A renewal reminder on WhatsApp (members registered at the desk).
+                        if (s.gymMemberId != null && s.memberPhone != null)
+                          WhatsAppFollowUpButton(
+                            venueId: venueId,
+                            gymMemberId: s.gymMemberId!,
+                            phone: s.memberPhone!,
+                            message: renewalMessage(
+                                name: s.memberDisplayName, gym: gymName, plan: s.planName, end: s.endDate!, today: today),
+                            kind: MessageKind.renewal,
+                            compact: true,
+                          ),
                       ],
                     ),
                   ),

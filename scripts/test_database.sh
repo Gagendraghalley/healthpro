@@ -11,7 +11,13 @@
 # a venue's profile, prices and reviews through profile_test.sql, and
 # trainers (verification, timings, attendance, reviews) through trainers_test.sql,
 # and push notifications through push_test.sql, and each person's app colours
-# through theme_test.sql.
+# through theme_test.sql, and their profile photo through profile_photo_test.sql, and
+# errors the app reports through app_errors_test.sql, and pausing memberships and
+# numbered receipts through pauses_receipts_test.sql, and the activity log,
+# enquiries, WhatsApp reminders and birthday wishes through follow_ups_test.sql, and
+# the gym's inventory and connected suppliers through inventory_test.sql, and
+# discounts, offers and expenses through money_test.sql, and body progress,
+# workout and diet plans and group classes through coaching_test.sql.
 # Needs PostgreSQL 14+ installed (brew install postgresql). Touches nothing else.
 #
 #   scripts/test_database.sh
@@ -46,5 +52,12 @@ db -f tests/database/trainers_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" |
 db -f tests/database/push_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 db -f tests/database/ai_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 db -f tests/database/theme_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
+db -f tests/database/profile_photo_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
+db -f tests/database/app_errors_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
+db -f tests/database/pauses_receipts_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
+db -f tests/database/follow_ups_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
+db -f tests/database/inventory_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
+db -f tests/database/money_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
+db -f tests/database/coaching_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 echo "Applying supabase/seed.sql (local test data)"
 db -f supabase/seed.sql

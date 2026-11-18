@@ -5,12 +5,18 @@ import 'package:health_pro_core/health_pro_core.dart';
 
 import 'dashboard/gym_dashboard_page.dart';
 import 'data/gym_repository.dart';
+import 'data/trainers.dart';
 import 'gym_permissions.dart';
 import 'gym_routes.dart';
+import 'screens/activity_screen.dart';
 import 'screens/add_trainer_screen.dart';
 import 'screens/ask_screen.dart';
+import 'screens/enquiries_screen.dart';
+import 'screens/expenses_screen.dart';
+import 'screens/offers_screen.dart';
 import 'screens/check_in_screen.dart';
 import 'screens/gym_trainer_screens.dart';
+import 'screens/inventory_screens.dart';
 import 'screens/join_screens.dart';
 import 'screens/member_registered_screen.dart';
 import 'screens/members_screens.dart';
@@ -19,7 +25,9 @@ import 'screens/payment_screens.dart';
 import 'screens/public_screens.dart';
 import 'screens/reports_screen.dart';
 import 'screens/staff_screens.dart';
+import 'screens/trainer_members_screen.dart';
 import 'screens/trainer_screens.dart';
+import 'screens/classes_screen.dart';
 import 'shell/gym_navigation.dart';
 import 'shell/gym_search.dart';
 import 'welcome/gym_welcome_page.dart';
@@ -76,6 +84,8 @@ class GymModule extends HealthProModule {
           path: GymRoutes.trainerProfile,
           builder: (_, s) => TrainerProfileScreen(thenAskGymId: s.uri.queryParameters['gym']),
         ),
+        GoRoute(path: GymRoutes.trainerMembers, builder: (_, __) => const TrainerMembersScreen()),
+        GoRoute(path: GymRoutes.trainerMember, builder: (_, s) => TrainerMemberScreen(gymMemberId: s.pathParameters['memberId']!)),
         GoRoute(path: GymRoutes.chooseTrainer, builder: (_, s) => ChooseTrainerScreen(venueId: s.pathParameters['id']!)),
         GoRoute(
           path: GymRoutes.trainer,
@@ -95,6 +105,8 @@ class GymModule extends HealthProModule {
             venueId: s.pathParameters['id']!,
             personQr: s.uri.queryParameters['person'],
             requestId: s.uri.queryParameters['request'],
+            prefillName: s.uri.queryParameters['name'],
+            prefillPhone: s.uri.queryParameters['phone'],
           ),
         ),
         GoRoute(
@@ -122,6 +134,13 @@ class GymModule extends HealthProModule {
         GoRoute(path: GymRoutes.addTrainer, builder: (_, s) => AddTrainerScreen(venueId: s.pathParameters['id']!)),
         GoRoute(path: GymRoutes.gymTrainers, builder: (_, s) => GymTrainersScreen(venueId: s.pathParameters['id']!)),
         GoRoute(path: GymRoutes.settings, builder: (_, s) => MembershipSettingsScreen(venueId: s.pathParameters['id']!)),
+        GoRoute(path: GymRoutes.inventory, builder: (_, s) => GymInventoryScreen(venueId: s.pathParameters['id']!)),
+        GoRoute(path: GymRoutes.suppliers, builder: (_, s) => SuppliersScreen(venueId: s.pathParameters['id']!)),
+        GoRoute(path: GymRoutes.enquiries, builder: (_, s) => EnquiriesScreen(venueId: s.pathParameters['id']!)),
+        GoRoute(path: GymRoutes.activity, builder: (_, s) => ActivityLogScreen(venueId: s.pathParameters['id']!)),
+        GoRoute(path: GymRoutes.offers, builder: (_, s) => OffersScreen(venueId: s.pathParameters['id']!)),
+        GoRoute(path: GymRoutes.expenses, builder: (_, s) => ExpensesScreen(venueId: s.pathParameters['id']!)),
+        GoRoute(path: GymRoutes.classes, builder: (_, s) => ClassesScreen(venueId: s.pathParameters['id']!)),
       ];
 
   /// On a person's own dashboard, beside their QR code: their gyms,
@@ -149,6 +168,14 @@ class GymModule extends HealthProModule {
               : 'Your gyms, schedule and attendance',
           icon: Icons.sports_rounded,
           route: GymRoutes.trainerHome,
+        ),
+      // A trainer verified at a gym: the members they train.
+      if (training?.gyms.any((g) => g.status == TrainerStatus.verified) ?? false)
+        const ModuleMenuItem(
+          title: 'My members',
+          subtitle: 'The members you train: their progress, and their workout and diet plans',
+          icon: Icons.groups_rounded,
+          route: GymRoutes.trainerMembers,
         ),
     ];
   }
@@ -193,6 +220,27 @@ class GymModule extends HealthProModule {
             icon: Icons.person_add_alt_1_rounded,
             route: GymRoutes.registerMemberFor(venue.id),
           ),
+        if (access.can(GymPermission.members))
+          ModuleMenuItem(
+            title: 'Classes',
+            subtitle: 'The weekly timetable, and who\'s booked into each class',
+            icon: Icons.event_note_rounded,
+            route: GymRoutes.classesFor(venue.id),
+          ),
+        if (access.can(GymPermission.register))
+          ModuleMenuItem(
+            title: 'Enquiries & trials',
+            subtitle: 'Walk-ins and free trials to follow up and sign up',
+            icon: Icons.contact_phone_rounded,
+            route: GymRoutes.enquiriesFor(venue.id),
+          ),
+        if (access.can(GymPermission.activity))
+          ModuleMenuItem(
+            title: 'Activity log',
+            subtitle: 'Who registered, sold, took payments, paused or cancelled what',
+            icon: Icons.manage_history_rounded,
+            route: GymRoutes.activityFor(venue.id),
+          ),
         if (access.can(GymPermission.payments))
           ModuleMenuItem(
             title: 'Payments to confirm',
@@ -214,6 +262,13 @@ class GymModule extends HealthProModule {
             icon: Icons.sports_rounded,
             route: GymRoutes.gymTrainersFor(venue.id),
           ),
+        if (access.can(GymPermission.inventory))
+          ModuleMenuItem(
+            title: 'Inventory',
+            subtitle: 'What the gym keeps and how many; items from connected suppliers',
+            icon: Icons.inventory_2_rounded,
+            route: GymRoutes.inventoryFor(venue.id),
+          ),
         if (access.can(GymPermission.register))
           ModuleMenuItem(
             title: 'Join requests',
@@ -228,12 +283,26 @@ class GymModule extends HealthProModule {
             icon: Icons.sell_outlined,
             route: GymRoutes.plansFor(venue.id),
           ),
+        if (access.can(GymPermission.plans))
+          ModuleMenuItem(
+            title: 'Offers & discounts',
+            subtitle: 'Student, couple and other deals; every discount given, and why',
+            icon: Icons.local_offer_outlined,
+            route: GymRoutes.offersFor(venue.id),
+          ),
         if (access.can(VenuePermission.income))
           ModuleMenuItem(
             title: 'Payments & income',
             subtitle: 'Payments month by month',
             icon: Icons.payments_outlined,
             route: GymRoutes.incomeFor(venue.id),
+          ),
+        if (access.can(VenuePermission.income))
+          ModuleMenuItem(
+            title: 'Expenses & profit',
+            subtitle: 'What the gym spends, and what\'s left each month',
+            icon: Icons.receipt_long_outlined,
+            route: GymRoutes.expensesFor(venue.id),
           ),
         if (access.can(GymPermission.members))
           ModuleMenuItem(
@@ -244,18 +313,17 @@ class GymModule extends HealthProModule {
           ),
       ];
 
-  /// On a gym's staff pages, the floating Ask AI button opens that gym's
-  /// own: questions about its members, visits and money.
+  /// On a gym's staff pages, the Ask AI button opens that gym's own:
+  /// questions about its members, visits and money.
   @override
   Widget? buildAssistant(BuildContext context, String location) {
     final id = gymIdInPath(location);
     return id == null ? null : GymAssistantPanel(venueId: id);
   }
 
-  /// Not over Ask AI itself, nor over the register form's Save bar.
+  /// Not on Ask AI's own page.
   @override
-  bool hidesAssistantButton(String location) =>
-      RegExp(r'^/gyms/[^/]+/manage/(ask|members/new|members/[^/]+/edit|trainers/new)$').hasMatch(location);
+  bool hidesAssistantButton(String location) => RegExp(r'^/gyms/[^/]+/manage/ask$').hasMatch(location);
 
   @override
   Map<String, ModuleMenuItem> get assistantLinks => const {
