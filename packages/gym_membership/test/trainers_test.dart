@@ -12,7 +12,7 @@ import 'package:gym_membership/src/widgets/trainer_widgets.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
 import 'gym_navigation_test.dart' as nav show gymId, inMenu, openGym, owner, person, showApp;
-import 'gym_screens_test.dart' show day, overrides, show;
+import 'gym_screens_test.dart' show day, inDialog, overrides, show;
 
 // Trainers: verified by each gym, their week, attendance taken at the desk,
 // members choosing them, reviews (the database side:
@@ -27,15 +27,15 @@ const tandin = TrainerProfile(
   ratingCount: 2,
 );
 
-GymTrainer gymTrainer({String status = 'verified', String source = 'request'}) => GymTrainer.fromJson({
-      'user_id': 't1',
+GymTrainer gymTrainer({String status = 'verified', String source = 'request', String id = 't1'}) => GymTrainer.fromJson({
+      'user_id': id,
       'status': status,
       'source': source,
       'email': 'tandin@x.bt',
       'phone': '+97517100004',
       'message': 'Mornings and evenings',
       'requested_at': '2026-11-10T00:00:00Z',
-      'profile': {'user_id': 't1', 'display_name': 'Tandin Wangchuk', 'headline': 'Strength coach', 'rating_count': 0},
+      'profile': {'user_id': id, 'display_name': 'Tandin Wangchuk', 'headline': 'Strength coach', 'rating_count': 0},
       'certificates': [
         {'id': 'c1', 'title': 'NSCA CSCS', 'issuer': 'NSCA', 'issued_on': '2020-05-01', 'file_url': 'https://x/cscs.pdf'},
       ],
@@ -106,21 +106,33 @@ void main() {
     for (final size in [const Size(1440, 1000), const Size(390, 844)]) {
       await show(tester, const GymTrainersScreen(venueId: 'g1'), size: size, with_: [
         ...overrides(),
-        gymTrainersProvider.overrideWith((ref, id) async => [gymTrainer(status: 'pending'), gymTrainer()]),
+        gymTrainersProvider.overrideWith((ref, id) async => [gymTrainer(status: 'pending', id: 't2'), gymTrainer()]),
       ]);
       await tester.pumpAndSettle();
       expect(find.text('Add trainer'), findsOneWidget, reason: 'the gym can add one itself, under the bar');
       expect(find.descendant(of: find.byType(GlassAppBar), matching: find.text('Add trainer')), findsNothing);
-      expect(find.text('Asking to train here (1)'), findsOneWidget);
-      expect(find.textContaining('NSCA CSCS'), findsOneWidget);
-      expect(find.text('Verify'), findsOneWidget);
-      expect(find.text("Don't verify"), findsOneWidget);
-      await tester.scrollUntilVisible(find.text('Our trainers (1)'), 300, scrollable: find.byType(Scrollable).first);
-      await tester.scrollUntilVisible(find.text('Days attended'), 300, scrollable: find.byType(Scrollable).first);
+      expect(find.text('Asking to train here  1'), findsOneWidget, reason: 'a filter, with how many');
+      expect(find.text('Open'), findsNWidgets(2), reason: 'a table: each row opens from its Action column');
+      expect(find.text('Verify'), findsNothing, reason: 'in the details, not the table');
+      // The one asking comes first: their certificates to check.
+      await tester.ensureVisible(find.text('Open').first);
+      await tester.tap(find.text('Open').first);
+      await tester.pumpAndSettle();
+      expect(inDialog(find.textContaining('NSCA CSCS')), findsOneWidget);
+      expect(inDialog(find.text('Verify')), findsOneWidget);
+      expect(inDialog(find.text("Don't verify")), findsOneWidget);
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+      // Ours: their week here and attendance.
+      await tester.ensureVisible(find.text('Open').last);
+      await tester.tap(find.text('Open').last);
+      await tester.pumpAndSettle();
+      expect(inDialog(find.text('Days attended')), findsOneWidget);
       expect(find.text('2 pm–3 pm · Not available').evaluate().isNotEmpty || find.text('2–3 pm · Not available').evaluate().isNotEmpty,
           isTrue, reason: 'their time at another gym, unnamed');
-      expect(find.text('Days attended'), findsOneWidget);
       expect(tester.takeException(), isNull);
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
     }
   });
 
@@ -131,14 +143,17 @@ void main() {
       gymTrainersProvider.overrideWith((ref, id) async => [gymTrainer(source: 'gym')]),
     ]);
     await tester.pumpAndSettle();
-    expect(find.text('Added by the gym'), findsOneWidget);
-    expect(find.text('+97517100004'), findsOneWidget);
-    expect(find.text('tandin@x.bt'), findsOneWidget);
-    expect(find.text('Change times'), findsOneWidget);
-    expect(find.text('Mark arrived'), findsOneWidget);
+    expect(find.text('+97517100004'), findsOneWidget, reason: 'their phone in the table');
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(inDialog(find.text('Added by the gym')), findsOneWidget);
+    expect(inDialog(find.text('+97517100004')), findsOneWidget);
+    expect(inDialog(find.text('tandin@x.bt')), findsOneWidget);
+    expect(inDialog(find.text('Change times')), findsOneWidget);
+    expect(inDialog(find.text('Mark arrived')), findsOneWidget);
     await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
-    expect(find.text('Make inactive'), findsOneWidget, reason: 'in the card\'s menu');
+    expect(find.text('Make inactive'), findsOneWidget, reason: 'in the details\' menu');
     expect(tester.takeException(), isNull);
   });
 

@@ -10,7 +10,7 @@ import 'package:gym_membership/src/screens/members_screens.dart';
 import 'package:gym_membership/src/screens/my_gyms_screen.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
-import 'gym_screens_test.dart' show day, gym, overrides, plans, show;
+import 'gym_screens_test.dart' show day, gym, inDialog, overrides, plans, show;
 
 // One QR code per person at every gym, and joining a gym by its QR code
 // (the database side: tests/database/people_test.sql).
@@ -152,9 +152,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Waiting (1)'), findsOneWidget);
       expect(find.text('Sonam Choden'), findsOneWidget);
-      expect(find.text('Would like Gym (Nu. 1,500)'), findsOneWidget);
-      expect(find.text('Add to gym'), findsOneWidget);
-      expect(find.text('Decline'), findsOneWidget);
+      expect(find.text('Open'), findsOneWidget, reason: 'the waiting one opens from the Action column');
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      expect(inDialog(find.text('Would like Gym (Nu. 1,500)')), findsOneWidget);
+      expect(inDialog(find.text('Add to gym')), findsOneWidget);
+      expect(inDialog(find.text('Decline')), findsOneWidget);
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
       await tester.scrollUntilVisible(find.text('Tashi Lhamo'), 200, scrollable: find.byType(Scrollable).first);
       expect(find.text('Declined'), findsOneWidget);
       expect(tester.takeException(), isNull);

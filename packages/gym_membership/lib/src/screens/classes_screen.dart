@@ -116,59 +116,9 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
                               style: TextStyle(color: context.brand.muted)),
                         )
                       else
-                        ResponsiveGrid(
-                          minItemWidth: 340,
-                          maxColumns: 3,
-                          children: [
-                            for (final c in onDay)
-                              _SessionCard(
-                                venueId: id,
-                                session: ClassSession(
-                                  gymClass: c,
-                                  date: _day,
-                                  booked: bookings.where((b) => b.classId == c.id).length,
-                                ),
-                                bookings: bookings.where((b) => b.classId == c.id).toList(),
-                              ),
-                          ],
-                        ),
+                        _SessionsTable(venueId: id, day: _day, classes: onDay, bookings: bookings),
                       const SectionTitle('Weekly timetable'),
-                      SectionCard(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            for (var w = 1; w <= 7; w++)
-                              if (classes.any((c) => c.weekday == w)) ...[
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
-                                  child: Text(weekdayNames[w - 1],
-                                      style: TextStyle(fontWeight: FontWeight.w800, color: context.brand.muted, fontSize: 12.5)),
-                                ),
-                                for (final c in classes.where((c) => c.weekday == w))
-                                  ListTile(
-                                    dense: true,
-                                    onTap: canEdit ? () => _edit(c) : null,
-                                    leading: SizedBox(
-                                      width: 70,
-                                      child: Text(c.time,
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.w700, color: c.isActive ? context.brand.ink : context.brand.muted)),
-                                    ),
-                                    title: Text(c.name, style: TextStyle(color: c.isActive ? null : context.brand.muted)),
-                                    subtitle: Text([
-                                      if (c.trainerName != null) 'with ${c.trainerName}',
-                                      '${c.durationMinutes} min',
-                                      '${c.capacity} places',
-                                    ].join(' · ')),
-                                    trailing: c.isActive
-                                        ? (canEdit ? const Icon(Icons.edit_outlined, size: 18) : null)
-                                        : StatusChip(label: 'Not on the timetable', color: context.brand.muted),
-                                  ),
-                              ],
-                          ],
-                        ),
-                      ),
+                      _TimetableTable(classes: classes, onEdit: canEdit ? _edit : null),
                     ],
                   ],
                 ),
@@ -181,8 +131,188 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
   }
 }
 
-/// One class on the chosen day: places taken, who's booked (each can be
-/// taken out), and booking a member in.
+/// The chosen day's classes as a table. Open shows who's booked (each can be
+/// taken out) and books a member in.
+class _SessionsTable extends StatelessWidget {
+  final String venueId;
+  final DateTime day;
+  final List<GymClass> classes;
+  final List<ClassBooking> bookings;
+
+  const _SessionsTable({required this.venueId, required this.day, required this.classes, required this.bookings});
+
+  void _open(BuildContext context, GymClass c) => showRowDetails(
+        context,
+        title: 'Class',
+        // Watched, so a booking made or taken out shows straight away.
+        builder: (context) => Consumer(builder: (context, ref, _) {
+          final now = ref.watch(gymClassBookingsProvider((venueId: venueId, date: day))).valueOrNull ?? bookings;
+          final mine = now.where((b) => b.classId == c.id).toList();
+          return _SessionCard(
+            venueId: venueId,
+            session: ClassSession(gymClass: c, date: day, booked: mine.length),
+            bookings: mine,
+          );
+        }),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    int booked(GymClass c) => bookings.where((b) => b.classId == c.id).length;
+    Widget places(GymClass c) => StatusChip(
+          label: '${booked(c)} / ${c.capacity}',
+          color: booked(c) >= c.capacity ? brand.warning : brand.success,
+          icon: Icons.people_alt_outlined,
+        );
+    return DataGrid<GymClass>(
+      rows: classes,
+      noun: 'classes',
+      rowLabel: (c) => 'Open ${c.name}',
+      onRowTap: (c) => _open(context, c),
+      columns: [
+        GridColumn(
+          key: 'class',
+          label: 'Class',
+          flex: 4,
+          sortBy: (c) => c.name.toLowerCase(),
+          cell: (context, c) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
+              Text(
+                  [
+                    if (!DataGrid.shows(context, 'time')) c.span,
+                    if (c.trainerName != null && !DataGrid.shows(context, 'trainer')) 'with ${c.trainerName}',
+                  ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: brand.muted, fontSize: 13)),
+              if (!DataGrid.shows(context, 'booked')) Padding(padding: const EdgeInsets.only(top: 4), child: places(c)),
+            ],
+          ),
+        ),
+        GridColumn(
+          key: 'time',
+          label: 'Time',
+          flex: 2,
+          showFrom: 600,
+          sortBy: (c) => c.hour * 60 + c.minute,
+          cell: (context, c) => Text(c.span, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.body)),
+        ),
+        GridColumn(
+          key: 'trainer',
+          label: 'Trainer',
+          flex: 3,
+          showFrom: 860,
+          sortBy: (c) => (c.trainerName ?? '').toLowerCase(),
+          cell: (context, c) => Text(c.trainerName ?? '—',
+              maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.trainerName == null ? brand.muted : brand.body)),
+        ),
+        GridColumn(
+          key: 'booked',
+          label: 'Booked',
+          width: 120,
+          showFrom: 480,
+          sortBy: booked,
+          cell: (context, c) => places(c),
+        ),
+        GridColumn.actions(cell: (context, c) => GridOpenButton(onPressed: () => _open(context, c))),
+      ],
+    );
+  }
+}
+
+/// Every class in the week as a table, Monday first; Open changes one (for
+/// those who may).
+class _TimetableTable extends StatelessWidget {
+  final List<GymClass> classes;
+  final ValueChanged<GymClass>? onEdit;
+
+  const _TimetableTable({required this.classes, required this.onEdit});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final rows = [...classes]..sort((a, b) => (a.weekday * 1440 + a.hour * 60 + a.minute).compareTo(b.weekday * 1440 + b.hour * 60 + b.minute));
+    Widget status(GymClass c) => c.isActive
+        ? StatusChip(label: 'On the timetable', color: brand.success)
+        : StatusChip(label: 'Not on the timetable', color: brand.muted);
+    return DataGrid<GymClass>(
+      rows: rows,
+      noun: 'classes',
+      pageSizes: const [25, 50, 100],
+      rowLabel: (c) => 'Open ${c.name}',
+      dimmed: (c) => !c.isActive,
+      onRowTap: onEdit,
+      columns: [
+        GridColumn(
+          key: 'class',
+          label: 'Class',
+          flex: 4,
+          sortBy: (c) => c.name.toLowerCase(),
+          cell: (context, c) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
+              Text(
+                  [
+                    if (!DataGrid.shows(context, 'day')) '${weekdayNames[c.weekday - 1]} ${c.time}',
+                    if (c.trainerName != null && !DataGrid.shows(context, 'trainer')) 'with ${c.trainerName}',
+                    if (!DataGrid.shows(context, 'places')) '${c.durationMinutes} min · ${c.capacity} places',
+                  ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: brand.muted, fontSize: 13)),
+              if (!DataGrid.shows(context, 'status') && !c.isActive)
+                Padding(padding: const EdgeInsets.only(top: 4), child: status(c)),
+            ],
+          ),
+        ),
+        GridColumn(
+          key: 'day',
+          label: 'Day',
+          flex: 2,
+          showFrom: 560,
+          sortBy: (c) => c.weekday * 1440 + c.hour * 60 + c.minute,
+          cell: (context, c) => Text('${weekdayNames[c.weekday - 1]} ${c.time}',
+              maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w600, color: brand.ink)),
+        ),
+        GridColumn(
+          key: 'trainer',
+          label: 'Trainer',
+          flex: 3,
+          showFrom: 900,
+          sortBy: (c) => (c.trainerName ?? '').toLowerCase(),
+          cell: (context, c) => Text(c.trainerName ?? '—',
+              maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.trainerName == null ? brand.muted : brand.body)),
+        ),
+        GridColumn(
+          key: 'places',
+          label: 'Length · places',
+          flex: 2,
+          showFrom: 1040,
+          sortBy: (c) => c.capacity,
+          cell: (context, c) => Text('${c.durationMinutes} min · ${c.capacity}', style: TextStyle(color: brand.body)),
+        ),
+        GridColumn(
+          key: 'status',
+          label: 'Status',
+          width: 190,
+          showFrom: 720,
+          sortBy: (c) => c.isActive ? 0 : 1,
+          cell: (context, c) => status(c),
+        ),
+        if (onEdit != null) GridColumn.actions(cell: (context, c) => GridOpenButton(onPressed: () => onEdit!(c))),
+      ],
+    );
+  }
+}
+
+/// One class on the chosen day, in the dialog Open shows: places taken,
+/// who's booked (each can be taken out), and booking a member in.
 class _SessionCard extends ConsumerWidget {
   final String venueId;
   final ClassSession session;
@@ -211,7 +341,7 @@ class _SessionCard extends ConsumerWidget {
   Future<void> _book(BuildContext context, WidgetRef ref) async {
     final member = await showAppDialog<GymMember>(
       context: context,
-      builder: (_) => _PickMemberDialog(venueId: venueId, booked: {for (final b in bookings) b.gymMemberId}),
+      builder: (_) => _PickMemberDialog(venueId: venueId, booked: {for (final b in bookings) if (b.gymMemberId != null) b.gymMemberId!}),
     );
     if (member == null || !context.mounted) return;
     final ok = await runAction(
@@ -227,8 +357,8 @@ class _SessionCard extends ConsumerWidget {
     final brand = context.brand;
     final c = session.gymClass;
     final ended = !c.startOn(session.date).add(Duration(minutes: c.durationMinutes)).isAfter(BhutanTime.now());
-    return SectionCard(
-      padding: const EdgeInsets.all(14),
+    return Padding(
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

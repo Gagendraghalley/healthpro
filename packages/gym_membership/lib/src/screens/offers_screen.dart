@@ -80,33 +80,7 @@ class _OffersScreenState extends ConsumerState<OffersScreen> {
                         onAction: _edit,
                       )
                     else
-                      ResponsiveGrid(
-                        minItemWidth: 260,
-                        maxColumns: 4,
-                        children: [
-                          for (final o in offers)
-                            SectionCard(
-                              onTap: () => _edit(o),
-                              padding: const EdgeInsets.all(14),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.local_offer_outlined, color: o.isActive ? context.brand.highlight : context.brand.muted),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(o.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                                        Text(o.label, style: TextStyle(color: context.brand.muted)),
-                                      ],
-                                    ),
-                                  ),
-                                  if (!o.isActive) StatusChip(label: 'Not offered', color: context.brand.muted),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
+                      _offersTable(context, offers),
                     _discounts(context, subs, id),
                   ],
                 ),
@@ -115,6 +89,64 @@ class _OffersScreenState extends ConsumerState<OffersScreen> {
           ),
         );
       },
+    );
+  }
+
+  /// The offers as a table; Open changes one.
+  Widget _offersTable(BuildContext context, List<GymOffer> offers) {
+    final brand = context.brand;
+    Widget status(GymOffer o) => o.isActive
+        ? StatusChip(label: 'Offered', color: brand.success)
+        : StatusChip(label: 'Not offered', color: brand.muted, icon: Icons.visibility_off_outlined);
+    return DataGrid<GymOffer>(
+      rows: offers,
+      noun: 'offers',
+      rowLabel: (o) => 'Open ${o.name}',
+      dimmed: (o) => !o.isActive,
+      onRowTap: _edit,
+      columns: [
+        GridColumn(
+          key: 'offer',
+          label: 'Offer',
+          flex: 4,
+          sortBy: (o) => o.name.toLowerCase(),
+          cell: (context, o) => Row(
+            children: [
+              Icon(Icons.local_offer_outlined, color: o.isActive ? brand.highlight : brand.muted),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(o.name,
+                        maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
+                    if (!DataGrid.shows(context, 'discount')) Text(o.label, style: TextStyle(color: brand.muted, fontSize: 13)),
+                    if (!DataGrid.shows(context, 'status')) Padding(padding: const EdgeInsets.only(top: 4), child: status(o)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        GridColumn(
+          key: 'discount',
+          label: 'Discount',
+          flex: 2,
+          showFrom: 600,
+          sortBy: (o) => '${o.kind.index}-${o.value.toString().padLeft(9, '0')}',
+          cell: (context, o) => Text(o.label, style: TextStyle(fontWeight: FontWeight.w700, color: brand.body)),
+        ),
+        GridColumn(
+          key: 'status',
+          label: 'Status',
+          width: 150,
+          showFrom: 480,
+          sortBy: (o) => o.isActive ? 0 : 1,
+          cell: (context, o) => status(o),
+        ),
+        GridColumn.actions(cell: (context, o) => GridOpenButton(onPressed: () => _edit(o))),
+      ],
     );
   }
 

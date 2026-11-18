@@ -67,36 +67,11 @@ class JoinRequestsScreen extends ConsumerWidget {
                       )
                     else ...[
                       SectionTitle('Waiting (${waiting.length})'),
-                      ResponsiveGrid(
-                        minItemWidth: 340,
-                        maxColumns: 3,
-                        equalHeight: false,
-                        children: [for (final r in waiting) _RequestCard(request: r, venueId: venueId)],
-                      ),
+                      _RequestsTable(requests: waiting, venueId: venueId),
                     ],
                     if (answered.isNotEmpty) ...[
                       const SectionTitle('Answered'),
-                      SectionCard(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Column(
-                          children: [
-                            for (final r in answered)
-                              ListTile(
-                                title: Text(r.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                subtitle: Text(
-                                  [timeAgo(r.decidedAt ?? r.createdAt), if (r.decisionNote != null) r.decisionNote!]
-                                      .join(' · '),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing: _StatusChip(status: r.status),
-                                onTap: r.gymMemberId == null
-                                    ? null
-                                    : () => context.go(GymRoutes.memberFor(venueId, r.gymMemberId!)),
-                              ),
-                          ],
-                        ),
-                      ),
+                      _RequestsTable(requests: answered, venueId: venueId),
                     ],
                   ],
                 ),
@@ -109,11 +84,149 @@ class JoinRequestsScreen extends ConsumerWidget {
   }
 }
 
-class _RequestCard extends ConsumerWidget {
+/// Join requests as a table. Open shows a waiting one's details (to add them
+/// or decline), or the member an added one became.
+class _RequestsTable extends StatelessWidget {
+  final List<JoinRequest> requests;
+  final String venueId;
+
+  const _RequestsTable({required this.requests, required this.venueId});
+
+  void _open(BuildContext context, JoinRequest r) {
+    if (r.isPending) {
+      showRowDetails(context, title: 'Join request', builder: (_) => _RequestDetails(request: r, venueId: venueId));
+    } else if (r.gymMemberId != null) {
+      context.go(GymRoutes.memberFor(venueId, r.gymMemberId!));
+    }
+  }
+
+  bool _opens(JoinRequest r) => r.isPending || r.gymMemberId != null;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    String contact(JoinRequest r) => [if (r.phone != null) r.phone!, if (r.email != null) r.email!].join(' · ');
+    String package(JoinRequest r) => r.planName ?? '—';
+    DateTime when(JoinRequest r) => r.isPending ? r.createdAt : (r.decidedAt ?? r.createdAt);
+    final pending = requests.any((r) => r.isPending);
+    return DataGrid<JoinRequest>(
+      rows: requests,
+      noun: 'requests',
+      rowLabel: (r) => 'Open ${r.name}',
+      onRowTap: (r) => _open(context, r),
+      columns: [
+        GridColumn(
+          key: 'name',
+          label: 'Name',
+          flex: 4,
+          sortBy: (r) => r.name.toLowerCase(),
+          cell: (context, r) {
+            final carry = [
+              if (!DataGrid.shows(context, 'contact') && contact(r).isNotEmpty) contact(r),
+              if (!DataGrid.shows(context, 'package') && r.planName != null) r.planName!,
+              if (!DataGrid.shows(context, 'when')) timeAgo(when(r)),
+            ];
+            return Row(
+              children: [
+                _Initial(name: r.name),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(r.name,
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
+                      if (carry.isNotEmpty)
+                        Text(carry.join(' · '),
+                            maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.muted, fontSize: 13)),
+                      if (!DataGrid.shows(context, 'status'))
+                        Padding(padding: const EdgeInsets.only(top: 4), child: _StatusChip(status: r.status)),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        GridColumn(
+          key: 'contact',
+          label: 'Contact',
+          flex: 3,
+          showFrom: 900,
+          sortBy: contact,
+          cell: (context, r) => Text(contact(r).isEmpty ? '—' : contact(r),
+              maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: contact(r).isEmpty ? brand.muted : brand.body)),
+        ),
+        if (pending)
+          GridColumn(
+            key: 'package',
+            label: 'Package',
+            flex: 3,
+            showFrom: 700,
+            sortBy: (r) => package(r).toLowerCase(),
+            cell: (context, r) => Text(package(r),
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: r.planName == null ? brand.muted : brand.body)),
+          )
+        else
+          GridColumn(
+            key: 'note',
+            label: 'Note',
+            flex: 3,
+            showFrom: 700,
+            cell: (context, r) => Text(r.decisionNote ?? '—',
+                maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: r.decisionNote == null ? brand.muted : brand.body)),
+          ),
+        GridColumn(
+          key: 'when',
+          label: pending ? 'Asked' : 'Answered',
+          flex: 2,
+          showFrom: 1040,
+          sortBy: when,
+          cell: (context, r) => Text(timeAgo(when(r)), style: TextStyle(color: brand.body)),
+        ),
+        GridColumn(
+          key: 'status',
+          label: 'Status',
+          width: 140,
+          showFrom: 560,
+          sortBy: (r) => r.status.index,
+          cell: (context, r) => _StatusChip(status: r.status),
+        ),
+        GridColumn.actions(
+          cell: (context, r) => _opens(r) ? GridOpenButton(onPressed: () => _open(context, r)) : const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+}
+
+/// A name's first letter in a tinted circle: people asking have no photo yet.
+class _Initial extends StatelessWidget {
+  final String name;
+
+  const _Initial({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    return CircleAvatar(
+      radius: 20,
+      backgroundColor: BrandColors.blue.withValues(alpha: 0.12),
+      child: Text(
+        name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(),
+        style: const TextStyle(color: BrandColors.blue, fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+}
+
+/// A waiting request's details, in the dialog Open shows: who, the package
+/// they'd like, their message; adding them or declining.
+class _RequestDetails extends ConsumerWidget {
   final JoinRequest request;
   final String venueId;
 
-  const _RequestCard({required this.request, required this.venueId});
+  const _RequestDetails({required this.request, required this.venueId});
 
   Future<void> _decline(BuildContext context, WidgetRef ref) async {
     final note = await askText(
@@ -128,28 +241,24 @@ class _RequestCard extends ConsumerWidget {
       () => ref.read(gymRepositoryProvider).declineJoinRequest(request.id, note: note),
       success: '${request.name} is told',
     );
-    if (ok) refreshGym(ref, venueId);
+    if (ok) {
+      refreshGym(ref, venueId);
+      if (context.mounted) Navigator.of(context).pop();
+    }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
     final contact = [if (request.phone != null) request.phone!, if (request.email != null) request.email!].join(' · ');
-    return SectionCard(
-      padding: const EdgeInsets.all(16),
+    return Padding(
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: BrandColors.blue.withValues(alpha: 0.12),
-                child: Text(
-                  request.name.trim().isEmpty ? '?' : request.name.trim()[0].toUpperCase(),
-                  style: const TextStyle(color: BrandColors.blue, fontWeight: FontWeight.w800),
-                ),
-              ),
+              _Initial(name: request.name),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -177,7 +286,12 @@ class _RequestCard extends ConsumerWidget {
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: () => context.go(GymRoutes.addPersonFor(venueId, requestId: request.id)),
+                  onPressed: () {
+                    // Out of the dialog first, so the form isn't under it.
+                    final router = GoRouter.of(context);
+                    Navigator.of(context).pop();
+                    router.go(GymRoutes.addPersonFor(venueId, requestId: request.id));
+                  },
                   icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
                   label: const Text('Add to gym'),
                 ),

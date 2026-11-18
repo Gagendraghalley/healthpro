@@ -41,6 +41,78 @@ class GridColumn<T> {
     this.sortBy,
     this.alignEnd = false,
   });
+
+  /// The Action column, at a row's end: its buttons ([GridOpenButton] to
+  /// open it). It never steps aside, so a row can always be opened.
+  factory GridColumn.actions({required Widget Function(BuildContext context, T row) cell, double width = 112}) =>
+      GridColumn(key: 'action', label: 'Action', width: width, alignEnd: true, cell: cell);
+}
+
+/// The Action column's button that opens a row: its page, or its details.
+class GridOpenButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+  final String label;
+  final IconData icon;
+
+  const GridOpenButton({super.key, required this.onPressed, this.label = 'Open', this.icon = Icons.open_in_new_rounded});
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 16),
+      label: Text(label, maxLines: 1),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 36),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        textStyle: const TextStyle(fontFamily: brandFont, fontWeight: FontWeight.w700, fontSize: 13.5),
+      ),
+    );
+  }
+}
+
+/// A row's details when it has no page of its own (a trainer, a request):
+/// what a card used to show, and its buttons, in a dialog over the table.
+Future<void> showRowDetails(BuildContext context, {required String title, required WidgetBuilder builder}) {
+  return showDialog<void>(
+    context: context,
+    builder: (context) {
+      final brand = context.brand;
+      return Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 8, 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: brand.ink, fontSize: 17, fontWeight: FontWeight.w800)),
+                    ),
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: Icon(Icons.close_rounded, color: brand.muted),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Flexible(child: SingleChildScrollView(child: builder(context))),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 /// [rows] as a table of [columns], a page at a time.

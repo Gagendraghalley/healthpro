@@ -90,6 +90,9 @@ List<Override> overrides({String role = VenueRole.owner}) => [
       unreadCountProvider.overrideWithValue(0),
     ];
 
+/// [f] in the details dialog a table row's Open shows.
+Finder inDialog(Finder f) => find.descendant(of: find.byType(Dialog), matching: f);
+
 Future<void> show(WidgetTester tester, Widget page, {Size size = const Size(1440, 1000), bool dark = false, List<Override>? with_}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;

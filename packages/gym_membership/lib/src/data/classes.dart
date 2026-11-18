@@ -149,12 +149,14 @@ List<ClassSession> sessionsFrom(Iterable<GymClass> classes, Iterable<ClassPlaces
   return out;
 }
 
-/// Someone booked into a class on a day, for the desk's list.
+/// Someone booked into a class on a day, for the desk's list: a member
+/// registered at the desk ([gymMemberId]), or one whose membership is on
+/// their account (20261118000014).
 class ClassBooking {
   final String id;
   final String classId;
   final DateTime classDate;
-  final String gymMemberId;
+  final String? gymMemberId;
   final String memberName;
   final String? memberCode;
   final String? memberPhone;
@@ -163,21 +165,22 @@ class ClassBooking {
     required this.id,
     required this.classId,
     required this.classDate,
-    required this.gymMemberId,
+    this.gymMemberId,
     required this.memberName,
     this.memberCode,
     this.memberPhone,
   });
 
   factory ClassBooking.fromJson(Map<String, dynamic> json) {
-    final m = json['member'] as Map<String, dynamic>?;
+    final m = json['member'] as Map<String, dynamic>? ?? json['account'] as Map<String, dynamic>?;
+    final name = (m?['full_name'] as String?)?.trim();
     return ClassBooking(
       id: json['id'] as String,
       classId: json['class_id'] as String,
       classDate: BhutanTime.parseDate(json['class_date'] as String),
-      gymMemberId: json['gym_member_id'] as String,
-      memberName: (m?['full_name'] as String?) ?? 'Member',
-      memberCode: m?['code'] as String?,
+      gymMemberId: json['gym_member_id'] as String?,
+      memberName: name == null || name.isEmpty ? 'Member' : name,
+      memberCode: (m?['code'] ?? m?['member_code']) as String?,
       memberPhone: m?['phone'] as String?,
     );
   }
@@ -224,7 +227,8 @@ class GymClassRepository {
   Future<List<ClassBooking>> bookings(String venueId, DateTime date) async {
     final rows = await _client
         .from('gym_class_bookings')
-        .select('*, member:gym_members!gym_class_bookings_gym_member_id_fkey(full_name, code, phone)')
+        .select('*, member:gym_members!gym_class_bookings_gym_member_id_fkey(full_name, code, phone), '
+            'account:profiles!gym_class_bookings_user_id_fkey(full_name, phone, member_code)')
         .eq('venue_id', venueId)
         .eq('class_date', _iso(date))
         .eq('status', 'booked')

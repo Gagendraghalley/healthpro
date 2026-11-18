@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../access/access.dart';
 import '../access/access_repository.dart';
 import '../auth/auth_repository.dart';
 import '../profiles/profile_repository.dart';
 import '../router/core_routes.dart';
 import '../theme/brand.dart';
+import '../venues/venue.dart';
+import '../venues/venue_repository.dart';
 
 // The account menu (their account, sign out): at the top right of every
 // signed-in page, and under the side menu. Light or dark is the bar's own
@@ -75,19 +78,28 @@ class _MenuRow extends StatelessWidget {
   }
 }
 
-/// The top of the account menu: who is signed in, larger, with their email
-/// and a badge for a super admin.
+/// What the account menu says they are: super admin, Health Pro team, their
+/// role at each venue they run ('Owner · Iron Gym'), or 'Member' when none.
+@visibleForTesting
+List<String> accountRoleLabels(PlatformAccess access, List<MyVenue> venues) {
+  final roles = [
+    if (access.isSuperAdmin) 'Super admin' else if (access.isTeam) 'Health Pro team',
+    for (final v in venues) '${v.roleName} · ${v.venue.name}',
+  ];
+  return roles.isEmpty ? const ['Member'] : roles;
+}
+
+/// The top of the account menu: who is signed in, larger, with a badge for
+/// each role they have (the first three, then how many more).
 class _AccountHeader extends StatelessWidget {
   final String name;
-  final String email;
   final String? photoUrl;
-  final bool superAdmin;
+  final List<String> roles;
 
-  const _AccountHeader({required this.name, required this.email, required this.photoUrl, required this.superAdmin});
+  const _AccountHeader({required this.name, required this.photoUrl, required this.roles});
 
   @override
   Widget build(BuildContext context) {
-    final brand = context.brand;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       child: Row(
@@ -103,27 +115,44 @@ class _AccountHeader extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: context.colors.onSurface, fontWeight: FontWeight.w700, fontSize: 15)),
-                if (email.isNotEmpty)
+                if (roles.isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(email,
-                        maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.muted, fontSize: 12.5)),
-                  ),
-                if (superAdmin)
-                  Container(
-                    margin: const EdgeInsets.only(top: 7),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                        color: brand.accent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(999)),
-                    child: Text('Super admin',
-                        style: TextStyle(
-                            color: brand.accentText, fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 0.2)),
+                    padding: const EdgeInsets.only(top: 7),
+                    child: Wrap(
+                      spacing: 5,
+                      runSpacing: 5,
+                      children: [
+                        for (final role in roles.take(3)) _RoleBadge(role),
+                        if (roles.length > 3) _RoleBadge('+${roles.length - 3} more'),
+                      ],
+                    ),
                   ),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// One role in the account menu's header, as a soft pill.
+class _RoleBadge extends StatelessWidget {
+  final String label;
+
+  const _RoleBadge(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 190),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: brand.accent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(999)),
+      child: Text(label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: brand.accentText, fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 0.2)),
     );
   }
 }
@@ -183,8 +212,10 @@ class AccountButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(myProfileProvider).valueOrNull;
     final name = (profile?.fullName ?? '').trim();
-    final email = (profile?.email ?? '').trim();
-    final superAdmin = ref.watch(myAccessProvider).valueOrNull?.isSuperAdmin ?? false;
+    final access = ref.watch(myAccessProvider).valueOrNull;
+    final venues = ref.watch(myVenuesProvider).valueOrNull;
+    // Nothing until both have loaded, so a gym owner never flashes as 'Member'.
+    final roles = access == null || venues == null ? const <String>[] : accountRoleLabels(access, venues);
     return PopupMenuButton<String>(
       tooltip: 'Account and settings',
       position: PopupMenuPosition.under,
@@ -198,7 +229,7 @@ class AccountButton extends ConsumerWidget {
           enabled: false,
           height: 0,
           padding: EdgeInsets.zero,
-          child: _AccountHeader(name: name, email: email, photoUrl: profile?.avatarUrl, superAdmin: superAdmin),
+          child: _AccountHeader(name: name, photoUrl: profile?.avatarUrl, roles: roles),
         ),
         const PopupMenuDivider(height: 9),
         ...accountMenuEntries(),

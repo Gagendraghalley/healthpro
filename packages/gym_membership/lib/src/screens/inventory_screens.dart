@@ -141,20 +141,12 @@ class _GymInventoryScreenState extends ConsumerState<GymInventoryScreen> {
                             textAlign: TextAlign.center, style: TextStyle(color: context.brand.muted)),
                       )
                     else
-                      ResponsiveGrid(
-                        minItemWidth: 320,
-                        maxColumns: 3,
-                        equalHeight: false,
-                        children: [
-                          for (final i in shown)
-                            _ItemCard(
-                              item: i,
-                              onMove: (reason) => _move(i, reason),
-                              onEdit: () => _edit(i),
-                              onHistory: () => _history(i),
-                              onRemove: () => _remove(i),
-                            ),
-                        ],
+                      _ItemsTable(
+                        items: shown,
+                        onMove: _move,
+                        onEdit: _edit,
+                        onHistory: _history,
+                        onRemove: _remove,
                       ),
                   ],
                   const SizedBox(height: 16),
@@ -235,108 +227,164 @@ class _GymInventoryScreenState extends ConsumerState<GymInventoryScreen> {
   }
 }
 
-enum _ItemAction { recount, history, edit, remove }
+enum _ItemAction { stockIn, takeOut, recount, history, remove }
 
-class _ItemCard extends StatelessWidget {
-  final InventoryItem item;
-  final void Function(StockReason reason) onMove;
-  final VoidCallback onEdit;
-  final VoidCallback onHistory;
-  final VoidCallback onRemove;
+/// The items as a table: how many there are and whether that's low. Open
+/// changes one's details; the menu beside it moves stock and shows history.
+class _ItemsTable extends StatelessWidget {
+  final List<InventoryItem> items;
+  final void Function(InventoryItem item, StockReason reason) onMove;
+  final ValueChanged<InventoryItem> onEdit;
+  final ValueChanged<InventoryItem> onHistory;
+  final ValueChanged<InventoryItem> onRemove;
 
-  const _ItemCard({
-    required this.item,
+  const _ItemsTable({
+    required this.items,
     required this.onMove,
     required this.onEdit,
     required this.onHistory,
     required this.onRemove,
   });
 
+  Widget _menu(BuildContext context, InventoryItem i) {
+    final brand = context.brand;
+    PopupMenuItem<_ItemAction> item(_ItemAction value, IconData icon, String label, {bool enabled = true, Color? color}) =>
+        PopupMenuItem(
+          value: value,
+          enabled: enabled,
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: color ?? brand.body),
+              const SizedBox(width: 12),
+              Text(label, style: TextStyle(color: color)),
+            ],
+          ),
+        );
+    return PopupMenuButton<_ItemAction>(
+      tooltip: 'More',
+      icon: Icon(Icons.more_vert_rounded, color: brand.muted),
+      onSelected: (a) => switch (a) {
+        _ItemAction.stockIn => onMove(i, StockReason.stockIn),
+        _ItemAction.takeOut => onMove(i, StockReason.used),
+        _ItemAction.recount => onMove(i, StockReason.recount),
+        _ItemAction.history => onHistory(i),
+        _ItemAction.remove => onRemove(i),
+      },
+      itemBuilder: (_) => [
+        item(_ItemAction.stockIn, Icons.add_rounded, 'Stock in'),
+        item(_ItemAction.takeOut, Icons.remove_rounded, 'Take out', enabled: i.quantity > 0),
+        item(_ItemAction.recount, Icons.fact_check_outlined, 'Recount'),
+        item(_ItemAction.history, Icons.history_rounded, 'History'),
+        item(_ItemAction.remove, Icons.delete_outline_rounded, 'Remove', color: brand.danger),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final details = [
-      if (item.category != null) item.category!,
-      if (item.reorderLevel > 0) 'Reorder at ${item.reorderLevel}',
-      if (item.unitCost != null) '${formatNu(item.unitCost!)} each',
-    ].join('  ·  ');
-    return SectionCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.name, style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                    if (details.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(details, style: TextStyle(color: brand.muted, fontSize: 13)),
-                    ],
-                  ],
-                ),
-              ),
-              PopupMenuButton<_ItemAction>(
-                tooltip: 'More',
-                icon: Icon(Icons.more_vert_rounded, color: brand.muted),
-                onSelected: (a) => switch (a) {
-                  _ItemAction.recount => onMove(StockReason.recount),
-                  _ItemAction.history => onHistory(),
-                  _ItemAction.edit => onEdit(),
-                  _ItemAction.remove => onRemove(),
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: _ItemAction.recount, child: Text('Recount')),
-                  PopupMenuItem(value: _ItemAction.history, child: Text('History')),
-                  PopupMenuItem(value: _ItemAction.edit, child: Text('Edit details')),
-                  PopupMenuItem(value: _ItemAction.remove, child: Text('Remove')),
-                ],
-              ),
-            ],
+    Widget muted(String text) => Text(text, style: TextStyle(color: brand.muted));
+    Widget quantity(InventoryItem i) => Text.rich(
+          TextSpan(children: [
+            TextSpan(text: '${i.quantity}', style: TextStyle(fontWeight: FontWeight.w800, color: brand.ink)),
+            TextSpan(text: ' ${i.unit}', style: TextStyle(color: brand.muted, fontSize: 13)),
+          ]),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
+    return DataGrid<InventoryItem>(
+      rows: items,
+      noun: 'items',
+      pageSizes: const [25, 50, 100],
+      rowLabel: (i) => 'Open ${i.name}',
+      onRowTap: onEdit,
+      columns: [
+        GridColumn(
+          key: 'item',
+          label: 'Item',
+          flex: 4,
+          sortBy: (i) => i.name.toLowerCase(),
+          cell: (context, i) {
+            final carry = [
+              if (i.category != null && !DataGrid.shows(context, 'category')) i.category!,
+              if (i.notes != null) i.notes!,
+            ];
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(i.name,
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
+                if (carry.isNotEmpty)
+                  Text(carry.join(' · '),
+                      maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.muted, fontSize: 13)),
+                if (!DataGrid.shows(context, 'quantity') || !DataGrid.shows(context, 'stock'))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (!DataGrid.shows(context, 'quantity')) quantity(i),
+                        if (!DataGrid.shows(context, 'stock')) StockChip(level: i.level),
+                      ],
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+        GridColumn(
+          key: 'category',
+          label: 'Category',
+          flex: 2,
+          showFrom: 900,
+          sortBy: (i) => (i.category ?? '').toLowerCase(),
+          cell: (context, i) => i.category == null
+              ? muted('—')
+              : Text(i.category!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.body)),
+        ),
+        GridColumn(
+          key: 'quantity',
+          label: 'Quantity',
+          flex: 2,
+          showFrom: 560,
+          sortBy: (i) => i.quantity,
+          cell: (context, i) => quantity(i),
+        ),
+        GridColumn(
+          key: 'reorder',
+          label: 'Reorder at',
+          flex: 2,
+          showFrom: 1040,
+          sortBy: (i) => i.reorderLevel,
+          cell: (context, i) => i.reorderLevel > 0 ? Text('${i.reorderLevel}', style: TextStyle(color: brand.body)) : muted('—'),
+        ),
+        GridColumn(
+          key: 'cost',
+          label: 'Unit cost',
+          flex: 2,
+          showFrom: 1160,
+          sortBy: (i) => i.unitCost ?? -1,
+          cell: (context, i) => i.unitCost == null ? muted('—') : Text(formatNu(i.unitCost!), style: TextStyle(color: brand.body)),
+        ),
+        GridColumn(
+          key: 'stock',
+          label: 'Stock',
+          width: 150,
+          showFrom: 700,
+          sortBy: (i) => i.level.index,
+          cell: (context, i) => StockChip(level: i.level),
+        ),
+        GridColumn.actions(
+          width: 172,
+          cell: (context, i) => Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [GridOpenButton(onPressed: () => onEdit(i)), _menu(context, i)],
           ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('${item.quantity}', style: context.text.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
-              const SizedBox(width: 6),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 5),
-                child: Text(item.unit, style: TextStyle(color: brand.muted)),
-              ),
-              const Spacer(),
-              StockChip(level: item.level),
-            ],
-          ),
-          if (item.notes != null) ...[
-            const SizedBox(height: 8),
-            Text(item.notes!, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.body, fontSize: 13)),
-          ],
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: item.quantity == 0 ? null : () => onMove(StockReason.used),
-                  icon: const Icon(Icons.remove_rounded, size: 18),
-                  label: const Text('Take out'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.tonalIcon(
-                  onPressed: () => onMove(StockReason.stockIn),
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text('Stock in'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

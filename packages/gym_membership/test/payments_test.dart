@@ -7,7 +7,7 @@ import 'package:gym_membership/src/screens/payment_screens.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
 import 'gym_navigation_test.dart' as nav show frontDesk, gymId, inMenu, openGym, owner, person, showApp;
-import 'gym_screens_test.dart' show day, overrides, show;
+import 'gym_screens_test.dart' show day, inDialog, overrides, show;
 
 // Paying online with a journal number, and the gym's settings (the database
 // side: tests/database/payments_test.sql).
@@ -96,13 +96,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Waiting (1)'), findsOneWidget);
       expect(find.text('Pema Yangzom'), findsOneWidget);
-      expect(find.text('JRN445566'), findsOneWidget);
-      expect(find.text('Gym · 2 months'), findsOneWidget);
-      expect(find.text('The price for that is Nu. 3,000.'), findsOneWidget, reason: 'they paid Nu. 2,500');
-      expect(find.text('Confirm'), findsOneWidget);
-      expect(find.text('Not found'), findsOneWidget);
       expect(find.text('Set up your bank account'), findsOneWidget, reason: 'the owner, with none yet');
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      expect(inDialog(find.text('JRN445566')), findsOneWidget);
+      expect(inDialog(find.text('Gym · 2 months')), findsOneWidget);
+      expect(inDialog(find.text('The price for that is Nu. 3,000.')), findsOneWidget, reason: 'they paid Nu. 2,500');
+      expect(inDialog(find.text('Confirm')), findsOneWidget);
+      expect(inDialog(find.text('Not found')), findsOneWidget);
       expect(tester.takeException(), isNull);
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
     }
   });
 
@@ -112,6 +116,8 @@ void main() {
       gymPaymentClaimsProvider.overrideWith((ref, id) async => [claim()]),
       gymSettingsProvider.overrideWith((ref, id) async => GymSettings.defaults(id)),
     ]);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Confirm'));
     await tester.pumpAndSettle();

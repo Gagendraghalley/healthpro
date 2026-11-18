@@ -174,15 +174,23 @@ void main() {
       expect(find.text(text), findsOneWidget, reason: text);
     }
     expect(find.text('Out of stock'), findsWidgets);
-    expect(tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Take out').last).onPressed, isNull,
-        reason: 'nothing to take out of an empty item');
+    expect(find.text('Open'), findsNWidgets(3), reason: 'a table: each item opens from its Action column');
+    // Moving stock is in the menu beside Open.
+    await tester.tap(find.byTooltip('More').last);
+    await tester.pumpAndSettle();
+    final takeOut = find.ancestor(of: find.text('Take out'), matching: find.byWidgetPredicate((w) => w is PopupMenuItem));
+    expect(tester.widget<PopupMenuItem>(takeOut).enabled, isFalse, reason: 'nothing to take out of an empty item');
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Low or out (2)'));
     await tester.pumpAndSettle();
     expect(find.text('Yoga mat'), findsNothing);
     expect(find.text('Whey protein'), findsOneWidget);
 
-    await tester.tap(find.text('Stock in').first);
+    await tester.tap(find.byTooltip('More').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Stock in'));
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextFormField, 'How many *'), '5');
     await tester.pumpAndSettle();

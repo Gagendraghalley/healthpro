@@ -250,7 +250,7 @@ Members walk in (they need no account), or ask to join in the app. Either way ea
 
 6. **Ask AI** (every staff member; the floating Ask AI button on the gym's pages): questions in their own words, in English or Dzongkha. Questions about the gym ("busiest hours this month?", "who hasn't come in two weeks?", "when did Pema last come?", "revenue by payment method this year?") are answered with a chart or a list of members. How-to questions ("how do I renew a member?") get a short answer and a button to the page that does it. See [Ask AI](#ask-ai-cloudflare-workers-ai).
 
-Members with an account membership from before (`gym_subscriptions.member_id`) still work underneath: `gym_activate_subscription` runs their memberships by the plan's days, and their old account QR code (`sportshub:member:<account id>`) still checks them in.
+Members with an account membership from before (`gym_subscriptions.member_id`) still work underneath: `gym_activate_subscription` runs their memberships by the plan's days, and their old account QR code (`sportshub:member:<account id>`) still checks them in. Migration 20261118000015 moved them into the desk's register (`gym_register_account_members()`): a registration per account and gym, as their Health Pro person, with a new member code, their packages, visits and class bookings moved onto it. Accounts with no phone number were left as they were (the register needs one); run `select public.gym_register_account_members();` again once they've added one.
 
 Dates are Bhutan dates (Asia/Thimphu), both ends included.
 

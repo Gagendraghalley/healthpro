@@ -161,19 +161,12 @@ class _EnquiriesScreenState extends ConsumerState<EnquiriesScreen> {
                           ),
                         )
                       else
-                        ResponsiveGrid(
-                          minItemWidth: 360,
-                          maxColumns: 3,
-                          children: staggered([
-                            for (final e in rows)
-                              _EnquiryTile(
-                                enquiry: e,
-                                today: today,
-                                venueId: id,
-                                gymName: access.venue.name,
-                                onEdit: () => _edit(e),
-                              ),
-                          ], step: const Duration(milliseconds: 30)),
+                        _EnquiriesTable(
+                          rows: rows,
+                          today: today,
+                          venueId: id,
+                          gymName: access.venue.name,
+                          onEdit: _edit,
                         ),
                     ],
                   ],
@@ -187,22 +180,22 @@ class _EnquiriesScreenState extends ConsumerState<EnquiriesScreen> {
   }
 }
 
-/// One enquiry: who, how they heard, what they're after, where it stands,
-/// their trial and follow-up; call, WhatsApp, and Register while it's open.
-class _EnquiryTile extends StatelessWidget {
-  final GymEnquiry enquiry;
+/// The enquiries as a table: who, how they heard, what they're after, their
+/// trial and follow-up, where it stands. Open changes one; the menu beside
+/// it calls, WhatsApps, and registers them while it's open.
+class _EnquiriesTable extends StatelessWidget {
+  final List<GymEnquiry> rows;
   final DateTime today;
   final String venueId;
   final String gymName;
-  final VoidCallback onEdit;
+  final ValueChanged<GymEnquiry> onEdit;
 
-  const _EnquiryTile({required this.enquiry, required this.today, required this.venueId, required this.gymName, required this.onEdit});
+  const _EnquiriesTable({required this.rows, required this.today, required this.venueId, required this.gymName, required this.onEdit});
 
-  @override
-  Widget build(BuildContext context) {
-    final e = enquiry;
+  /// The follow-up and trial, as chips; none when there's nothing to do.
+  List<Widget> _chips(BuildContext context, GymEnquiry e) {
     final brand = context.brand;
-    final chips = <Widget>[
+    return [
       if (e.isOpen && e.followUpOn != null)
         if (e.followUpOn!.isBefore(today))
           StatusChip(label: 'Follow-up missed, ${formatShortDate(e.followUpOn!)}', color: brand.danger, icon: Icons.alarm_rounded)
@@ -218,71 +211,110 @@ class _EnquiryTile extends StatelessWidget {
         else
           StatusChip(label: 'Trial until ${formatShortDate(e.trialEndsOn!)}', color: brand.highlight, icon: Icons.flag_outlined),
     ];
-    return SectionCard(
-      padding: const EdgeInsets.all(14),
-      onTap: onEdit,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(e.fullName,
-                        maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15.5)),
-                    Text('${e.phone} · ${e.source.label}', style: TextStyle(color: brand.muted)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              StatusChip(label: e.status.label, color: _statusColor(context, e.status)),
-            ],
+  }
+
+  Widget _menu(BuildContext context, GymEnquiry e) {
+    final brand = context.brand;
+    PopupMenuItem<VoidCallback> item(IconData icon, String label, VoidCallback onTap) => PopupMenuItem(
+          value: onTap,
+          child: Row(children: [Icon(icon, size: 20, color: brand.body), const SizedBox(width: 12), Text(label)]),
+        );
+    return PopupMenuButton<VoidCallback>(
+      tooltip: 'More',
+      icon: Icon(Icons.more_vert_rounded, color: brand.muted),
+      onSelected: (action) => action(),
+      itemBuilder: (_) => [
+        item(Icons.call_outlined, 'Call', () => callPhone(context, e.phone)),
+        item(Icons.chat_outlined, 'WhatsApp', () => openWhatsApp(context, e.phone,
+            message: 'Hello ${firstName(e.fullName, fallback: e.fullName)}, this is $gymName. ')),
+        if (e.isOpen)
+          item(Icons.person_add_alt_1_rounded, 'Register',
+              () => context.go(GymRoutes.registerEnquiryFor(venueId, name: e.fullName, phone: e.phone)))
+        else if (e.gymMemberId != null)
+          item(Icons.person_outline_rounded, 'Open member', () => context.go(GymRoutes.memberFor(venueId, e.gymMemberId!))),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    Widget status(GymEnquiry e) => StatusChip(label: e.status.label, color: _statusColor(context, e.status));
+    return DataGrid<GymEnquiry>(
+      rows: rows,
+      noun: 'enquiries',
+      pageSizes: const [25, 50, 100],
+      rowLabel: (e) => 'Open ${e.fullName}',
+      onRowTap: onEdit,
+      columns: [
+        GridColumn(
+          key: 'name',
+          label: 'Name',
+          flex: 4,
+          sortBy: (e) => e.fullName.toLowerCase(),
+          cell: (context, e) {
+            final chips = DataGrid.shows(context, 'follow') ? const <Widget>[] : _chips(context, e);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(e.fullName,
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
+                Text('${e.phone} · ${e.source.label}',
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.muted, fontSize: 13)),
+                if (!DataGrid.shows(context, 'interest') && e.interest != null)
+                  Text(e.interest!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.body, fontSize: 13)),
+                if (!DataGrid.shows(context, 'status') || chips.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Wrap(spacing: 6, runSpacing: 4, children: [if (!DataGrid.shows(context, 'status')) status(e), ...chips]),
+                  ),
+              ],
+            );
+          },
+        ),
+        GridColumn(
+          key: 'interest',
+          label: 'What they\'re after',
+          flex: 3,
+          showFrom: 860,
+          sortBy: (e) => (e.interest ?? '').toLowerCase(),
+          cell: (context, e) {
+            final text = [if (e.interest != null) e.interest!, if (e.notes != null) e.notes!];
+            return text.isEmpty
+                ? Text('—', style: TextStyle(color: brand.muted))
+                : Text(text.join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.body));
+          },
+        ),
+        GridColumn(
+          key: 'follow',
+          label: 'Follow-up',
+          flex: 3,
+          showFrom: 680,
+          sortBy: (e) => e.followUpOn ?? e.trialEndsOn ?? DateTime(9999),
+          cell: (context, e) {
+            final chips = _chips(context, e);
+            return chips.isEmpty
+                ? Text('—', style: TextStyle(color: brand.muted))
+                : Wrap(spacing: 6, runSpacing: 4, children: chips);
+          },
+        ),
+        GridColumn(
+          key: 'status',
+          label: 'Status',
+          width: 130,
+          showFrom: 520,
+          sortBy: (e) => e.status.index,
+          cell: (context, e) => status(e),
+        ),
+        GridColumn.actions(
+          width: 172,
+          cell: (context, e) => Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [GridOpenButton(onPressed: () => onEdit(e)), _menu(context, e)],
           ),
-          if (e.interest != null) ...[
-            const SizedBox(height: 6),
-            Text(e.interest!, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.body)),
-          ],
-          if (chips.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Wrap(spacing: 6, runSpacing: 6, children: chips),
-          ],
-          if (e.notes != null) ...[
-            const SizedBox(height: 6),
-            Text(e.notes!, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.muted, fontSize: 12.5)),
-          ],
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              IconButton(
-                tooltip: 'Call',
-                onPressed: () => callPhone(context, e.phone),
-                icon: const Icon(Icons.call_outlined, size: 20),
-              ),
-              IconButton(
-                tooltip: 'WhatsApp',
-                onPressed: () => openWhatsApp(context, e.phone,
-                    message: 'Hello ${firstName(e.fullName, fallback: e.fullName)}, this is $gymName. '),
-                icon: const Icon(Icons.chat_outlined, size: 20),
-              ),
-              const Spacer(),
-              if (e.isOpen)
-                FilledButton.tonalIcon(
-                  onPressed: () => context.go(GymRoutes.registerEnquiryFor(venueId, name: e.fullName, phone: e.phone)),
-                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
-                  label: const Text('Register'),
-                )
-              else if (e.gymMemberId != null)
-                TextButton(
-                  onPressed: () => context.go(GymRoutes.memberFor(venueId, e.gymMemberId!)),
-                  child: const Text('Open member'),
-                ),
-            ],
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

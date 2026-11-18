@@ -70,11 +70,15 @@ class PaymentClaimCard extends ConsumerWidget {
   /// On the member's own page: no need to say who.
   final bool showMember;
 
+  /// In a card; false in the details dialog, which is its own frame.
+  final bool framed;
+
   const PaymentClaimCard(
       {super.key,
       required this.claim,
       required this.canConfirm,
-      this.showMember = true});
+      this.showMember = true,
+      this.framed = true});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -86,9 +90,7 @@ class PaymentClaimCard extends ConsumerWidget {
     final plan = plans.where((p) => p.id == claim.planId).firstOrNull;
     final price = plan == null ? null : packagePrice(plan, claim.months);
     final differs = price != null && price != claim.amount;
-    return SectionCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
+    final body = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -169,8 +171,173 @@ class PaymentClaimCard extends ConsumerWidget {
           ] else if (claim.isPending)
             Text('Someone who takes payments confirms it.',
                 style: TextStyle(color: brand.muted, fontSize: 12.5)),
+          if (!claim.isPending) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                StatusChip(
+                  label: claim.status.label,
+                  color: claim.status == ClaimStatus.confirmed
+                      ? brand.success
+                      : brand.danger,
+                ),
+                if (claim.decisionNote != null) ...[
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child: Text(claim.decisionNote!,
+                          style: TextStyle(color: brand.muted))),
+                ],
+              ],
+            ),
+          ],
         ],
-      ),
+      );
+    return framed
+        ? SectionCard(padding: const EdgeInsets.all(16), child: body)
+        : Padding(padding: const EdgeInsets.all(20), child: body);
+  }
+}
+
+/// Online payments as a table. Open shows a waiting one (Confirm, Not
+/// found); an answered one opens its member.
+class _ClaimsTable extends StatelessWidget {
+  final List<PaymentClaim> claims;
+  final String venueId;
+  final bool canConfirm;
+
+  const _ClaimsTable(
+      {required this.claims, required this.venueId, required this.canConfirm});
+
+  void _open(BuildContext context, PaymentClaim c) {
+    if (!c.isPending) {
+      context.go(GymRoutes.memberFor(venueId, c.gymMemberId));
+      return;
+    }
+    showRowDetails(
+      context,
+      title: 'Online payment',
+      // Watched, so Confirm or Not found shows straight away.
+      builder: (context) => Consumer(builder: (context, ref, _) {
+        final now = ref
+            .watch(gymPaymentClaimsProvider(venueId))
+            .valueOrNull
+            ?.where((x) => x.id == c.id)
+            .firstOrNull;
+        return PaymentClaimCard(
+            claim: now ?? c, canConfirm: canConfirm, framed: false);
+      }),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final pending = claims.any((c) => c.isPending);
+    DateTime when(PaymentClaim c) =>
+        c.isPending ? c.createdAt : (c.decidedAt ?? c.createdAt);
+    Widget status(PaymentClaim c) => StatusChip(
+          label: c.status.label,
+          color: c.isPending
+              ? brand.warning
+              : c.status == ClaimStatus.confirmed
+                  ? brand.success
+                  : brand.danger,
+        );
+    return DataGrid<PaymentClaim>(
+      rows: claims,
+      noun: 'payments',
+      rowLabel: (c) => 'Open ${c.memberName}',
+      onRowTap: (c) => _open(context, c),
+      columns: [
+        GridColumn(
+          key: 'member',
+          label: 'Member',
+          flex: 4,
+          sortBy: (c) => c.memberName.toLowerCase(),
+          cell: (context, c) {
+            final carry = [
+              if (!DataGrid.shows(context, 'amount')) formatNu(c.amount),
+              if (!DataGrid.shows(context, 'package'))
+                '${c.planName} · ${c.monthsLabel}',
+              if (!DataGrid.shows(context, 'jrn')) 'JRN ${c.jrn}',
+            ];
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(c.memberName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700, color: brand.ink)),
+                if (carry.isNotEmpty)
+                  Text(carry.join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: brand.muted, fontSize: 13)),
+                if (!DataGrid.shows(context, 'status'))
+                  Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: status(c)),
+              ],
+            );
+          },
+        ),
+        GridColumn(
+          key: 'package',
+          label: 'Package',
+          flex: 3,
+          showFrom: 760,
+          sortBy: (c) => c.planName.toLowerCase(),
+          cell: (context, c) => Text('${c.planName} · ${c.monthsLabel}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: brand.body)),
+        ),
+        GridColumn(
+          key: 'amount',
+          label: 'Amount',
+          flex: 2,
+          showFrom: 600,
+          sortBy: (c) => c.amount,
+          cell: (context, c) => Text(formatNu(c.amount),
+              style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
+        ),
+        GridColumn(
+          key: 'jrn',
+          label: 'JRN',
+          flex: 2,
+          showFrom: 900,
+          sortBy: (c) => c.jrn,
+          cell: (context, c) => Text(c.jrn,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: brand.body,
+                  letterSpacing: 1,
+                  fontFeatures: const [FontFeature.tabularFigures()])),
+        ),
+        GridColumn(
+          key: 'when',
+          label: pending ? 'Sent' : 'Answered',
+          flex: 2,
+          showFrom: 1040,
+          sortBy: when,
+          cell: (context, c) =>
+              Text(timeAgo(when(c)), style: TextStyle(color: brand.body)),
+        ),
+        GridColumn(
+          key: 'status',
+          label: 'Status',
+          width: 130,
+          showFrom: 520,
+          sortBy: (c) => c.status.index,
+          cell: (context, c) => status(c),
+        ),
+        GridColumn.actions(
+            cell: (context, c) =>
+                GridOpenButton(onPressed: () => _open(context, c))),
+      ],
     );
   }
 }
@@ -244,51 +411,17 @@ class PaymentsToConfirmScreen extends ConsumerWidget {
                       )
                     else ...[
                       SectionTitle('Waiting (${waiting.length})'),
-                      ResponsiveGrid(
-                        minItemWidth: 340,
-                        maxColumns: 3,
-                        equalHeight: false,
-                        children: [
-                          for (final c in waiting)
-                            PaymentClaimCard(
-                                claim: c,
-                                canConfirm: access.can(GymPermission.payments)),
-                        ],
-                      ),
+                      _ClaimsTable(
+                          claims: waiting,
+                          venueId: venueId,
+                          canConfirm: access.can(GymPermission.payments)),
                     ],
                     if (answered.isNotEmpty) ...[
                       const SectionTitle('Answered'),
-                      SectionCard(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Column(
-                          children: [
-                            for (final c in answered)
-                              ListTile(
-                                title: Text(
-                                    '${c.memberName} · ${formatNu(c.amount)}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis),
-                                subtitle: Text(
-                                  [
-                                    'JRN ${c.jrn}',
-                                    timeAgo(c.decidedAt ?? c.createdAt),
-                                    if (c.decisionNote != null) c.decisionNote!
-                                  ].join(' · '),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing: StatusChip(
-                                  label: c.status.label,
-                                  color: c.status == ClaimStatus.confirmed
-                                      ? context.brand.success
-                                      : context.brand.danger,
-                                ),
-                                onTap: () => context.go(GymRoutes.memberFor(
-                                    venueId, c.gymMemberId)),
-                              ),
-                          ],
-                        ),
-                      ),
+                      _ClaimsTable(
+                          claims: answered,
+                          venueId: venueId,
+                          canConfirm: access.can(GymPermission.payments)),
                     ],
                   ],
                 ),

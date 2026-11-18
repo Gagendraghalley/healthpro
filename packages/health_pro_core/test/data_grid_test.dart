@@ -79,4 +79,41 @@ void main() {
     expect(find.text('wide cell'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('the Action column: Open at every width, and the details it shows', (tester) async {
+    for (final width in [1200.0, 360.0]) {
+      tester.view.physicalSize = Size(width, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => DataGrid<String>(
+              rows: const ['Pema', 'Karma'],
+              noun: 'people',
+              columns: [
+                GridColumn(key: 'name', label: 'Name', flex: 3, cell: (_, n) => Text(n)),
+                GridColumn.actions(
+                  cell: (context, n) => GridOpenButton(
+                    onPressed: () => showRowDetails(context, title: 'Person', builder: (_) => Text('All about $n')),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Action'), findsOneWidget, reason: 'never steps aside');
+      expect(find.text('Open'), findsNWidgets(2));
+      await tester.tap(find.text('Open').last);
+      await tester.pumpAndSettle();
+      expect(find.text('All about Karma'), findsOneWidget);
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+      expect(find.text('All about Karma'), findsNothing);
+      expect(tester.takeException(), isNull);
+    }
+  });
 }

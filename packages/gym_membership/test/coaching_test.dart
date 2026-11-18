@@ -9,7 +9,7 @@ import 'package:gym_membership/src/widgets/class_widgets.dart';
 import 'package:gym_membership/src/widgets/coaching_widgets.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
-import 'gym_screens_test.dart' show day, overrides, show;
+import 'gym_screens_test.dart' show day, inDialog, overrides, show;
 
 // Body progress, workout and diet plans, and group classes (the database
 // side: tests/database/coaching_test.sql).
@@ -206,6 +206,19 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    test('the desk\'s list: a registered member, or one whose membership is on their account', () {
+      final registered = ClassBooking.fromJson({
+        'id': 'b1', 'class_id': 'yoga', 'class_date': '2026-11-21', 'gym_member_id': 'm1',
+        'member': {'full_name': 'Mindu Dema', 'code': 'ABC234', 'phone': '+97517700001'}, 'account': null,
+      });
+      final account = ClassBooking.fromJson({
+        'id': 'b2', 'class_id': 'yoga', 'class_date': '2026-11-21', 'gym_member_id': null, 'user_id': 'u1',
+        'member': null, 'account': {'full_name': 'Lhamo Legacy', 'phone': null, 'member_code': 'XYZ789'},
+      });
+      expect((registered.memberName, registered.memberCode, registered.gymMemberId), ('Mindu Dema', 'ABC234', 'm1'));
+      expect((account.memberName, account.memberCode, account.gymMemberId), ('Lhamo Legacy', 'XYZ789', null));
+    });
+
     testWidgets('a gym without classes shows nothing on My gym', (tester) async {
       await pump(tester, const MyClassesCard(venueId: 'g1'), [gymClassesProvider.overrideWith((ref, id) async => const [])]);
       expect(find.text('Classes'), findsNothing);
@@ -221,9 +234,13 @@ void main() {
       ]);
       await tester.pumpAndSettle();
       expect(find.text('New class'), findsOneWidget);
-      expect(find.text('Mindu Dema · ABC234'), findsOneWidget);
-      expect(find.text('1 / 2'), findsOneWidget);
+      expect(find.text('1 / 2'), findsOneWidget, reason: 'places taken, in the day\'s table');
       expect(find.text('Weekly timetable'), findsOneWidget);
+      // Who's booked: in the class's details, from Open.
+      await tester.tap(find.text('Open').first);
+      await tester.pumpAndSettle();
+      expect(inDialog(find.text('Mindu Dema · ABC234')), findsOneWidget);
+      expect(inDialog(find.text('1 / 2')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

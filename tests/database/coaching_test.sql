@@ -193,5 +193,62 @@ select t.eq((select count(*) from public.gym_classes where venue_id = :'gym')::i
 set role anon;
 select t.eq((select count(*) from public.gym_classes where venue_id = :'gym')::int, 1, 'the public doesn''t');
 
+-- ---- Lhamo's membership is on her account (from before the desk's register) ----
+reset role;
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('00000000-0000-0000-0000-0000000f3007', 'coach.legacy@x.bt', '{"full_name":"Lhamo Legacy"}');
+insert into public.gym_subscriptions (venue_id, member_id, plan_name, duration_days, price, status, start_date, end_date)
+values (:'gym', '00000000-0000-0000-0000-0000000f3007', 'Monthly', 30, 1500, 'active', public.bhutan_today(),
+        public.bhutan_today() + 29);
+set role authenticated;
+select t.as_user('00000000-0000-0000-0000-0000000f3001');
+select public.gym_save_class(:'gym', null, jsonb_build_object('name', 'Zumba', 'weekday', :dow, 'starts_at', '18:00',
+                             'capacity', 1)) as zumba \gset
+select t.as_user('00000000-0000-0000-0000-0000000f3007');
+select public.gym_book_class(:'zumba', :'tomorrow') as legacy_booking \gset
+select t.eq((select (user_id = '00000000-0000-0000-0000-0000000f3007')::text || '|' || coalesce(gym_member_id::text, '-')
+             from public.gym_class_bookings where id = :'legacy_booking'),
+            'true|-', 'a member whose membership is on her account books too');
+select t.eq((select p ->> 'my_booking_id' from jsonb_array_elements(public.gym_class_places(:'gym', public.bhutan_today())) p
+             where p ->> 'class_id' = :'zumba'), :'legacy_booking', 'and sees it''s hers');
+select t.fails(format($$select public.gym_book_class(%L, %L)$$, :'zumba', :'tomorrow'), 'booked in already');
+select t.as_user('00000000-0000-0000-0000-0000000f3002');
+select t.fails(format($$select public.gym_book_class(%L, %L, %L)$$, :'zumba', :'tomorrow', :'sonam'), 'is full');
+select t.eq((select count(*) from public.gym_class_bookings where class_id = :'zumba' and status = 'booked')::int, 1,
+            'her booking takes the place, and the desk sees it');
+select t.as_user('00000000-0000-0000-0000-0000000f3004');
+select t.fails(format($$select public.gym_cancel_class_booking(%L)$$, :'legacy_booking'), 'Only the member and the gym');
+select t.as_user('00000000-0000-0000-0000-0000000f3007');
+select public.gym_cancel_class_booking(:'legacy_booking');
+select t.eq((select status from public.gym_class_bookings where id = :'legacy_booking'), 'cancelled', 'and she cancels it');
+
+-- ---- Account memberships into the register (20261118000015) ------------------
+select public.gym_book_class(:'zumba', :'tomorrow') as legacy_booking \gset
+reset role;
+insert into public.gym_check_ins (venue_id, member_id) values (:'gym', '00000000-0000-0000-0000-0000000f3007');
+select t.eq(public.gym_register_account_members() -> 'left' -> 0 ->> 'why', 'no phone number',
+            'an account without a phone number is left as it is');
+update public.profiles set phone = '+97517700007' where id = '00000000-0000-0000-0000-0000000f3007';
+select t.eq((public.gym_register_account_members() ->> 'registered')::int, 1, 'with one, Lhamo is registered at the gym');
+select id as lhamo, code as lhamo_code from public.gym_members where venue_id = :'gym' and full_name = 'Lhamo Legacy' \gset
+select t.eq((select phone || '|' || coalesce(email, '-') || '|' || joined_on from public.gym_members where id = :'lhamo'),
+            '+97517700007|coach.legacy@x.bt|' || public.bhutan_today(), 'with her name, phone, email and first package''s day');
+select t.eq((select (p.user_id = '00000000-0000-0000-0000-0000000f3007')::text
+             from public.gym_members g join public.people p on p.id = g.person_id where g.id = :'lhamo'),
+            'true', 'as her Health Pro person (her QR code)');
+select t.eq((select count(*) from public.gym_subscriptions where member_id = '00000000-0000-0000-0000-0000000f3007')::int
+              || '|' || (select count(*) from public.gym_subscriptions where gym_member_id = :'lhamo')
+              || '|' || (select count(*) from public.gym_check_ins where gym_member_id = :'lhamo')
+              || '|' || (select coalesce(gym_member_id::text, '-') = :'lhamo' from public.gym_class_bookings where id = :'legacy_booking'),
+            '0|1|1|true', 'her package, visit and class booking move onto it');
+select t.eq((public.gym_register_account_members() ->> 'registered')::int, 0, 'run again: nothing left to move');
+set role authenticated;
+select t.as_user('00000000-0000-0000-0000-0000000f3007');
+select t.eq((select g ->> 'member_code' || '|' || (g ->> 'plan_name')
+             from jsonb_array_elements(public.my_gyms() -> 'gyms') g where g ->> 'venue_id' = :'gym'),
+            :'lhamo_code' || '|Monthly', 'My gym shows her registration: a member code, and her package');
+select t.as_user('00000000-0000-0000-0000-0000000f3002');
+select t.eq(public.gym_check_in_by_code(:'gym', :'lhamo_code') ->> 'member_name', 'Lhamo Legacy', 'the desk checks her in by it');
+
 reset role;
 do $$ begin raise notice 'ALL PROGRESS, PLAN AND CLASS CHECKS PASSED'; end $$;

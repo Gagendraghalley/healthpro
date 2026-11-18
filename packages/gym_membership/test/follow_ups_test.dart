@@ -146,10 +146,18 @@ void main() {
       expect(find.text('To follow up  3'), findsOneWidget);
       expect(find.text('Follow-up missed, ${formatShortDate(day(-1))}'), findsOneWidget);
       expect(find.text('Trial until ${formatShortDate(day(2))}'), findsOneWidget);
-      expect(find.text('Register'), findsNWidgets(3));
+      expect(find.text('Open'), findsNWidgets(3), reason: 'a table: each row opens from its Action column');
       expect(find.text('Karma 4'), findsNothing, reason: 'joined: under Joined');
       // The missed one comes first.
       expect(tester.getTopLeft(find.text('Karma 2')).dy, lessThanOrEqualTo(tester.getTopLeft(find.text('Karma 1')).dy));
+      // Beside Open: call, WhatsApp, and Register while it's open.
+      await tester.tap(find.byTooltip('More').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Call'), findsOneWidget);
+      expect(find.text('WhatsApp'), findsOneWidget);
+      expect(find.text('Register'), findsOneWidget);
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     });
 

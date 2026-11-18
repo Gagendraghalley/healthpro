@@ -18,13 +18,25 @@ import 'trainer_screens.dart' show pickTrainerSlots;
 /// verified ones with their week here (their times at other gyms only as
 /// Not available), their attendance here (the desk scans their QR code when
 /// they arrive) and their members here.
-class GymTrainersScreen extends ConsumerWidget {
+class GymTrainersScreen extends ConsumerStatefulWidget {
   final String venueId;
 
   const GymTrainersScreen({super.key, required this.venueId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<GymTrainersScreen> createState() => _GymTrainersScreenState();
+}
+
+class _GymTrainersScreenState extends ConsumerState<GymTrainersScreen> {
+  /// The status shown; null for all of them.
+  TrainerStatus? _filter;
+
+  /// The table's order: those asking first, then ours, inactive, not verified.
+  static const _order = [TrainerStatus.pending, TrainerStatus.verified, TrainerStatus.inactive, TrainerStatus.rejected];
+
+  @override
+  Widget build(BuildContext context) {
+    final venueId = widget.venueId;
     return GymStaffPage(
       venueId: venueId,
       title: 'Trainers',
@@ -34,11 +46,9 @@ class GymTrainersScreen extends ConsumerWidget {
         body: AsyncValueView<List<GymTrainer>>(
           value: ref.watch(gymTrainersProvider(venueId)),
           onRetry: () => ref.invalidate(gymTrainersProvider(venueId)),
-          data: (list) {
-            final waiting = list.where((t) => t.status == TrainerStatus.pending).toList();
-            final verified = list.where((t) => t.status == TrainerStatus.verified).toList();
-            final inactive = list.where((t) => t.status == TrainerStatus.inactive).toList();
-            final declined = list.where((t) => t.status == TrainerStatus.rejected).toList();
+          data: (all) {
+            final list = [for (final s in _order) ...all.where((t) => t.status == s)];
+            final rows = _filter == null ? list : list.where((t) => t.status == _filter).toList();
             return RefreshIndicator(
               onRefresh: () => ref.refresh(gymTrainersProvider(venueId).future),
               child: ListView(
@@ -70,31 +80,34 @@ class GymTrainersScreen extends ConsumerWidget {
                       actionLabel: 'Add trainer',
                       onAction: () => context.go(GymRoutes.addTrainerFor(venueId)),
                     ),
-                  if (waiting.isNotEmpty) ...[
-                    SectionTitle('Asking to train here (${waiting.length})'),
-                    for (final t in waiting) _TrainerCard(trainer: t, venueId: venueId),
-                  ],
-                  if (verified.isNotEmpty) ...[
-                    SectionTitle('Our trainers (${verified.length})'),
-                    ResponsiveGrid(
-                      minItemWidth: 360,
-                      maxColumns: 2,
-                      equalHeight: false,
-                      children: [for (final t in verified) _TrainerCard(trainer: t, venueId: venueId)],
+                  if (list.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: 40,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          for (final s in <TrainerStatus?>[null, ..._order])
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                label: Text('${s == null ? 'All' : s == TrainerStatus.pending ? 'Asking to train here' : s.label}  '
+                                    '${s == null ? list.length : list.where((t) => t.status == s).length}'),
+                                selected: _filter == s,
+                                onSelected: (_) => setState(() => _filter = s),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ],
-                  if (inactive.isNotEmpty) ...[
-                    SectionTitle('Inactive at this gym (${inactive.length})'),
-                    ResponsiveGrid(
-                      minItemWidth: 360,
-                      maxColumns: 2,
-                      equalHeight: false,
-                      children: [for (final t in inactive) _TrainerCard(trainer: t, venueId: venueId)],
-                    ),
-                  ],
-                  if (declined.isNotEmpty) ...[
-                    const SectionTitle('Not verified'),
-                    for (final t in declined) _TrainerCard(trainer: t, venueId: venueId),
+                    const SizedBox(height: 12),
+                    if (rows.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Center(child: Text('No trainers here.', style: TextStyle(color: context.brand.muted))),
+                      )
+                    else
+                      _TrainersTable(trainers: rows, venueId: venueId),
                   ],
                   const SizedBox(height: 24),
                 ],
@@ -107,11 +120,150 @@ class GymTrainersScreen extends ConsumerWidget {
   }
 }
 
-class _TrainerCard extends ConsumerWidget {
+/// The trainers as a table; Open shows one's details and what can be done.
+class _TrainersTable extends StatelessWidget {
+  final List<GymTrainer> trainers;
+  final String venueId;
+
+  const _TrainersTable({required this.trainers, required this.venueId});
+
+  void _open(BuildContext context, GymTrainer t) => showRowDetails(
+        context,
+        title: 'Trainer',
+        // Watched, so a decision here shows straight away.
+        builder: (context) => Consumer(builder: (context, ref, _) {
+          final now = ref.watch(gymTrainersProvider(venueId)).valueOrNull?.where((x) => x.profile.userId == t.profile.userId);
+          return _TrainerDetails(trainer: now?.firstOrNull ?? t, venueId: venueId);
+        }),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final today = BhutanTime.today();
+    bool arrived(GymTrainer t) => uniqueTrainerAttendanceEntries(t.attendance).any((at) {
+          final local = BhutanTime.toBhutan(at);
+          return local.year == today.year && local.month == today.month && local.day == today.day;
+        });
+    Widget status(GymTrainer t) => StatusChip(
+          label: t.status.label,
+          color: t.status == TrainerStatus.verified
+              ? brand.success
+              : t.status == TrainerStatus.pending
+                  ? brand.warning
+                  : brand.muted,
+          icon: t.status == TrainerStatus.verified
+              ? Icons.verified_rounded
+              : t.status == TrainerStatus.inactive
+                  ? Icons.visibility_off_outlined
+                  : Icons.schedule_rounded,
+        );
+    Widget muted(String text) => Text(text, style: TextStyle(color: brand.muted));
+    return DataGrid<GymTrainer>(
+      rows: trainers,
+      noun: 'trainers',
+      rowLabel: (t) => 'Open ${t.profile.name}',
+      dimmed: (t) => t.status == TrainerStatus.inactive || t.status == TrainerStatus.rejected,
+      onRowTap: (t) => _open(context, t),
+      columns: [
+        GridColumn(
+          key: 'trainer',
+          label: 'Trainer',
+          flex: 4,
+          sortBy: (t) => t.profile.name.toLowerCase(),
+          cell: (context, t) {
+            final p = t.profile;
+            final headline = (p.headline ?? '').trim();
+            final carry = [
+              if (headline.isNotEmpty) headline,
+              if (!DataGrid.shows(context, 'phone') && t.phone != null) t.phone!,
+            ];
+            return Row(
+              children: [
+                TrainerAvatar(name: p.name, photoUrl: p.photoUrl, size: 40),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(p.name,
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
+                      if (carry.isNotEmpty)
+                        Text(carry.join(' · '),
+                            maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.muted, fontSize: 13)),
+                      if (!DataGrid.shows(context, 'status')) Padding(padding: const EdgeInsets.only(top: 4), child: status(t)),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        GridColumn(
+          key: 'phone',
+          label: 'Phone',
+          flex: 2,
+          showFrom: 900,
+          sortBy: (t) => t.phone ?? '',
+          cell: (context, t) => t.phone == null
+              ? muted('—')
+              : Text(t.phone!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.body)),
+        ),
+        GridColumn(
+          key: 'members',
+          label: 'Members',
+          flex: 2,
+          showFrom: 760,
+          sortBy: (t) => t.members,
+          cell: (context, t) => t.status != TrainerStatus.verified
+              ? muted('—')
+              : Text('${t.members}', style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
+        ),
+        GridColumn(
+          key: 'days',
+          label: 'Days attended',
+          flex: 2,
+          showFrom: 1040,
+          sortBy: (t) => trainerAttendanceDaysLast30(t.attendance, today),
+          cell: (context, t) => t.status != TrainerStatus.verified
+              ? muted('—')
+              : Text('${trainerAttendanceDaysLast30(t.attendance, today)} / 30', style: TextStyle(color: brand.body)),
+        ),
+        GridColumn(
+          key: 'today',
+          label: 'Today',
+          flex: 2,
+          showFrom: 1160,
+          sortBy: (t) => arrived(t) ? 0 : 1,
+          cell: (context, t) => t.status != TrainerStatus.verified
+              ? muted('—')
+              : arrived(t)
+                  ? Text('Arrived', style: TextStyle(fontWeight: FontWeight.w700, color: brand.readable(brand.success)))
+                  : muted('Not yet'),
+        ),
+        GridColumn(
+          key: 'status',
+          label: 'Status',
+          width: 190,
+          showFrom: 560,
+          sortBy: (t) => t.status.index,
+          cell: (context, t) => status(t),
+        ),
+        GridColumn.actions(cell: (context, t) => GridOpenButton(onPressed: () => _open(context, t))),
+      ],
+    );
+  }
+}
+
+/// A trainer's details, in the dialog Open shows: their certificates or
+/// their week here, attendance, and the buttons to verify, mark them arrived,
+/// change their times, or make them inactive.
+class _TrainerDetails extends ConsumerWidget {
   final GymTrainer trainer;
   final String venueId;
 
-  const _TrainerCard({required this.trainer, required this.venueId});
+  const _TrainerDetails({required this.trainer, required this.venueId});
 
   Future<void> _decide(BuildContext context, WidgetRef ref, {required bool approve}) async {
     final p = trainer.profile;
@@ -228,11 +380,7 @@ class _TrainerCard extends ConsumerWidget {
               : Icons.schedule_rounded,
     );
     final line = Divider(height: 1, thickness: 1, color: brand.glassBorder);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: SectionCard(
-        padding: EdgeInsets.zero,
-        child: LayoutBuilder(builder: (context, constraints) {
+    return LayoutBuilder(builder: (context, constraints) {
           // The status sits top right when there's room, under the name on a phone.
           final wide = constraints.maxWidth >= 480;
           return Column(
@@ -475,7 +623,12 @@ class _TrainerCard extends ConsumerWidget {
                           label: const Text('Reactivate'),
                         ),
                       OutlinedButton.icon(
-                        onPressed: () => context.push(GymRoutes.trainerFor(p.userId, venueId: venueId)),
+                        onPressed: () {
+                          // Out of the details dialog first, so the profile isn't under it.
+                          final router = GoRouter.of(context);
+                          Navigator.of(context).pop();
+                          router.push(GymRoutes.trainerFor(p.userId, venueId: venueId));
+                        },
                         icon: const Icon(Icons.person_outline_rounded, size: 18),
                         label: const Text('View profile'),
                       ),
@@ -485,9 +638,7 @@ class _TrainerCard extends ConsumerWidget {
               ),
             ],
           );
-        }),
-      ),
-    );
+        });
   }
 }
 
