@@ -14,7 +14,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 import { cors, reply } from '../_shared/workers_ai.ts';
-import { catalogUrl, cleanQuery, cleanSkip, publicSupplier, read, type Supplier } from './catalog.ts';
+import { builtIn, catalogUrl, cleanQuery, cleanSkip, publicSupplier, read, type Supplier } from './catalog.ts';
 
 const uuid = (value: unknown): string | null =>
   typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ? value : null;
@@ -63,12 +63,16 @@ Deno.serve(async (req) => {
   const list = suppliers.map(publicSupplier);
 
   try {
-    const response = await fetch(catalogUrl(supplier, query, skip), {
-      headers: { Accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!response.ok) throw new Error(`${supplier.key} answered ${response.status}`);
-    const { items, total } = read(supplier, await response.json(), query, skip);
+    let answer: unknown = null;
+    if (!builtIn(supplier)) {
+      const response = await fetch(catalogUrl(supplier, query, skip), {
+        headers: { Accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok) throw new Error(`${supplier.key} answered ${response.status}`);
+      answer = await response.json();
+    }
+    const { items, total } = read(supplier, answer, query, skip);
     return reply({ suppliers: list, supplier: supplier.key, items, total }, 200);
   } catch (e) {
     console.error('supplier-catalog failed', e);

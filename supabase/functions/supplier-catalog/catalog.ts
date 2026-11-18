@@ -1,6 +1,8 @@
 // Reading a connected supplier's catalogue (inventory_suppliers), one
 // adapter per kind of API, into the one shape the app shows. Pure: the
 // fetching is in index.ts, so this is tested without the network.
+// 'sample' is the dummy gym suppliers' built-in catalogue (sample.ts).
+import { SAMPLE_ITEMS, type SampleItem } from './sample.ts';
 
 export type Supplier = {
   key: string;
@@ -46,6 +48,19 @@ export function cleanSkip(value: unknown): number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? Math.min(value, 10000) : 0;
 }
 
+/// Whether [supplier]'s items are built in here, so there's nothing to fetch.
+export const builtIn = (supplier: Supplier): boolean => supplier.api_kind === 'sample';
+
+/// [all] searched by [query] and paged from [skip], for catalogues that come
+/// back whole.
+function searchHere(all: SupplierItem[], query: string | null, skip: number): { items: SupplierItem[]; total: number } {
+  const q = query?.toLowerCase();
+  const matching = q
+    ? all.filter((i) => [i.name, i.brand, i.category, i.description].some((f) => f?.toLowerCase().includes(q)))
+    : all;
+  return { items: matching.slice(skip, skip + PAGE), total: matching.length };
+}
+
 /// The request for [supplier]'s items matching [query]. With a category,
 /// the whole category comes back and [read] filters it, since DummyJSON's
 /// search covers every category.
@@ -57,6 +72,8 @@ export function catalogUrl(supplier: Supplier, query: string | null, skip: numbe
       if (supplier.category) return `${base}/products/category/${encodeURIComponent(supplier.category)}?limit=100&${fields}`;
       if (query) return `${base}/products/search?q=${encodeURIComponent(query)}&limit=${PAGE}&skip=${skip}&${fields}`;
       return `${base}/products?limit=${PAGE}&skip=${skip}&${fields}`;
+    case 'sample':
+      throw new Error('Sample suppliers are built in, nothing to fetch');
     default:
       throw new Error(`No adapter for ${supplier.api_kind}`);
   }
@@ -73,11 +90,11 @@ export function read(supplier: Supplier, body: unknown, query: string | null, sk
         const total = count((body as { total?: unknown })?.total) ?? all.length;
         return { items: all, total };
       }
-      const q = query?.toLowerCase();
-      const matching = q
-        ? all.filter((i) => [i.name, i.brand, i.description].some((f) => f?.toLowerCase().includes(q)))
-        : all;
-      return { items: matching.slice(skip, skip + PAGE), total: matching.length };
+      return searchHere(all, query, skip);
+    }
+    case 'sample': {
+      const all = SAMPLE_ITEMS.filter((i) => !supplier.category || i.section === supplier.category).map((i) => fromSample(supplier, i));
+      return searchHere(all, query, skip);
     }
     default:
       throw new Error(`No adapter for ${supplier.api_kind}`);
@@ -104,6 +121,22 @@ function fromDummyjson(supplier: Supplier, raw: unknown): SupplierItem | null {
     availability: text(p.availabilityStatus, 30),
     image: https(p.thumbnail),
     url: `${base}/products/${encodeURIComponent(id)}`,
+  };
+}
+
+function fromSample(supplier: Supplier, i: SampleItem): SupplierItem {
+  return {
+    id: i.id,
+    name: i.name,
+    description: i.description,
+    category: i.category,
+    brand: null,
+    price: i.price,
+    currency: 'BTN',
+    stock: i.stock,
+    availability: i.stock === 0 ? 'Out of Stock' : i.stock <= 5 ? 'Low Stock' : 'In Stock',
+    image: https(i.image),
+    url: `${supplier.website_url.replace(/\/+$/, '')}/products/${encodeURIComponent(i.id)}`,
   };
 }
 

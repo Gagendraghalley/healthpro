@@ -22,7 +22,9 @@ select t.as_user('00000000-0000-0000-0000-0000000ab004');
 select public.register_venue('{"type":"gym","name":"Other Stock Gym","dzongkhag":"Thimphu","phone":"+97517200002"}') as other \gset
 
 -- ---- Connected suppliers ---------------------------------------------------
-select t.eq((select string_agg(key, ',') from public.inventory_suppliers), 'test-store', 'the test supplier is connected');
+select t.eq((select string_agg(key, ',' order by sort_order) from public.inventory_suppliers where is_active),
+            'sample-equipment,sample-nutrition,sample-accessories', 'the dummy gym suppliers are connected');
+select t.eq((select count(*)::int from public.inventory_suppliers where key = 'test-store'), 0, 'the other-sports test supplier is gone');
 set role anon;
 select t.as_user(null);
 select t.fails('select count(*) from public.inventory_suppliers', 'permission denied');

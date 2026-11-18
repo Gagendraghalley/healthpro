@@ -1,7 +1,7 @@
 // How the supplier-catalog Edge Function reads a connected supplier.
 //
 //   deno test tests/functions/
-import { catalogUrl, cleanQuery, cleanSkip, publicSupplier, read, type Supplier } from '../../supabase/functions/supplier-catalog/catalog.ts';
+import { builtIn, catalogUrl, cleanQuery, cleanSkip, publicSupplier, read, type Supplier } from '../../supabase/functions/supplier-catalog/catalog.ts';
 
 function same(actual: unknown, expected: unknown) {
   const a = JSON.stringify(actual);
@@ -91,6 +91,49 @@ Deno.test('what comes in from the app is tidied', () => {
   same(cleanSkip(-5), 0);
   same(cleanSkip(2.5), 0);
   same(cleanSkip(60), 60);
+});
+
+const sample = (category: string | null): Supplier => ({
+  key: `sample-${category}`,
+  name: 'Sample',
+  description: null,
+  website_url: 'https://example.com/',
+  api_kind: 'sample',
+  api_url: 'https://example.com',
+  category,
+});
+
+Deno.test('the dummy gym suppliers are built in, each showing its own section', () => {
+  same([builtIn(sample('equipment')), builtIn(store)], [true, false]);
+  const equipment = read(sample('equipment'), null, null, 0);
+  const nutrition = read(sample('nutrition'), null, null, 0);
+  const accessories = read(sample('accessories'), null, null, 0);
+  same(equipment.items.some((i) => i.name === 'Olympic barbell 20 kg'), true);
+  same(equipment.items.some((i) => i.name.startsWith('Creatine')), false);
+  same(nutrition.items.some((i) => i.name.startsWith('Creatine')), true);
+  same(accessories.items.some((i) => i.name === 'Cotton yoga mat'), true);
+  same(read(sample(null), null, null, 0).total, equipment.total + nutrition.total + accessories.total);
+});
+
+Deno.test('dummy items are gym things in Ngultrum, linking to the supplier', () => {
+  const { items } = read(sample(null), null, null, 0);
+  same(items.every((i) => i.currency === 'BTN' && i.price !== null && i.price > 0 && i.url.startsWith('https://example.com/products/')), true);
+  const others = /football|cricket|tennis|golf|baseball|basketball|volleyball|shuttlecock/i;
+  same(items.filter((i) => others.test(`${i.name} ${i.description}`)).map((i) => i.name), []);
+  const plate = items.find((i) => i.name === 'Cast iron weight plate 5 kg')!;
+  same([plate.stock, plate.availability], [0, 'Out of Stock']);
+});
+
+Deno.test('every dummy item has its own photo, from Wikimedia Commons', () => {
+  const images = read(sample(null), null, null, 0).items.map((i) => i.image);
+  same(images.every((i) => i?.startsWith('https://upload.wikimedia.org/wikipedia/commons/thumb/') && i.includes('/500px-')), true);
+  same(new Set(images).size, images.length);
+});
+
+Deno.test('dummy suppliers are searched here, by name or kind', () => {
+  same(read(sample('nutrition'), null, 'protein', 0).items.every((i) => /protein/i.test(`${i.name} ${i.category} ${i.description}`)), true);
+  same(read(sample('equipment'), null, 'cardio', 0).items.map((i) => i.name), ['Motorised treadmill', 'Spin bike', 'Rowing machine']);
+  same(read(sample('equipment'), null, 'creatine', 0), { items: [], total: 0 });
 });
 
 Deno.test('the app never sees the API address', () => {
