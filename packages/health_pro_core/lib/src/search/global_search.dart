@@ -505,7 +505,7 @@ class _Heading extends StatelessWidget {
   }
 }
 
-/// One result: its 3D icon (or flat one) on a tile of its service's colour, what it is, and
+/// One result: its 3D icon as in the side menu (or a flat one on a tile of its service's colour), what it is, and
 /// where; marked when chosen (by the arrows or the mouse).
 class _ResultTile extends StatelessWidget {
   final SearchHit hit;
@@ -548,10 +548,13 @@ class _ResultTile extends StatelessWidget {
                 width: 36,
                 height: 36,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                // A 3D icon stands on its own, as in the side menu; a flat one on its tile.
+                decoration: hit.art != null
+                    ? null
+                    : BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
                 child: hit.art == null
                     ? Icon(hit.icon, size: 19, color: color)
-                    : Art3DIcon(hit.art!, size: 24, fallback: hit.icon, fallbackColor: color),
+                    : Art3DIcon(hit.art!, size: 28, fallback: hit.icon, fallbackColor: color),
               ),
               const SizedBox(width: 12),
               Expanded(
