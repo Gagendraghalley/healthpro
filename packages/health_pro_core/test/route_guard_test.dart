@@ -41,6 +41,13 @@ void main() {
         CoreRoutes.signInFor('/gyms/abc/manage/plans'));
   });
 
+  test('signing out on a private page goes to Welcome, not back to it after the next sign-in', () {
+    String? out(String location, String pattern) => guardRoute(
+        uri: Uri.parse(location), pattern: pattern, signedIn: false, publicPatterns: public, justSignedOut: true);
+    expect(out('/gyms/abc/manage/reports', '/gyms/:id/manage/reports'), CoreRoutes.welcome);
+    expect(out('/gyms/abc', '/gyms/:id'), isNull, reason: 'public pages stay open');
+  });
+
   test('signed-in users skip the sign-in pages, to ?next= when it is ours', () {
     expect(guard('/sign-in', signedIn: true), CoreRoutes.home);
     expect(guard('/sign-in?next=%2Fmy-gym', pattern: '/sign-in', signedIn: true), '/my-gym');

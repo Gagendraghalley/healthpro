@@ -66,6 +66,30 @@ reset role;
 set role service_role;
 select t.fails($$select public.ai_take_public_question('visitor-hash-0000000003')$$, 'answered all it can for today');
 
+-- Signed-in members are counted by their account, not their address, and the
+-- visitors' 150 (used up just above) don't stop them.
+reset role;
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('00000000-0000-0000-0000-0000000a1003', 'ask.member@x.bt', '{"full_name":"Sonam Member"}'),
+  ('00000000-0000-0000-0000-0000000a1004', 'ask.member2@x.bt', '{"full_name":"Tashi Member"}');
+set role service_role;
+select t.eq(public.ai_take_public_question('visitor-hash-0000000003', '00000000-0000-0000-0000-0000000a1003'), 14,
+            'a member asks after the visitors'' share is used up: 14 left');
+select public.ai_take_public_question('visitor-hash-0000000003', '00000000-0000-0000-0000-0000000a1003')
+from generate_series(1, 14);
+select t.fails($$select public.ai_take_public_question('visitor-hash-0000000003', '00000000-0000-0000-0000-0000000a1003')$$,
+               'asked 15 questions today');
+select t.eq(public.ai_take_public_question('visitor-hash-0000000003', '00000000-0000-0000-0000-0000000a1004'), 14,
+            'another member on the same address has their own 15');
+select t.eq(public.ai_take_public_question(null, '00000000-0000-0000-0000-0000000a1004'), 13, 'a member needs no address');
+select t.fails($$select public.ai_take_public_question('visitor-hash-0000000004')$$, 'answered all it can for today');
+reset role;
+select t.eq((select count(*) from public.ai_public_questions where user_id is not null and client_hash is not null)::int,
+            0, 'members'' addresses aren''t kept');
+delete from auth.users where id = '00000000-0000-0000-0000-0000000a1004';
+select t.eq((select count(*) from public.ai_public_questions
+             where user_id = '00000000-0000-0000-0000-0000000a1004')::int, 0, 'a deleted account''s questions go with it');
+
 -- Old questions are cleared.
 reset role;
 update public.ai_public_questions set asked_at = now() - interval '40 days';

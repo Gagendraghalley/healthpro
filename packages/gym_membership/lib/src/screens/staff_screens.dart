@@ -431,27 +431,30 @@ class _PackagesTable extends StatelessWidget {
           sortBy: (p) => '${p.isActive ? 0 : 1}${bestId == p.id ? 0 : 1}',
           cell: (context, p) => badges(p, withStatus: true),
         ),
-        GridColumn(
-          key: 'more',
-          label: '',
-          width: 52,
-          alignEnd: true,
-          cell: (context, p) => PopupMenuButton<String>(
-            tooltip: 'More for ${p.name}',
-            onSelected: (v) => v == 'edit' ? onEdit(p) : onToggle(p),
-            itemBuilder: (_) => [
-              const PopupMenuItem(
-                value: 'edit',
-                child: ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: Icon(Icons.edit_outlined), title: Text('Edit')),
-              ),
-              PopupMenuItem(
-                value: 'toggle',
-                child: ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(p.isActive ? Icons.visibility_off_outlined : Icons.visibility_outlined),
-                  title: Text(p.isActive ? 'Hide (stop selling)' : 'Put on sale'),
-                ),
+        GridColumn.actions(
+          width: 172,
+          cell: (context, p) => Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GridOpenButton(onPressed: () => onEdit(p)),
+              PopupMenuButton<String>(
+                tooltip: 'More for ${p.name}',
+                onSelected: (v) => v == 'edit' ? onEdit(p) : onToggle(p),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: Icon(Icons.edit_outlined), title: Text('Edit')),
+                  ),
+                  PopupMenuItem(
+                    value: 'toggle',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(p.isActive ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                      title: Text(p.isActive ? 'Hide (stop selling)' : 'Put on sale'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1261,6 +1264,9 @@ class _PaymentsTable extends StatelessWidget {
                   color: brand.ink,
                   fontFeatures: const [FontFeature.tabularFigures()])),
         ),
+        GridColumn.actions(
+            cell: (context, p) =>
+                GridOpenButton(onPressed: () => showReceipt(context, p.id))),
       ],
     );
   }

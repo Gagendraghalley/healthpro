@@ -289,13 +289,7 @@ class _RolesTable extends StatelessWidget {
           sortBy: (r) => r.isActive ? 0 : 1,
           cell: (context, r) => _StatusChip(role: r),
         ),
-        GridColumn(
-          key: 'open',
-          label: '',
-          width: 40,
-          alignEnd: true,
-          cell: (context, r) => Icon(Icons.chevron_right_rounded, color: brand.muted),
-        ),
+        GridColumn.actions(cell: (context, r) => GridOpenButton(onPressed: () => onOpen(r))),
       ],
     );
   }

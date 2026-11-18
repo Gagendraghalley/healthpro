@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/classes.dart';
 import '../data/gym_repository.dart';
 import '../data/registered_member.dart';
 import '../gym_permissions.dart';
+import '../gym_routes.dart';
 import '../widgets/class_widgets.dart';
 import '../widgets/gym_widgets.dart';
 
 /// Group classes, for the desk: who's booked into each class on a day (the
-/// next two weeks), booking members in and taking them out; and the weekly
-/// timetable, kept by who sets the packages.
+/// next two weeks), members of the gym and non-members on Health Pro, booking
+/// members in and taking anyone out; how many have registered to date; and
+/// the weekly timetable, kept by who sets the packages. For the roles given
+/// Classes (GymPermission.classes): front desk, manager...
 class ClassesScreen extends ConsumerStatefulWidget {
   final String venueId;
 
@@ -22,14 +26,21 @@ class ClassesScreen extends ConsumerStatefulWidget {
   ConsumerState<ClassesScreen> createState() => _ClassesScreenState();
 }
 
+/// The page's three views.
+enum _View { bookings, registered, timetable }
+
 class _ClassesScreenState extends ConsumerState<ClassesScreen> {
-  DateTime _day = BhutanTime.today();
+  /// The day picked; null for the first day with a class.
+  DateTime? _picked;
+  _View _view = _View.bookings;
 
   Future<void> _edit([GymClass? c]) async {
     final saved = await showAppDialog<bool>(context: context, builder: (_) => _ClassDialog(venueId: widget.venueId, gymClass: c));
     if (saved == true) {
       ref.invalidate(gymClassesProvider(widget.venueId));
       ref.invalidate(gymClassBookingsProvider);
+      ref.invalidate(gymClassPlacesProvider(widget.venueId));
+      ref.invalidate(gymClassRegistrationsProvider(widget.venueId));
     }
   }
 
@@ -39,9 +50,12 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
     return GymStaffPage(
       venueId: id,
       title: 'Classes',
-      permission: GymPermission.members,
+      permission: GymPermission.classes,
       builder: (context, access) {
         final canEdit = access.can(GymPermission.plans);
+        final canRegister = access.can(GymPermission.register);
+        // Booking a member in picks from the members list.
+        final canBook = access.can(GymPermission.members);
         return AppPage(
           title: 'Classes',
           body: AsyncValueView<List<GymClass>>(
@@ -50,22 +64,34 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
             data: (classes) {
               final today = BhutanTime.today();
               final active = classes.where((c) => c.isActive).toList();
-              final onDay = active.where((c) => c.weekday == _day.weekday).toList()
+              // The next two weeks' days that have a class; the first is open to start with.
+              final classDays = [
+                for (var i = 0; i < 14; i++) DateTime(today.year, today.month, today.day + i),
+              ].where((d) => active.any((c) => c.weekday == d.weekday)).toList();
+              final day = classDays.contains(_picked) ? _picked! : (classDays.firstOrNull ?? today);
+              final places = ref.watch(gymClassPlacesProvider(id)).valueOrNull ?? const <ClassPlaces>[];
+              int bookedOn(DateTime d) => places.where((p) => p.date == d).fold(0, (n, p) => n + p.booked);
+              final onDay = active.where((c) => c.weekday == day.weekday).toList()
                 ..sort((a, b) => (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute));
-              final bookings =
-                  ref.watch(gymClassBookingsProvider((venueId: id, date: _day))).valueOrNull ?? const <ClassBooking>[];
+              final bookings = ref.watch(gymClassBookingsProvider((venueId: id, date: day))).valueOrNull ?? const <ClassBooking>[];
+              // Each view's count: places booked to come, people to date, classes a week.
+              final toCome = places.where((p) => !p.date.isBefore(today)).fold(0, (n, p) => n + p.booked);
+              final people = ref.watch(gymClassRegistrationsProvider(id)).valueOrNull?.people;
               return RefreshIndicator(
                 onRefresh: () async {
                   ref.invalidate(gymClassesProvider(id));
                   ref.invalidate(gymClassBookingsProvider);
+                  ref.invalidate(gymClassPlacesProvider(id));
+                  ref.invalidate(gymClassRegistrationsProvider(id));
                 },
                 child: ListView(
                   padding: pagePadding(context, bottom: 40),
                   children: [
                     PageActions(
                       text: active.isEmpty
-                          ? 'Your weekly timetable: yoga, zumba and the rest. Members book their place in the app.'
-                          : '${active.length} ${active.length == 1 ? 'class' : 'classes'} a week. Members book their place in the app.',
+                          ? 'Set up your weekly classes. Members, and anyone with a Health Pro account, book them in the app.'
+                          : '${active.length} ${active.length == 1 ? 'class' : 'classes'} a week. Members, and anyone with a '
+                              'Health Pro account, book them in the app.',
                       children: [
                         if (canEdit)
                           FilledButton.icon(
@@ -81,44 +107,67 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
                         icon: Icons.event_note_outlined,
                         title: 'No classes yet',
                         message: canEdit
-                            ? 'Add the gym\'s classes: the day, time, length and how many places. Members then book them on My gym.'
+                            ? 'Add the gym\'s classes (yoga, zumba...): the day, time, length and how many places. Members book them on My gym, '
+                                'and anyone on Health Pro on your public page.'
                             : 'The owner adds the gym\'s classes here.',
                         actionLabel: canEdit ? 'Add a class' : null,
                         onAction: canEdit ? _edit : null,
                       )
                     else ...[
-                      const SectionTitle('Bookings'),
-                      SizedBox(
-                        height: 40,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          children: [
-                            for (var i = 0; i < 14; i++)
-                              () {
-                                final d = DateTime(today.year, today.month, today.day + i);
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: ChoiceChip(
-                                    label: Text(classDayLabel(d, today)),
-                                    selected: _day == d,
-                                    onSelected: (_) => setState(() => _day = d),
-                                  ),
-                                );
-                              }(),
-                          ],
-                        ),
+                      ViewTabs<_View>(
+                        selected: _view,
+                        onChanged: (v) => setState(() => _view = v),
+                        tabs: [
+                          ViewTab(value: _View.bookings, label: 'Bookings', icon: Icons.event_available_rounded, count: toCome),
+                          ViewTab(value: _View.registered, label: 'Registered', icon: Icons.groups_rounded, count: people),
+                          ViewTab(value: _View.timetable, label: 'Timetable', icon: Icons.calendar_view_week_rounded, count: active.length),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      if (onDay.isEmpty)
-                        SectionCard(
-                          padding: const EdgeInsets.all(16),
-                          child: Text('No classes on ${classDayLabel(_day, today).toLowerCase()}.',
-                              style: TextStyle(color: context.brand.muted)),
-                        )
-                      else
-                        _SessionsTable(venueId: id, day: _day, classes: onDay, bookings: bookings),
-                      const SectionTitle('Weekly timetable'),
-                      _TimetableTable(classes: classes, onEdit: canEdit ? _edit : null),
+                      const SizedBox(height: 18),
+                      ...switch (_view) {
+                        _View.bookings => [
+                            if (classDays.isEmpty)
+                              SectionCard(
+                                padding: const EdgeInsets.all(16),
+                                child: Text('No classes on the timetable in the next two weeks.',
+                                    style: TextStyle(color: context.brand.muted)),
+                              )
+                            else ...[
+                              SizedBox(
+                                height: 40,
+                                child: ListView(
+                                  scrollDirection: Axis.horizontal,
+                                  children: [
+                                    for (final d in classDays)
+                                      Padding(
+                                        padding: const EdgeInsets.only(right: 8),
+                                        child: ChoiceChip(
+                                          label: Text(bookedOn(d) == 0
+                                              ? classDayLabel(d, today)
+                                              : '${classDayLabel(d, today)} · ${bookedOn(d)} booked'),
+                                          selected: d == day,
+                                          onSelected: (_) => setState(() => _picked = d),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              _SessionsTable(
+                                  venueId: id, day: day, classes: onDay, bookings: bookings, canRegister: canRegister, canBook: canBook),
+                            ],
+                          ],
+                        _View.registered => [_RegisteredToDate(venueId: id, canRegister: canRegister)],
+                        _View.timetable => [
+                            _TimetableTable(classes: classes, onEdit: canEdit ? _edit : null),
+                            if (!canEdit)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 10, left: 2),
+                                child: Text('Whoever sets the gym\'s packages changes the timetable.',
+                                    style: TextStyle(color: context.brand.muted, fontSize: 12.5)),
+                              ),
+                          ],
+                      },
                     ],
                   ],
                 ),
@@ -131,15 +180,25 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
   }
 }
 
-/// The chosen day's classes as a table. Open shows who's booked (each can be
-/// taken out) and books a member in.
+/// The chosen day's classes as a table, with how many of those booked are
+/// members and how many non-members. Open shows who's booked (each can be
+/// taken out, and a non-member registered) and books a member in.
 class _SessionsTable extends StatelessWidget {
   final String venueId;
   final DateTime day;
   final List<GymClass> classes;
   final List<ClassBooking> bookings;
+  final bool canRegister;
+  final bool canBook;
 
-  const _SessionsTable({required this.venueId, required this.day, required this.classes, required this.bookings});
+  const _SessionsTable({
+    required this.venueId,
+    required this.day,
+    required this.classes,
+    required this.bookings,
+    this.canRegister = false,
+    this.canBook = false,
+  });
 
   void _open(BuildContext context, GymClass c) => showRowDetails(
         context,
@@ -152,6 +211,8 @@ class _SessionsTable extends StatelessWidget {
             venueId: venueId,
             session: ClassSession(gymClass: c, date: day, booked: mine.length),
             bookings: mine,
+            canRegister: canRegister,
+            canBook: canBook,
           );
         }),
       );
@@ -160,6 +221,7 @@ class _SessionsTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final brand = context.brand;
     int booked(GymClass c) => bookings.where((b) => b.classId == c.id).length;
+    int nonMembers(GymClass c) => bookings.where((b) => b.classId == c.id && b.isNonMember).length;
     Widget places(GymClass c) => StatusChip(
           label: '${booked(c)} / ${c.capacity}',
           color: booked(c) >= c.capacity ? brand.warning : brand.success,
@@ -181,14 +243,10 @@ class _SessionsTable extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
-              Text(
-                  [
-                    if (!DataGrid.shows(context, 'time')) c.span,
-                    if (c.trainerName != null && !DataGrid.shows(context, 'trainer')) 'with ${c.trainerName}',
-                  ].join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: brand.muted, fontSize: 13)),
+              _CellNote([
+                if (!DataGrid.shows(context, 'time')) c.span,
+                if (c.trainerName != null && !DataGrid.shows(context, 'trainer')) 'with ${c.trainerName}',
+              ]),
               if (!DataGrid.shows(context, 'booked')) Padding(padding: const EdgeInsets.only(top: 4), child: places(c)),
             ],
           ),
@@ -218,10 +276,271 @@ class _SessionsTable extends StatelessWidget {
           sortBy: booked,
           cell: (context, c) => places(c),
         ),
+        GridColumn(
+          key: 'members',
+          label: 'Members',
+          width: 100,
+          showFrom: 720,
+          sortBy: (c) => booked(c) - nonMembers(c),
+          cell: (context, c) => Text('${booked(c) - nonMembers(c)}', style: TextStyle(color: brand.body)),
+        ),
+        GridColumn(
+          key: 'non-members',
+          label: 'Non-members',
+          width: 140,
+          showFrom: 820,
+          sortBy: nonMembers,
+          cell: (context, c) => Text('${nonMembers(c)}', style: TextStyle(color: nonMembers(c) == 0 ? brand.muted : brand.body)),
+        ),
         GridColumn.actions(cell: (context, c) => GridOpenButton(onPressed: () => _open(context, c))),
       ],
     );
   }
+}
+
+/// How many have registered for the gym's classes to date: the totals at a
+/// glance, each class's, and everyone who has booked (members or not), found
+/// by name, phone, email or member code; a non-member can be registered from
+/// there.
+class _RegisteredToDate extends ConsumerStatefulWidget {
+  final String venueId;
+  final bool canRegister;
+
+  const _RegisteredToDate({required this.venueId, this.canRegister = false});
+
+  @override
+  ConsumerState<_RegisteredToDate> createState() => _RegisteredToDateState();
+}
+
+class _RegisteredToDateState extends ConsumerState<_RegisteredToDate> {
+  String _search = '';
+
+  /// Everyone (null), members (true) or non-members (false).
+  bool? _members;
+
+  bool _matches(ClassRegistrant p) {
+    if (_members != null && p.isMember != _members) return false;
+    if (_search.isEmpty) return true;
+    final digits = _search.replaceAll(RegExp(r'\D'), '');
+    return p.name.toLowerCase().contains(_search) ||
+        (p.memberCode?.toLowerCase().contains(_search) ?? false) ||
+        (p.email?.toLowerCase().contains(_search) ?? false) ||
+        (digits.length >= 3 && (p.phone ?? '').replaceAll(RegExp(r'\D'), '').contains(digits));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final venueId = widget.venueId;
+    return AsyncValueView<ClassRegistrations>(
+      value: ref.watch(gymClassRegistrationsProvider(venueId)),
+      onRetry: () => ref.invalidate(gymClassRegistrationsProvider(venueId)),
+      data: (r) {
+        if (r.bookings == 0) {
+          return const EmptyState(
+            icon: Icons.groups_outlined,
+            title: 'No bookings yet',
+            message: 'Everyone who books a class shows here: members of the gym, and anyone else on Health Pro.',
+          );
+        }
+        final people = r.registrants.where(_matches).toList();
+        Widget filter(String label, bool? value, int count) => ChoiceChip(
+              label: Text('$label ($count)'),
+              selected: _members == value,
+              onSelected: (_) => setState(() => _members = value),
+            );
+        final search = TextField(
+          decoration: const InputDecoration(
+            prefixIcon: Icon(Icons.search_rounded, size: 20),
+            hintText: 'Search name, phone, email or code',
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(vertical: 10),
+          ),
+          onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
+        );
+        final filters = Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            filter('Everyone', null, r.people),
+            filter('Members', true, r.members),
+            filter('Non-members', false, r.nonMembers),
+          ],
+        );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ServiceStats(stats: [
+              ServiceStat(label: 'Places booked', value: r.bookings, color: BrandColors.blue),
+              ServiceStat(label: 'People', value: r.people, color: BrandColors.navy),
+              ServiceStat(label: 'Members', value: r.members, color: BrandColors.green),
+              ServiceStat(label: 'Non-members', value: r.nonMembers, color: brand.highlight),
+            ]),
+            Padding(
+              padding: const EdgeInsets.only(top: 10, left: 2),
+              child: Text(
+                [
+                  'Since the first booking',
+                  if (r.upcoming > 0) '${r.upcoming} still to come',
+                  if (r.cancelled > 0) '${r.cancelled} cancelled, not counted',
+                ].join(' · '),
+                style: TextStyle(color: brand.muted, fontSize: 12.5),
+              ),
+            ),
+            const SectionTitle('By class'),
+            DataGrid<ClassTally>(
+              rows: r.classes,
+              noun: 'classes',
+              columns: [
+                GridColumn(
+                  key: 'class',
+                  label: 'Class',
+                  flex: 4,
+                  sortBy: (c) => c.name.toLowerCase(),
+                  cell: (context, c) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
+                      _CellNote([c.when, if (!c.isActive) 'off the timetable']),
+                      if (!DataGrid.shows(context, 'members'))
+                        _CellNote(['${c.members} ${c.members == 1 ? 'member' : 'members'}',
+                          '${c.nonMembers} ${c.nonMembers == 1 ? 'non-member' : 'non-members'}']),
+                    ],
+                  ),
+                ),
+                GridColumn(
+                  key: 'booked',
+                  label: 'Booked',
+                  width: 90,
+                  sortBy: (c) => c.bookings,
+                  cell: (context, c) => Text('${c.bookings}', style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
+                ),
+                GridColumn(
+                  key: 'members',
+                  label: 'Members',
+                  width: 100,
+                  showFrom: 640,
+                  sortBy: (c) => c.members,
+                  cell: (context, c) => Text('${c.members}', style: TextStyle(color: brand.body)),
+                ),
+                GridColumn(
+                  key: 'non-members',
+                  label: 'Non-members',
+                  width: 140,
+                  showFrom: 640,
+                  sortBy: (c) => c.nonMembers,
+                  cell: (context, c) => Text('${c.nonMembers}', style: TextStyle(color: c.nonMembers == 0 ? brand.muted : brand.body)),
+                ),
+                GridColumn(
+                  key: 'upcoming',
+                  label: 'To come',
+                  width: 100,
+                  showFrom: 820,
+                  sortBy: (c) => c.upcoming,
+                  cell: (context, c) => Text('${c.upcoming}', style: TextStyle(color: c.upcoming == 0 ? brand.muted : brand.body)),
+                ),
+                GridColumn(
+                  key: 'last',
+                  label: 'Last booked for',
+                  width: 150,
+                  showFrom: 980,
+                  sortBy: (c) => c.lastDate?.millisecondsSinceEpoch ?? 0,
+                  cell: (context, c) => Text(c.lastDate == null ? '—' : formatShortDate(c.lastDate!), style: TextStyle(color: brand.body)),
+                ),
+              ],
+            ),
+            SectionTitle('People (${r.people})'),
+            LayoutBuilder(
+              builder: (context, constraints) => constraints.maxWidth < 640
+                  ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [search, const SizedBox(height: 10), filters])
+                  : Row(children: [SizedBox(width: 340, child: search), const SizedBox(width: 14), Expanded(child: filters)]),
+            ),
+            const SizedBox(height: 12),
+            DataGrid<ClassRegistrant>(
+              rows: people,
+              noun: 'people',
+              pageSizes: const [25, 50, 100],
+              columns: [
+                GridColumn(
+                  key: 'name',
+                  label: 'Name',
+                  flex: 4,
+                  sortBy: (p) => p.name.toLowerCase(),
+                  cell: (context, p) {
+                    final under = [
+                      if (p.memberCode != null) p.memberCode!,
+                      if (!DataGrid.shows(context, 'contact') && p.contact.isNotEmpty) p.contact,
+                    ].join(' · ');
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
+                        if (under.isNotEmpty)
+                          Text(under, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.muted, fontSize: 13)),
+                        if (!DataGrid.shows(context, 'member'))
+                          Padding(padding: const EdgeInsets.only(top: 4), child: _memberChip(context, p.isMember)),
+                      ],
+                    );
+                  },
+                ),
+                GridColumn(
+                  key: 'member',
+                  label: 'Status',
+                  width: 170,
+                  showFrom: 560,
+                  sortBy: (p) => p.isMember ? 0 : 1,
+                  cell: (context, p) => _memberChip(context, p.isMember),
+                ),
+                GridColumn(
+                  key: 'contact',
+                  label: 'Contact',
+                  flex: 3,
+                  showFrom: 900,
+                  sortBy: (p) => p.contact.toLowerCase(),
+                  cell: (context, p) => Text(p.contact.isEmpty ? '—' : p.contact,
+                      maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: p.contact.isEmpty ? brand.muted : brand.body)),
+                ),
+                GridColumn(
+                  key: 'times',
+                  label: 'Bookings',
+                  width: 100,
+                  showFrom: 700,
+                  sortBy: (p) => p.bookings,
+                  cell: (context, p) => Text('${p.bookings}', style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
+                ),
+                GridColumn(
+                  key: 'latest',
+                  label: 'Last class',
+                  flex: 3,
+                  showFrom: 1080,
+                  sortBy: (p) => p.lastDate.millisecondsSinceEpoch,
+                  cell: (context, p) => Text('${p.lastClass ?? 'Class'} · ${formatShortDate(p.lastDate)}',
+                      maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.body)),
+                ),
+                if (widget.canRegister && r.nonMembers > 0)
+                  GridColumn.actions(
+                    width: 140,
+                    cell: (context, p) => p.isMember
+                        ? const SizedBox.shrink()
+                        : GridOpenButton(
+                            label: 'Register',
+                            icon: Icons.person_add_alt_1_outlined,
+                            onPressed: () => context.go(GymRoutes.registerEnquiryFor(venueId, name: p.name, phone: p.phone ?? '')),
+                          ),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  static Widget _memberChip(BuildContext context, bool member) => member
+      ? StatusChip(label: 'Member', color: context.brand.success)
+      : StatusChip(label: 'Non-member', color: context.brand.highlight, icon: Icons.public_rounded);
 }
 
 /// Every class in the week as a table, Monday first; Open changes one (for
@@ -239,6 +558,9 @@ class _TimetableTable extends StatelessWidget {
     Widget status(GymClass c) => c.isActive
         ? StatusChip(label: 'On the timetable', color: brand.success)
         : StatusChip(label: 'Not on the timetable', color: brand.muted);
+    Widget who(GymClass c) => c.openToAll
+        ? StatusChip(label: 'Everyone', color: brand.highlight, icon: Icons.public_rounded)
+        : StatusChip(label: 'Members only', color: brand.muted, icon: Icons.lock_outline_rounded);
     return DataGrid<GymClass>(
       rows: rows,
       noun: 'classes',
@@ -257,15 +579,12 @@ class _TimetableTable extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
-              Text(
-                  [
-                    if (!DataGrid.shows(context, 'day')) '${weekdayNames[c.weekday - 1]} ${c.time}',
-                    if (c.trainerName != null && !DataGrid.shows(context, 'trainer')) 'with ${c.trainerName}',
-                    if (!DataGrid.shows(context, 'places')) '${c.durationMinutes} min · ${c.capacity} places',
-                  ].join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: brand.muted, fontSize: 13)),
+              _CellNote([
+                if (!DataGrid.shows(context, 'day')) '${weekdayNames[c.weekday - 1]} ${c.time}',
+                if (c.trainerName != null && !DataGrid.shows(context, 'trainer')) 'with ${c.trainerName}',
+                if (!DataGrid.shows(context, 'places')) '${c.durationMinutes} min · ${c.capacity} places',
+                if (!DataGrid.shows(context, 'who')) c.openToAll ? 'everyone' : 'members only',
+              ]),
               if (!DataGrid.shows(context, 'status') && !c.isActive)
                 Padding(padding: const EdgeInsets.only(top: 4), child: status(c)),
             ],
@@ -298,6 +617,14 @@ class _TimetableTable extends StatelessWidget {
           cell: (context, c) => Text('${c.durationMinutes} min · ${c.capacity}', style: TextStyle(color: brand.body)),
         ),
         GridColumn(
+          key: 'who',
+          label: 'Who can book',
+          width: 160,
+          showFrom: 820,
+          sortBy: (c) => c.openToAll ? 0 : 1,
+          cell: (context, c) => who(c),
+        ),
+        GridColumn(
           key: 'status',
           label: 'Status',
           width: 190,
@@ -312,17 +639,29 @@ class _TimetableTable extends StatelessWidget {
 }
 
 /// One class on the chosen day, in the dialog Open shows: places taken,
-/// who's booked (each can be taken out), and booking a member in.
+/// who's booked, each a member of the gym or a non-member on Health Pro with
+/// how to reach them (each can be taken out, a non-member registered as a
+/// member),
+/// and booking a member in.
 class _SessionCard extends ConsumerWidget {
   final String venueId;
   final ClassSession session;
   final List<ClassBooking> bookings;
+  final bool canRegister;
+  final bool canBook;
 
-  const _SessionCard({required this.venueId, required this.session, required this.bookings});
+  const _SessionCard({
+    required this.venueId,
+    required this.session,
+    required this.bookings,
+    this.canRegister = false,
+    this.canBook = false,
+  });
 
   void _refresh(WidgetRef ref) {
     ref.invalidate(gymClassBookingsProvider((venueId: venueId, date: session.date)));
     ref.invalidate(gymClassPlacesProvider(venueId));
+    ref.invalidate(gymClassRegistrationsProvider(venueId));
   }
 
   Future<void> _remove(BuildContext context, WidgetRef ref, ClassBooking b) async {
@@ -336,6 +675,13 @@ class _SessionCard extends ConsumerWidget {
     if (!sure || !context.mounted) return;
     final ok = await runAction(context, () => ref.read(gymClassRepositoryProvider).cancel(b.id));
     if (ok) _refresh(ref);
+  }
+
+  /// A non-member into the gym's register, filled in with their name and phone.
+  void _register(BuildContext context, ClassBooking b) {
+    final router = GoRouter.of(context);
+    Navigator.of(context).pop();
+    router.go(GymRoutes.registerEnquiryFor(venueId, name: b.memberName, phone: b.memberPhone ?? ''));
   }
 
   Future<void> _book(BuildContext context, WidgetRef ref) async {
@@ -357,6 +703,7 @@ class _SessionCard extends ConsumerWidget {
     final brand = context.brand;
     final c = session.gymClass;
     final ended = !c.startOn(session.date).add(Duration(minutes: c.durationMinutes)).isAfter(BhutanTime.now());
+    final nonMembers = bookings.where((b) => b.isNonMember).length;
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -369,7 +716,13 @@ class _SessionCard extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(c.name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
-                    Text([c.span, if (c.trainerName != null) 'with ${c.trainerName}'].join(' · '),
+                    Text(
+                        [
+                          c.span,
+                          if (c.trainerName != null) 'with ${c.trainerName}',
+                          if (bookings.isNotEmpty) '${bookings.length - nonMembers} ${bookings.length - nonMembers == 1 ? 'member' : 'members'}',
+                          if (nonMembers > 0) '$nonMembers ${nonMembers == 1 ? 'non-member' : 'non-members'}',
+                        ].join(' · '),
                         style: TextStyle(color: brand.muted, fontSize: 12.5)),
                   ],
                 ),
@@ -389,9 +742,30 @@ class _SessionCard extends ConsumerWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text('${b.memberName}${b.memberCode == null ? '' : ' · ${b.memberCode}'}',
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${b.memberName}${b.memberCode == null ? '' : ' · ${b.memberCode}'}',
+                              maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w600, color: brand.ink)),
+                          if (b.contact.isNotEmpty || b.bookedByDesk)
+                            Text([if (b.contact.isNotEmpty) b.contact, if (b.bookedByDesk) 'booked by the desk'].join(' · '),
+                                maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.muted, fontSize: 12.5)),
+                        ],
+                      ),
+                    ),
                   ),
+                  const SizedBox(width: 8),
+                  b.isMember
+                      ? StatusChip(label: 'Member', color: brand.success)
+                      : StatusChip(label: 'Non-member', color: brand.highlight, icon: Icons.public_rounded),
+                  if (b.isNonMember && canRegister)
+                    IconButton(
+                      tooltip: 'Register ${b.memberName} as a member',
+                      onPressed: () => _register(context, b),
+                      icon: Icon(Icons.person_add_alt_1_outlined, size: 18, color: brand.muted),
+                    ),
                   IconButton(
                     tooltip: 'Take ${b.memberName} out',
                     onPressed: () => _remove(context, ref, b),
@@ -399,7 +773,7 @@ class _SessionCard extends ConsumerWidget {
                   ),
                 ],
               ),
-          if (!ended && !session.isFull) ...[
+          if (canBook && !ended && !session.isFull) ...[
             const SizedBox(height: 6),
             Align(
               alignment: Alignment.centerLeft,
@@ -501,6 +875,7 @@ class _ClassDialogState extends ConsumerState<_ClassDialog> {
   late TimeOfDay _time = TimeOfDay(hour: _old?.hour ?? 7, minute: _old?.minute ?? 0);
   late int _minutes = _old?.durationMinutes ?? 60;
   late bool _active = _old?.isActive ?? true;
+  late bool _open = _old?.openToAll ?? true;
   bool _saving = false;
 
   static const _lengths = [30, 45, 60, 75, 90, 120];
@@ -535,6 +910,7 @@ class _ClassDialogState extends ConsumerState<_ClassDialog> {
       durationMinutes: _minutes,
       capacity: int.parse(_capacity.text.trim()),
       isActive: _active,
+      openToAll: _open,
     );
     final ok = await runAction(context, () async {
       await ref.read(gymClassRepositoryProvider).saveClass(widget.venueId, details, classId: _old?.id);
@@ -569,7 +945,7 @@ class _ClassDialogState extends ConsumerState<_ClassDialog> {
                   maxLength: 60,
                   textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(labelText: 'Name *', hintText: 'Yoga, Zumba, HIIT...'),
-                  validator: (v) => (v ?? '').trim().length < 2 ? 'Give the class a name' : null,
+                  validator: (v) => (v ?? '').trim().length < 2 ? 'Give it a name' : null,
                 ),
                 TextFormField(
                   controller: _trainer,
@@ -624,6 +1000,15 @@ class _ClassDialogState extends ConsumerState<_ClassDialog> {
                   maxLines: 3,
                   decoration: const InputDecoration(labelText: 'About it', hintText: 'For beginners; bring a mat...'),
                 ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _open,
+                  onChanged: (v) => setState(() => _open = v),
+                  title: const Text('Open to everyone on Health Pro'),
+                  subtitle: Text(_open
+                      ? 'Anyone with a Health Pro account can book it, member of the gym or not'
+                      : 'Only members with a package can book it. Places booked already stay'),
+                ),
                 if (_old != null)
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
@@ -642,5 +1027,20 @@ class _ClassDialogState extends ConsumerState<_ClassDialog> {
         FilledButton(onPressed: _saving ? null : _save, child: Text(_old == null ? 'Add' : 'Save')),
       ],
     );
+  }
+}
+
+/// The quiet second line of a table's first cell: [parts] joined, nothing
+/// when there are none (the other columns show them).
+class _CellNote extends StatelessWidget {
+  final List<String> parts;
+
+  const _CellNote(this.parts);
+
+  @override
+  Widget build(BuildContext context) {
+    if (parts.isEmpty) return const SizedBox.shrink();
+    return Text(parts.join(' · '),
+        maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: context.brand.muted, fontSize: 13));
   }
 }

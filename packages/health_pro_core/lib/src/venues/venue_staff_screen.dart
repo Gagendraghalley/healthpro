@@ -234,13 +234,9 @@ class _StaffTable extends StatelessWidget {
           cell: (context, s) => Text(s.email ?? '—',
               maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: s.email == null ? brand.muted : brand.body)),
         ),
-        GridColumn(
-          key: 'manage',
-          label: '',
-          width: 48,
-          alignEnd: true,
+        GridColumn.actions(
           cell: (context, s) => canChange(s)
-              ? Tooltip(message: 'Change role or remove', child: Icon(Icons.more_horiz_rounded, color: brand.muted))
+              ? Tooltip(message: 'Change role or remove', child: GridOpenButton(onPressed: () => onChange(s)))
               : const SizedBox.shrink(),
         ),
       ],

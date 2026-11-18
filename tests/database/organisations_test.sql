@@ -139,7 +139,7 @@ select t.eq((select count(*) from public.organisations)::int, 0, '...and no orga
 -- R manages one branch of two: 'venue.roles' there isn't enough.
 select t.as_user('00000000-0000-0000-0000-000000000400');
 select public.set_organisation_role(:'chain', :'manager', true,
-  array['venue.edit', 'venue.income', 'venue.roles', 'gym.members', 'gym.check_in', 'gym.plans', 'gym.register']);
+  array['venue.edit', 'venue.income', 'venue.roles', 'gym.members', 'gym.check_in', 'gym.plans', 'gym.register', 'gym.classes']);
 select t.as_user('00000000-0000-0000-0000-000000000405');
 select t.eq((public.organisation_roles(:'chain') ->> 'can_manage')::boolean, false,
             'roles at one branch of two isn''t enough to change the organisation''s');

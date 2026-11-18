@@ -641,13 +641,7 @@ class _MyVenuesTable extends ConsumerWidget {
           sortBy: (v) => v.venue.verificationStatus,
           cell: (context, v) => VerificationChip(status: v.venue.verificationStatus),
         ),
-        GridColumn(
-          key: 'open',
-          label: '',
-          width: 40,
-          alignEnd: true,
-          cell: (context, v) => Icon(Icons.chevron_right_rounded, color: brand.muted),
-        ),
+        GridColumn.actions(cell: (context, v) => GridOpenButton(onPressed: () => context.push(venueHomeRoute(ref.read(enabledModulesProvider).valueOrNull ?? const [], v.venue)))),
       ],
     );
   }

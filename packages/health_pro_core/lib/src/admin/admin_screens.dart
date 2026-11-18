@@ -241,13 +241,7 @@ class _PendingVenuesTable extends ConsumerWidget {
             ],
           ),
         ),
-        GridColumn(
-          key: 'open',
-          label: '',
-          width: 40,
-          alignEnd: true,
-          cell: (context, v) => Icon(Icons.chevron_right_rounded, color: brand.muted),
-        ),
+        GridColumn.actions(cell: (context, v) => GridOpenButton(onPressed: () => showAppDialog<void>(context: context, builder: (_) => _ReviewVenueDialog(venue: v)))),
       ],
     );
   }

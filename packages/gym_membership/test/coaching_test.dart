@@ -206,17 +206,69 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    test('the desk\'s list: a registered member, or one whose membership is on their account', () {
-      final registered = ClassBooking.fromJson({
-        'id': 'b1', 'class_id': 'yoga', 'class_date': '2026-11-21', 'gym_member_id': 'm1',
-        'member': {'full_name': 'Mindu Dema', 'code': 'ABC234', 'phone': '+97517700001'}, 'account': null,
+    test('the desk\'s list: a member of the gym, or a non-member on Health Pro', () {
+      final member = ClassBooking.fromJson({
+        'id': 'b1', 'class_id': 'yoga', 'class_date': '2026-11-21', 'gym_member_id': 'm1', 'user_id': null,
+        'full_name': 'Mindu Dema', 'member_code': 'ABC234', 'phone': '+97517700001', 'email': null,
+        'is_member': true, 'booked_by_desk': true,
       });
-      final account = ClassBooking.fromJson({
+      final nonMember = ClassBooking.fromJson({
         'id': 'b2', 'class_id': 'yoga', 'class_date': '2026-11-21', 'gym_member_id': null, 'user_id': 'u1',
-        'member': null, 'account': {'full_name': 'Lhamo Legacy', 'phone': null, 'member_code': 'XYZ789'},
+        'full_name': 'Xo Out', 'member_code': null, 'phone': null, 'email': 'xo@x.bt',
+        'is_member': false, 'booked_by_desk': false,
       });
-      expect((registered.memberName, registered.memberCode, registered.gymMemberId), ('Mindu Dema', 'ABC234', 'm1'));
-      expect((account.memberName, account.memberCode, account.gymMemberId), ('Lhamo Legacy', 'XYZ789', null));
+      expect((member.memberName, member.memberCode, member.gymMemberId, member.isNonMember, member.bookedByDesk),
+          ('Mindu Dema', 'ABC234', 'm1', false, true));
+      expect((nonMember.memberName, nonMember.userId, nonMember.isNonMember, nonMember.contact), ('Xo Out', 'u1', true, 'xo@x.bt'));
+      expect(member.contact, '+97517700001');
+    });
+
+    test('a class is open to everyone unless the gym says not, and the editor sends it', () {
+      final base = {'id': 'y', 'venue_id': 'g1', 'name': 'Yoga', 'weekday': 1, 'starts_at': '07:00:00', 'duration_minutes': 60, 'capacity': 5};
+      expect(GymClass.fromJson(base).openToAll, isTrue);
+      expect(GymClass.fromJson({...base, 'open_to_all': false}).openToAll, isFalse);
+      expect(classDetails(name: 'Yoga', weekday: 1, hour: 7, minute: 0, durationMinutes: 60, capacity: 5, openToAll: false)['open_to_all'],
+          isFalse);
+    });
+
+    testWidgets('on the gym\'s page: anyone books an open class; members-only ones say so', (tester) async {
+      await pump(tester, const ClassWeek(venueId: 'g1', signedIn: false, member: false, explain: true), [
+        gymClassesProvider.overrideWith((ref, id) async => [
+              yoga(),
+              GymClass(
+                  id: 'hiit', venueId: 'g1', name: 'HIIT', weekday: day(1).weekday, hour: 9, minute: 0, capacity: 5, openToAll: false),
+            ]),
+        gymClassPlacesProvider.overrideWith((ref, id) async => const []),
+      ]);
+      expect(find.text('Book'), findsOneWidget, reason: 'the open class');
+      expect(find.text('Members only'), findsOneWidget);
+      expect(find.textContaining('members only'), findsOneWidget, reason: 'in the members-only class\'s line');
+      expect(find.textContaining('Anyone with a Health Pro account can book'), findsOneWidget);
+      expect(find.textContaining('Sign in or create a free account'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    test('My dashboard: a booked class, and when it ends', () {
+      final b = MyClassBooking.fromJson({
+        'id': 'b1', 'class_id': 'yoga', 'venue_id': 'g1', 'venue_name': 'Coach Gym', 'class_date': '2026-11-21',
+        'name': 'Yoga', 'trainer_name': null, 'starts_at': '07:00:00', 'duration_minutes': 45,
+      });
+      expect((b.name, b.venueName, b.time), ('Yoga', 'Coach Gym', '7:00 AM'));
+      expect(b.endsAt, DateTime(2026, 11, 21, 7, 45));
+      expect(MyClassBookingsList.ahead([b], DateTime(2026, 11, 21, 7, 44)), [b]);
+      expect(MyClassBookingsList.ahead([b], DateTime(2026, 11, 21, 7, 45)), isEmpty, reason: 'over: off the list');
+    });
+
+    testWidgets('My dashboard: the classes booked at any gym, each with Cancel', (tester) async {
+      MyClassBooking booked(String id, String gym, int inDays) => MyClassBooking(
+          id: id, classId: id, venueId: gym, venueName: gym == 'g1' ? 'Coach Gym' : 'Paro Fitness', date: day(inDays),
+          name: id == 'b1' ? 'Yoga' : 'Zumba', hour: 18, minute: 0);
+      await pump(tester, MyClassBookingsList(bookings: [booked('b1', 'g1', 1), booked('b2', 'g2', 2)]), const []);
+      expect(find.text('Tomorrow'), findsOneWidget);
+      expect(find.text('Yoga'), findsOneWidget);
+      expect(find.textContaining('Paro Fitness'), findsOneWidget);
+      expect(find.text('Cancel'), findsNWidgets(2));
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('a gym without classes shows nothing on My gym', (tester) async {
@@ -224,23 +276,74 @@ void main() {
       expect(find.text('Classes'), findsNothing);
     });
 
-    testWidgets('the desk: the day\'s classes with who\'s booked, and the weekly timetable', (tester) async {
+    testWidgets('the desk: bookings by class day, who has registered to date, and the timetable', (tester) async {
       await show(tester, const ClassesScreen(venueId: 'g1'), with_: [
         ...overrides(),
         gymClassesProvider.overrideWith((ref, id) async => [yoga(weekday: day(0).weekday, hour: 23)]),
+        gymClassPlacesProvider.overrideWith((ref, id) async => [ClassPlaces(classId: 'yoga', date: day(0), booked: 2)]),
         gymClassBookingsProvider.overrideWith((ref, q) async => [
               ClassBooking(id: 'b1', classId: 'yoga', classDate: day(0), gymMemberId: 'm1', memberName: 'Mindu Dema', memberCode: 'ABC234'),
+              ClassBooking(
+                  id: 'b2', classId: 'yoga', classDate: day(0), userId: 'u1', memberName: 'Xo Out', memberEmail: 'xo@x.bt', isMember: false),
             ]),
+        gymClassRegistrationsProvider.overrideWith((ref, id) async => ClassRegistrations(
+              bookings: 14,
+              people: 2,
+              members: 1,
+              nonMembers: 1,
+              upcoming: 2,
+              classes: [
+                ClassTally(classId: 'yoga', name: 'Yoga', weekday: 1, hour: 7, minute: 0, bookings: 14, people: 2, members: 1, nonMembers: 1),
+              ],
+              registrants: [
+                ClassRegistrant(
+                    key: 'u:u1', name: 'Xo Out', isMember: false, email: 'xo@x.bt', bookings: 3, firstDate: day(-20), lastDate: day(0),
+                    lastClass: 'Yoga'),
+                ClassRegistrant(
+                    key: 'm:m1', name: 'Mindu Dema', memberCode: 'ABC234', phone: '+97517700001', bookings: 11, firstDate: day(-60),
+                    lastDate: day(0), lastClass: 'Yoga'),
+              ],
+            )),
       ]);
       await tester.pumpAndSettle();
       expect(find.text('New class'), findsOneWidget);
-      expect(find.text('1 / 2'), findsOneWidget, reason: 'places taken, in the day\'s table');
-      expect(find.text('Weekly timetable'), findsOneWidget);
+      // Bookings: only the days with a class, each with how many are booked.
+      expect(find.text('Today · 2 booked'), findsOneWidget);
+      expect(find.text('Tomorrow'), findsNothing, reason: 'no class tomorrow');
+      expect(find.text('2 / 2'), findsOneWidget, reason: 'places taken, in the day\'s table');
+      expect(find.text('1 class'), findsOneWidget, reason: 'the table\'s count, in the singular');
       // Who's booked: in the class's details, from Open.
       await tester.tap(find.text('Open').first);
       await tester.pumpAndSettle();
       expect(inDialog(find.text('Mindu Dema · ABC234')), findsOneWidget);
-      expect(inDialog(find.text('1 / 2')), findsOneWidget);
+      expect(inDialog(find.text('Member')), findsOneWidget);
+      expect(inDialog(find.text('Xo Out')), findsOneWidget);
+      expect(inDialog(find.text('Non-member')), findsOneWidget);
+      expect(inDialog(find.text('xo@x.bt')), findsOneWidget);
+      expect(inDialog(find.textContaining('1 member · 1 non-member')), findsOneWidget);
+      Navigator.of(tester.element(find.text('Mindu Dema · ABC234'))).pop();
+      await tester.pumpAndSettle();
+
+      // Registered to date: the totals, each class's, and everyone who has booked.
+      await tester.tap(find.text('Registered'));
+      await tester.pumpAndSettle();
+      expect(find.text('Places booked'), findsOneWidget);
+      expect(find.text('By class'), findsOneWidget);
+      expect(find.text('People (2)'), findsOneWidget);
+      expect(find.text('Register'), findsOneWidget, reason: 'the non-member, for whoever registers members');
+      await tester.tap(find.text('Non-members (1)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Mindu Dema'), findsNothing, reason: 'non-members only');
+      await tester.tap(find.text('Everyone (2)'));
+      await tester.enterText(find.byType(TextField), '17700001');
+      await tester.pumpAndSettle();
+      expect(find.text('Xo Out'), findsNothing, reason: 'found by phone');
+      expect(find.text('Mindu Dema'), findsOneWidget);
+
+      // The timetable: who can book each class.
+      await tester.tap(find.text('Timetable'));
+      await tester.pumpAndSettle();
+      expect(find.text('Everyone'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

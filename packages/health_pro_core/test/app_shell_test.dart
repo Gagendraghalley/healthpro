@@ -381,6 +381,25 @@ void main() {
       expect(rankHits(hits, 'PAY').map((h) => h.title), ['Payments & income', 'Payments to confirm']);
       expect(rankHits(hits, '   '), isEmpty);
     });
+
+    test('pages and shortcuts keep the 3D icons the menu gives them', () {
+      const nav = ServiceNav(
+        key: 'gym',
+        name: 'Gym',
+        icon: Icons.fitness_center,
+        color: BrandColors.green,
+        homeRoute: '/gym',
+        sections: [
+          NavSection(items: [NavDestination(label: 'Members', icon: Icons.groups, art: Art3D.person, route: '/gym/members')]),
+        ],
+        actions: [ServiceAction(label: 'Check in', icon: Icons.qr_code, art: Art3D.checkMark, route: '/gym/check-in')],
+      );
+      final hits = {for (final h in searchablePages(platformPages: true, services: [nav])) h.title: h.art};
+      expect(hits['Members'], Art3D.person);
+      expect(hits['Check in'], Art3D.checkMark);
+      expect(hits['Overview'], Art3D.house);
+      expect(hits['Notifications'], Art3D.bell);
+    });
   });
 
   test('a page is open at its route, under it, but not under what it excludes', () {

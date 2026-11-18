@@ -13,6 +13,7 @@ import '../router/core_routes.dart';
 import '../search/global_search.dart';
 import '../theme/brand.dart';
 import '../utils/launch.dart';
+import '../widgets/art3d.dart';
 import '../widgets/logo.dart';
 import '../widgets/motion.dart';
 import 'app_shell.dart';
@@ -203,22 +204,35 @@ ServiceNav? adminNav(PlatformAccess access, {int pending = 0}) {
     homeRoute: CoreRoutes.admin,
     sections: [
       NavSection(items: [
-        const NavDestination(label: 'Admin home', icon: Icons.home_work_outlined, route: CoreRoutes.admin, exact: true),
+        const NavDestination(
+            label: 'Admin home', icon: Icons.home_work_outlined, art: Art3D.officeBuilding, route: CoreRoutes.admin, exact: true),
         if (access.can(PlatformPermission.users))
-          const NavDestination(label: 'Users', icon: Icons.people_alt_outlined, route: CoreRoutes.adminUsers),
+          const NavDestination(label: 'Users', icon: Icons.people_alt_outlined, art: Art3D.person, route: CoreRoutes.adminUsers),
         if (access.can(PlatformPermission.roles))
-          const NavDestination(label: 'Roles & permissions', icon: Icons.verified_user_outlined, route: CoreRoutes.adminRoles),
+          const NavDestination(
+              label: 'Roles & permissions', icon: Icons.verified_user_outlined, art: Art3D.key, route: CoreRoutes.adminRoles),
         if (access.can(PlatformPermission.organisations))
-          const NavDestination(label: 'Organisations', icon: Icons.apartment_rounded, route: CoreRoutes.adminOrganisations),
+          const NavDestination(
+              label: 'Organisations',
+              icon: Icons.apartment_rounded,
+              art: Art3D.classicalBuilding,
+              route: CoreRoutes.adminOrganisations),
         if (access.can(PlatformPermission.venuesVerify))
           NavDestination(
-              label: 'Venues to verify', icon: Icons.fact_check_outlined, route: CoreRoutes.adminVenues, badge: pending),
+              label: 'Venues to verify',
+              icon: Icons.fact_check_outlined,
+              art: Art3D.magnifier,
+              route: CoreRoutes.adminVenues,
+              badge: pending),
         if (access.can(PlatformPermission.masters))
-          const NavDestination(label: 'Master data', icon: Icons.account_tree_outlined, route: CoreRoutes.adminMasters),
+          const NavDestination(
+              label: 'Master data', icon: Icons.account_tree_outlined, art: Art3D.cardFileBox, route: CoreRoutes.adminMasters),
         if (access.can(PlatformPermission.modules))
-          const NavDestination(label: 'Services on/off', icon: Icons.toggle_on_outlined, route: CoreRoutes.adminModules),
+          const NavDestination(
+              label: 'Services on/off', icon: Icons.toggle_on_outlined, art: Art3D.plug, route: CoreRoutes.adminModules),
         if (access.can(PlatformPermission.errors))
-          const NavDestination(label: 'App errors', icon: Icons.bug_report_outlined, route: CoreRoutes.adminErrors),
+          const NavDestination(
+              label: 'App errors', icon: Icons.bug_report_outlined, art: Art3D.ladybird, route: CoreRoutes.adminErrors),
       ]),
     ],
   );
@@ -277,8 +291,7 @@ class SideInk {
   Color get buttonIcon => _white(LightColors.muted, 0.85);
 
   /// Rules between groups.
-  Color get rule => _white(LightColors.border, 0.08);
-  Color get foldedRule => _white(LightColors.border, 0.12);
+  Color get rule => _white(LightColors.border, 0.08);  Color get foldedRule => _white(LightColors.border, 0.12);
 }
 
 /// The menu itself: the logo, the platform's pages, each service's section,
@@ -400,12 +413,14 @@ class _PlatformSidebarState extends ConsumerState<PlatformSidebar> {
                           if (widget.platformPages) ...[
                             SideNavTile(
                               icon: Icons.space_dashboard_rounded,
+                              art: Art3D.house,
                               label: 'Overview',
                               selected: location == CoreRoutes.home,
                               onTap: () => _open(CoreRoutes.home),
                             ),
                             SideNavTile(
                               icon: Icons.apps_rounded,
+                              art: Art3D.puzzle,
                               label: 'My services',
                               selected: location == CoreRoutes.services,
                               onTap: () => _open(CoreRoutes.services),
@@ -421,6 +436,7 @@ class _PlatformSidebarState extends ConsumerState<PlatformSidebar> {
                             const SideNavHeading('My Health Pro'),
                           SideNavTile(
                             icon: Icons.dashboard_rounded,
+                            art: Art3D.idCard,
                             label: 'My dashboard',
                             selected: location == CoreRoutes.myQr,
                             onTap: () => _open(CoreRoutes.myQr),
@@ -428,6 +444,7 @@ class _PlatformSidebarState extends ConsumerState<PlatformSidebar> {
                           for (final item in widget.memberItems)
                             SideNavTile(
                               icon: item.icon,
+                              art: item.art,
                               label: item.title,
                               selected: location == item.route,
                               onTap: () => _open(item.route!),
@@ -566,6 +583,32 @@ class _FindService extends StatelessWidget {
   }
 }
 
+/// The menu's one grid, top to bottom: every line's icon (a page's, a
+/// service's tile, the gym's initials, a group's tile) centred on the same
+/// column, every name starting at [label], every page's line the same height.
+abstract final class _MenuGrid {
+  /// A page's icon (its 3D icon, or a flat one centred in the same square):
+  /// its left edge, and its size.
+  static const inset = 8.0;
+  static const icon = 28.0;
+
+  /// The column every icon and tile is centred on.
+  static const column = inset + icon / 2;
+
+  /// Where every name starts.
+  static const label = 46.0;
+
+  /// Above and below a page's icon.
+  static const rowPad = 7.0;
+  static const text = 14.0;
+
+  /// A group's pages, set in from its heading: they start under the
+  /// heading's icon ([column]), with a smaller icon and text.
+  static const childIcon = 24.0;
+  static const childInset = 6.0;
+  static const childText = 13.5;
+}
+
 /// One line of the menu: an icon and a label, marked when it's the page
 /// open (a soft light and a bar in [accent]). Folded, the icon alone.
 class SideNavTile extends StatefulWidget {
@@ -578,19 +621,24 @@ class SideNavTile extends StatefulWidget {
   /// The bar's and icon's colour when it's open: the service's.
   final Color accent;
 
-  /// A service's page, a little smaller and set in under its name.
-  final bool nested;
   final bool external;
+
+  /// Its 3D icon, in place of [icon].
+  final Art3D? art;
+
+  /// One of a group's pages: set in under the group's heading, a size smaller.
+  final bool nested;
 
   const SideNavTile({
     super.key,
     required this.icon,
     required this.label,
     required this.onTap,
+    this.art,
+    this.nested = false,
     this.selected = false,
     this.badge = 0,
     this.accent = BrandColors.orange,
-    this.nested = false,
     this.external = false,
   });
 
@@ -612,15 +660,17 @@ class _SideNavTileState extends State<SideNavTile> {
     final iconColor = selected ? accent : text;
     final badgeColor = context.brand.accent;
     final badge = widget.badge;
+    final nested = widget.nested && !folded;
+    final iconSize = nested ? _MenuGrid.childIcon : _MenuGrid.icon;
+    final inset = nested ? _MenuGrid.childInset : _MenuGrid.inset;
+    final Widget glyph = widget.art != null
+        ? Art3DIcon(widget.art!, size: iconSize, fallback: widget.icon, fallbackColor: iconColor)
+        : SizedBox.square(
+            dimension: iconSize, child: Center(child: Icon(widget.icon, size: nested ? 18 : 20, color: iconColor)));
     final Widget content;
     if (folded) {
       content = Center(
-        child: Badge(
-          isLabelVisible: badge > 0,
-          backgroundColor: badgeColor,
-          smallSize: 8,
-          child: Icon(widget.icon, size: 21, color: iconColor),
-        ),
+        child: Badge(isLabelVisible: badge > 0, backgroundColor: badgeColor, smallSize: 8, child: glyph),
       );
     } else {
       content = Row(
@@ -630,9 +680,9 @@ class _SideNavTileState extends State<SideNavTile> {
             scale: _hover && !selected && !reduceMotion(context) ? 1.1 : 1,
             duration: Motion.hover,
             curve: Motion.ease,
-            child: Icon(widget.icon, size: widget.nested ? 19 : 21, color: iconColor),
+            child: glyph,
           ),
-          SizedBox(width: widget.nested ? 12 : 14),
+          const SizedBox(width: _MenuGrid.label - _MenuGrid.inset - _MenuGrid.icon),
           Expanded(
             child: Text(
               widget.label,
@@ -640,8 +690,9 @@ class _SideNavTileState extends State<SideNavTile> {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: text,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                fontSize: widget.nested ? 13.5 : 14.5,
+                // A group's pages a step lighter than its heading (w800).
+                fontWeight: selected ? FontWeight.w700 : (nested ? FontWeight.w500 : FontWeight.w600),
+                fontSize: nested ? _MenuGrid.childText : _MenuGrid.text,
               ),
             ),
           ),
@@ -674,7 +725,9 @@ class _SideNavTileState extends State<SideNavTile> {
             child: Stack(
               children: [
                 Padding(
-                  padding: EdgeInsets.symmetric(horizontal: folded ? 0 : 12, vertical: widget.nested ? 9 : 11),
+                  padding: folded
+                      ? const EdgeInsets.symmetric(vertical: _MenuGrid.rowPad)
+                      : EdgeInsets.fromLTRB(inset, _MenuGrid.rowPad, 10, _MenuGrid.rowPad),
                   child: content,
                 ),
                 // The bar down the left of the open page.
@@ -695,7 +748,8 @@ class _SideNavTileState extends State<SideNavTile> {
       ),
     );
     return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
+      // A group's page is set in to its heading's icon column.
+      padding: EdgeInsets.only(bottom: 2, left: nested ? _MenuGrid.column - 1.5 : 0),
       child: Semantics(
         button: true,
         selected: selected,
@@ -707,9 +761,10 @@ class _SideNavTileState extends State<SideNavTile> {
 }
 
 /// A service in the menu: its icon, name and the person's role in it; open,
-/// what it's working on (with a switcher) and its pages under headings.
-/// Folded, its icon, which opens its pages in a menu beside it.
-class ServiceSection extends StatelessWidget {
+/// what it's working on (with a switcher) and its pages in groups that open
+/// and close under their headings ([navGroupsProvider]). Folded, its icon,
+/// which opens its pages in a menu beside it.
+class ServiceSection extends ConsumerWidget {
   final ServiceNav nav;
   final String location;
   final bool open;
@@ -730,11 +785,25 @@ class ServiceSection extends StatelessWidget {
   void _go(NavDestination d) => d.isExternal ? onExternal(d.externalUrl!) : onOpen(d.route!);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final active = nav.isOpenAt(location);
     if (PlatformSidebar.isFolded(context)) return _foldedTile(context, active);
-    final ink = SideInk.of(context);
     final scope = nav.scope;
+    // One group open at a time: the page's, or the one opened by hand.
+    ref.watch(navGroupsProvider);
+    final groups = ref.read(navGroupsProvider.notifier);
+    final openGroup = groups.openIn(nav, location);
+    Widget page(NavDestination d, {bool nested = false}) => SideNavTile(
+          icon: d.icon,
+          label: d.label,
+          art: d.art,
+          nested: nested,
+          external: d.isExternal,
+          badge: d.badge,
+          accent: nav.color,
+          selected: d.isOpenAt(location),
+          onTap: () => _go(d),
+        );
     // Each line's place as the section opens: they come in one after another.
     var line = 0;
     return Padding(
@@ -746,44 +815,43 @@ class ServiceSection extends StatelessWidget {
           Collapsible(
             open: open,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 6, 0, 6),
+              // Its lines on the menu's grid, under its header: not set in.
+              padding: const EdgeInsets.symmetric(vertical: 6),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (scope != null)
                     CollapsibleItem(index: line++, child: _ScopeSwitcher(scope: scope, color: nav.color, onOpen: onOpen)),
-                  for (final s in nav.sections) ...[
-                    if (s.title != null)
-                      CollapsibleItem(
-                        index: line++,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-                          child: Text(
-                            s.title!,
-                            style: TextStyle(
-                              color: ink.dark ? Colors.white.withValues(alpha: 0.4) : ink.heading,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.6,
+                  for (final s in nav.sections)
+                    if (s.title == null)
+                      for (final d in s.items) CollapsibleItem(index: line++, child: page(d))
+                    else ...[
+                      if (openGroup == s.keyIn(nav) case final groupOpen) ...[
+                        CollapsibleItem(
+                          index: line++,
+                          child: _GroupHeading(
+                            section: s,
+                            color: s.color ?? nav.color,
+                            open: groupOpen,
+                            here: s.isOpenAt(location),
+                            onTap: () => groups.choose(nav.key, groupOpen ? null : s.keyIn(nav), at: location),
+                          ),
+                        ),
+                        CollapsibleItem(
+                          index: line++,
+                          child: Collapsible(
+                            open: groupOpen,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                for (final (j, d) in s.items.indexed)
+                                  CollapsibleItem(index: j, child: page(d, nested: true)),
+                              ],
                             ),
                           ),
                         ),
-                      ),
-                    for (final d in s.items)
-                      CollapsibleItem(
-                        index: line++,
-                        child: SideNavTile(
-                          icon: d.icon,
-                          label: d.label,
-                          nested: true,
-                          external: d.isExternal,
-                          badge: d.badge,
-                          accent: nav.color,
-                          selected: d.isOpenAt(location),
-                          onTap: () => _go(d),
-                        ),
-                      ),
-                  ],
+                      ],
+                    ],
                 ],
               ),
             ),
@@ -806,7 +874,8 @@ class ServiceSection extends StatelessWidget {
             onTap: () => _flyout(context),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Center(child: ServiceIconTile(icon: nav.icon, color: nav.color, filled: active, size: 38)),
+              child: Center(
+                  child: ServiceIconTile(icon: nav.icon, color: context.brand.themed(nav.color), filled: true, size: 38)),
             ),
           ),
         ),
@@ -830,16 +899,129 @@ class ServiceSection extends StatelessWidget {
           ),
         ),
         const PopupMenuDivider(),
-        for (final d in nav.destinations)
-          CheckedPopupMenuItem<NavDestination>(value: d, checked: d.isOpenAt(location), child: Text(d.label)),
+        for (final s in nav.sections) ...[
+          if (s.title != null)
+            PopupMenuItem<NavDestination>(
+              enabled: false,
+              height: 34,
+              child: Row(children: [
+                Icon(s.icon ?? Icons.folder_outlined, size: 16, color: context.brand.themed(s.color ?? nav.color)),
+                const SizedBox(width: 8),
+                Text(s.title!, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5)),
+              ]),
+            ),
+          for (final d in s.items)
+            CheckedPopupMenuItem<NavDestination>(value: d, checked: d.isOpenAt(location), child: Text(d.label)),
+        ],
       ],
     );
     if (chosen != null) _go(chosen);
   }
 }
 
+/// A group's heading in a service's section: its icon on a tile of its
+/// colour (solid while one of its pages is open), its name in bold and a
+/// chevron; closed, its pages' counts together.
+class _GroupHeading extends StatefulWidget {
+  final NavSection section;
+  final Color color;
+  final bool open;
+  final bool here;
+  final VoidCallback onTap;
+
+  const _GroupHeading(
+      {required this.section, required this.color, required this.open, required this.here, required this.onTap});
+
+  @override
+  State<_GroupHeading> createState() => _GroupHeadingState();
+}
+
+class _GroupHeadingState extends State<_GroupHeading> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = SideInk.of(context);
+    final s = widget.section;
+    final color = context.brand.themed(widget.color);
+    final here = widget.here;
+    final badge = widget.open ? 0 : s.badge;
+    const tile = 30.0;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 2),
+      child: Semantics(
+        button: true,
+        expanded: widget.open,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: widget.onTap,
+            onHover: (h) => setState(() => _hover = h),
+            borderRadius: BorderRadius.circular(10),
+            hoverColor: ink.hover,
+            child: Padding(
+              // Its tile on the menu's icon column, its name where every name starts.
+              padding: const EdgeInsets.fromLTRB(_MenuGrid.column - tile / 2, 7, 10, 7),
+              child: Row(
+                children: [
+                  if (s.art != null)
+                    Art3DIcon(s.art!, size: tile, fallback: s.icon, fallbackColor: color)
+                  else
+                    AnimatedContainer(
+                      duration: Motion.of(context, Motion.hover),
+                      curve: Motion.ease,
+                      width: tile,
+                      height: tile,
+                      decoration: BoxDecoration(
+                        color: here ? color : color.withValues(alpha: ink.dark ? 0.2 : 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(s.icon ?? Icons.folder_outlined, size: 15, color: here ? Colors.white : color),
+                    ),
+                  const SizedBox(width: _MenuGrid.label - _MenuGrid.column - tile / 2),
+                  Expanded(
+                    child: Text(
+                      s.title!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: ink.strong, fontWeight: FontWeight.w800, fontSize: _MenuGrid.text),
+                    ),
+                  ),
+                  // Closed over the page that's open: a dot says it's in here.
+                  if (here && !widget.open)
+                    Container(
+                      width: 7,
+                      height: 7,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                    ),
+                  if (badge > 0)
+                    Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                      decoration: BoxDecoration(color: context.brand.accent, borderRadius: BorderRadius.circular(20)),
+                      child: Text('$badge',
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                    ),
+                  AnimatedRotation(
+                    turns: widget.open ? 0.5 : 0,
+                    duration: Motion.of(context, Motion.dropdown),
+                    curve: Motion.ease,
+                    child: Icon(Icons.expand_more_rounded, size: 18, color: _hover || widget.open ? ink.label : ink.faint),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// A service's icon on a tile of its colour: solid when it's the one in
-/// use.
+/// use, and then glossy, like a 3D icon: lit from the top left, a shine
+/// across its top and the icon raised off it.
 class ServiceIconTile extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -848,17 +1030,42 @@ class ServiceIconTile extends StatelessWidget {
 
   const ServiceIconTile({super.key, required this.icon, required this.color, this.filled = false, this.size = 34});
 
+  /// A glossy tile of [color]: lighter at the top left, deeper at the
+  /// bottom right.
+  static Gradient gloss(Color color) => LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color.lerp(color, Colors.white, 0.26)!, color, Color.lerp(color, Colors.black, 0.16)!],
+        stops: const [0, 0.5, 1],
+      );
+
+  /// The shine across a glossy tile's top half, laid over it.
+  static BoxDecoration shine(BorderRadius radius) => BoxDecoration(
+        borderRadius: radius,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.center,
+          colors: [Colors.white.withValues(alpha: 0.36), Colors.white.withValues(alpha: 0)],
+        ),
+      );
+
+  /// White on a glossy tile, raised off it by a soft shadow of its colour.
+  static List<Shadow> raised(Color color, double size) =>
+      [Shadow(color: Color.lerp(color, Colors.black, 0.5)!.withValues(alpha: 0.45), blurRadius: size * 0.08, offset: Offset(0, size * 0.04))];
+
   @override
   Widget build(BuildContext context) {
     // Softer in the light: a paler tint, and a shorter glow under it.
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final radius = BorderRadius.circular(size * 0.3);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: filled ? color : color.withValues(alpha: dark ? 0.18 : 0.12),
-        borderRadius: BorderRadius.circular(size * 0.3),
+        color: filled ? null : color.withValues(alpha: dark ? 0.18 : 0.12),
+        gradient: filled ? gloss(color) : null,
+        borderRadius: radius,
         boxShadow: filled
             ? [
                 dark
@@ -867,7 +1074,8 @@ class ServiceIconTile extends StatelessWidget {
               ]
             : null,
       ),
-      child: Icon(icon, size: size * 0.55, color: filled ? Colors.white : color),
+      foregroundDecoration: filled ? shine(radius) : null,
+      child: Icon(icon, size: size * 0.55, color: filled ? Colors.white : color, shadows: filled ? raised(color, size) : null),
     );
   }
 }
@@ -885,6 +1093,7 @@ class _ServiceHeader extends StatefulWidget {
 }
 
 class _ServiceHeaderState extends State<_ServiceHeader> {
+  static const _tile = 32.0;
   bool _hover = false;
 
   @override
@@ -911,11 +1120,13 @@ class _ServiceHeaderState extends State<_ServiceHeader> {
               onTap: widget.onTap,
               borderRadius: BorderRadius.circular(14),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 10, 8),
+                // On the menu's grid: its tile on the icon column, its name where every name starts.
+                padding: const EdgeInsets.fromLTRB(_MenuGrid.column - _tile / 2, 8, 10, 8),
                 child: Row(
                   children: [
-                    ServiceIconTile(icon: nav.icon, color: nav.color, filled: widget.active),
-                    const SizedBox(width: 12),
+                    // Always glossy, the service's own 3D tile.
+                    ServiceIconTile(icon: nav.icon, color: context.brand.themed(nav.color), filled: true, size: _tile),
+                    const SizedBox(width: _MenuGrid.label - _MenuGrid.column - _tile / 2),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -979,9 +1190,12 @@ class _ScopeSwitcher extends StatelessWidget {
     final ink = SideInk.of(context);
     final several = scope.options.length > 1 || scope.addRoute != null;
     final initials = scope.label.trim().split(RegExp(r'\s+')).take(2).map((w) => w.isEmpty ? '' : w[0]).join().toUpperCase();
+    // On the menu's grid: the initials on the icon column (inside the card's
+    // edge), the name where every name starts.
+    const avatar = 28.0;
     final card = Container(
       margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.fromLTRB(8, 8, 6, 8),
+      padding: const EdgeInsets.fromLTRB(_MenuGrid.column - avatar / 2 - 1, 8, 8, 8),
       decoration: BoxDecoration(
         color: ink.well,
         borderRadius: BorderRadius.circular(12),
@@ -989,14 +1203,27 @@ class _ScopeSwitcher extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // The gym's initials on a glossy 3D tile, like the service's.
           Container(
-            width: 30,
-            height: 30,
+            width: avatar,
+            height: avatar,
             alignment: Alignment.center,
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(9)),
-            child: Text(initials, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12)),
+            decoration: BoxDecoration(
+              gradient: ServiceIconTile.gloss(context.brand.themed(color)),
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(color: context.brand.themed(color).withValues(alpha: 0.28), blurRadius: 6, offset: const Offset(0, 2)),
+              ],
+            ),
+            foregroundDecoration: ServiceIconTile.shine(BorderRadius.circular(8)),
+            child: Text(initials,
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11.5,
+                    shadows: ServiceIconTile.raised(context.brand.themed(color), avatar))),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: _MenuGrid.label - _MenuGrid.column - avatar / 2),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

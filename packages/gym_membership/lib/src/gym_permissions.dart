@@ -18,6 +18,11 @@ abstract final class GymPermission {
   /// Plans and prices.
   static const plans = 'gym.plans';
 
+  /// The Classes page: who's booked into each, booking members in
+  /// and taking anyone out, and who has registered to date. Changing the
+  /// timetable is [plans]' (20261118000018_gym_classes_permission.sql).
+  static const classes = 'gym.classes';
+
   /// Verify trainers who ask to train here; their timings and attendance
   /// (20261115000004_trainers.sql).
   static const trainers = 'gym.trainers';

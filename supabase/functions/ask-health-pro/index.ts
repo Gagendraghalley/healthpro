@@ -6,14 +6,15 @@
 //     -> { kind, answer?, page?, venue_type?, dzongkhag?, left }
 //
 // Anyone can call it, so the database counts each question first
-// (ai_take_public_question, with the service role): 15 a Bhutan day from
-// one address, 150 a day from everyone (about half the free allowance),
-// which leaves the rest to the gyms' own Ask AI. Addresses are kept only as a keyed
-// hash, for 30 days.
+// (ai_take_public_question, with the service role): 15 a Bhutan day for
+// each signed-in account, or else for each address; 150 a day from all
+// visitors together (about half the free allowance), which leaves the rest
+// to the gyms' own Ask AI. Addresses are kept only as a keyed hash, for 30
+// days.
 //
 // Secrets: see _shared/workers_ai.ts.
 // Deploy: supabase functions deploy ask-health-pro (verify_jwt off: visitors)
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 
 import { AskError, askWorkersAi, cors, reply, workersAi } from '../_shared/workers_ai.ts';
 import { cleanHistory, cleanQuestion, messages, sanitize, SCHEMA } from './reply.ts';
@@ -40,6 +41,7 @@ Deno.serve(async (req) => {
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, serviceKey, { auth: { persistSession: false } });
   const { data: left, error: takeError } = await admin.rpc('ai_take_public_question', {
     client: await visitorKey(req, serviceKey),
+    member: await signedInAccount(admin, req),
   });
   if (takeError) return reply({ error: takeError.message }, 429);
 
@@ -52,6 +54,19 @@ Deno.serve(async (req) => {
     return reply({ error: "The AI couldn't answer just now. Please try again, or tap a suggestion.", left }, 502);
   }
 });
+
+/** The signed-in account asking, checked with Supabase Auth; null for a
+ *  visitor (the app then sends only the public key). */
+async function signedInAccount(admin: SupabaseClient, req: Request): Promise<string | null> {
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+  try {
+    const { data } = await admin.auth.getUser(token);
+    return data?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /** Who is asking, without keeping who: their address, hashed with a secret
  *  (so the hashes can't be turned back into addresses). */

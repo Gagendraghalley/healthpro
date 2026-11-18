@@ -132,8 +132,9 @@ select public.bhutan_today() + 1 as tomorrow \gset
 select extract(isodow from date :'tomorrow')::int as dow \gset
 select extract(isodow from public.bhutan_today())::int as today_dow \gset
 select t.as_user('00000000-0000-0000-0000-0000000f3001');
+-- Yoga and Zumba are for members only; open classes are checked at the end.
 select public.gym_save_class(:'gym', null, jsonb_build_object('name', 'Yoga', 'trainer_name', 'Tashi', 'weekday', :dow,
-                             'starts_at', '07:00', 'duration_minutes', 60, 'capacity', 1)) as yoga \gset
+                             'starts_at', '07:00', 'duration_minutes', 60, 'capacity', 1, 'open_to_all', false)) as yoga \gset
 select public.gym_save_class(:'gym', null, jsonb_build_object('name', 'Midnight run', 'weekday', :today_dow,
                              'starts_at', '00:00', 'capacity', 10)) as early \gset
 select t.fails(format($$select public.gym_save_class(%L, null, '{"name":"Zumba","weekday":9,"starts_at":"18:00","capacity":5}')$$,
@@ -203,7 +204,7 @@ values (:'gym', '00000000-0000-0000-0000-0000000f3007', 'Monthly', 30, 1500, 'ac
 set role authenticated;
 select t.as_user('00000000-0000-0000-0000-0000000f3001');
 select public.gym_save_class(:'gym', null, jsonb_build_object('name', 'Zumba', 'weekday', :dow, 'starts_at', '18:00',
-                             'capacity', 1)) as zumba \gset
+                             'capacity', 1, 'open_to_all', false)) as zumba \gset
 select t.as_user('00000000-0000-0000-0000-0000000f3007');
 select public.gym_book_class(:'zumba', :'tomorrow') as legacy_booking \gset
 select t.eq((select (user_id = '00000000-0000-0000-0000-0000000f3007')::text || '|' || coalesce(gym_member_id::text, '-')
@@ -249,6 +250,93 @@ select t.eq((select g ->> 'member_code' || '|' || (g ->> 'plan_name')
             :'lhamo_code' || '|Monthly', 'My gym shows her registration: a member code, and her package');
 select t.as_user('00000000-0000-0000-0000-0000000f3002');
 select t.eq(public.gym_check_in_by_code(:'gym', :'lhamo_code') ->> 'member_name', 'Lhamo Legacy', 'the desk checks her in by it');
+
+-- ---- Open classes (20261118000016): anyone on Health Pro books ----------------
+select t.as_user('00000000-0000-0000-0000-0000000f3001');
+select public.gym_save_class(:'gym', null, jsonb_build_object('name', 'Open yoga', 'weekday', :dow, 'starts_at', '08:00',
+                             'capacity', 3)) as open_yoga \gset
+select t.eq((select open_to_all::text from public.gym_classes where id = :'open_yoga'), 'true', 'a new class is open to everyone');
+set role anon;
+select t.eq((select p ->> 'booked' from jsonb_array_elements(public.gym_class_places(:'gym', :'tomorrow')) p
+             where p ->> 'class_id' = :'zumba'), '1', 'the public sees the places booked');
+select t.fails(format($$select public.gym_book_class(%L, %L)$$, :'open_yoga', :'tomorrow'), 'permission denied');
+set role authenticated;
+
+-- Xo isn't registered at the gym: not into a members-only class, but into the open one.
+select t.as_user('00000000-0000-0000-0000-0000000f3005');
+select t.fails(format($$select public.gym_book_class(%L, %L)$$, :'zumba', :'tomorrow'), 'Only members of this gym can book Zumba');
+select public.gym_book_class(:'open_yoga', :'tomorrow') as guest_booking \gset
+select t.eq((select (user_id = '00000000-0000-0000-0000-0000000f3005')::text || '|' || coalesce(gym_member_id::text, '-')
+             from public.gym_class_bookings where id = :'guest_booking'),
+            'true|-', 'Xo, not a member, books the open class on their account');
+select t.eq((select p ->> 'my_booking_id' from jsonb_array_elements(public.gym_class_places(:'gym', public.bhutan_today())) p
+             where p ->> 'class_id' = :'open_yoga'), :'guest_booking', 'and sees it''s theirs');
+select t.fails(format($$select public.gym_book_class(%L, %L)$$, :'open_yoga', :'tomorrow'), 'booked in already');
+select t.fails(format($$select public.gym_class_bookings_on(%L, %L)$$, :'gym', :'tomorrow'), 'Only the gym''s staff');
+
+-- Pem has no package: the desk books Pem in all the same. Mindu books on her registration.
+select t.as_user('00000000-0000-0000-0000-0000000f3002');
+select public.gym_book_class(:'open_yoga', :'tomorrow', :'pem');
+select t.as_user('00000000-0000-0000-0000-0000000f3004');
+select public.gym_book_class(:'open_yoga', :'tomorrow') as mindu_open \gset
+select t.eq((select coalesce(gym_member_id::text, '-') from public.gym_class_bookings where id = :'mindu_open'), :'mindu',
+            'a member books the open class on her registration');
+select t.as_user('00000000-0000-0000-0000-0000000f3002');
+select t.eq((select string_agg(e ->> 'full_name' || ':' || (e ->> 'is_member') || ':' || (e ->> 'booked_by_desk') || ':'
+                               || coalesce(e ->> 'member_code', '-') || ':' || coalesce(e ->> 'email', '-'), ','
+                               order by e ->> 'full_name')
+             from jsonb_array_elements(public.gym_class_bookings_on(:'gym', :'tomorrow')) e where e ->> 'class_id' = :'open_yoga'),
+            'Mindu Dema:true:false:' || (select code from public.gym_members where id = :'mindu') || ':-,'
+              || 'Pem Nopackage:true:true:' || (select code from public.gym_members where id = :'pem') || ':-,'
+              || 'Xo Out:false:false:-:coach.outsider@x.bt',
+            'the desk sees who''s booked: members and non-members, and who the desk booked');
+select t.eq(jsonb_array_length(public.my_class_bookings()), 0, 'My dashboard: the desk''s own places only, not the gym''s');
+select t.as_user('00000000-0000-0000-0000-0000000f3005');
+select t.eq((select string_agg(e ->> 'name' || '@' || (e ->> 'venue_name'), ',') from jsonb_array_elements(public.my_class_bookings()) e),
+            'Open yoga@Coach Gym', 'My dashboard: Xo''s classes, at any gym');
+select t.as_user('00000000-0000-0000-0000-0000000f3004');
+select t.eq((select string_agg(e ->> 'id', ',') from jsonb_array_elements(public.my_class_bookings()) e), :'mindu_open',
+            'and Mindu''s, on her registration');
+select t.fails(format($$select public.gym_class_registrations(%L)$$, :'gym'), 'Only the gym''s staff can see who has registered');
+
+-- Classes is a screen right (20261118000018): owner, manager, front desk and trainer have it.
+select t.eq((select string_agg(r.key, ',' order by r.key) from public.role_permissions rp join public.roles r on r.id = rp.role_id
+             where rp.permission_key = 'gym.classes' and r.key in ('owner', 'manager', 'staff', 'trainer')),
+            'manager,owner,staff,trainer', 'owner, manager, front desk and trainer can see Classes');
+-- Registered to date: Lhamo (Zumba), and Xo, Pem and Mindu (Open yoga); cancelled places don't count.
+select t.as_user('00000000-0000-0000-0000-0000000f3002');
+select public.gym_class_registrations(:'gym') as regs \gset
+select t.eq((select (t ->> 'bookings') || '|' || (t ->> 'people') || '|' || (t ->> 'members') || '|' || (t ->> 'non_members')
+                    || '|' || (t ->> 'upcoming') from (select :'regs'::jsonb -> 'totals' as t) x),
+            '4|4|3|1|4', 'the desk sees how many have registered to date: places, people, members, non-members, to come');
+select t.eq((select (c ->> 'bookings') || '|' || (c ->> 'members') || '|' || (c ->> 'non_members')
+             from jsonb_array_elements(:'regs'::jsonb -> 'classes') c where c ->> 'class_id' = :'open_yoga'),
+            '3|2|1', 'for each class');
+select t.eq((select p ->> 'full_name' || '|' || (p ->> 'is_member') || '|' || (p ->> 'bookings') || '|' || (p ->> 'last_class')
+                    || '|' || (p ->> 'email')
+             from jsonb_array_elements(:'regs'::jsonb -> 'people') p where p ->> 'key' = 'u:00000000-0000-0000-0000-0000000f3005'),
+            'Xo Out|false|1|Open yoga|coach.outsider@x.bt', 'and everyone who has booked, members or not');
+
+-- Members only from now: the places booked stay; Xo can't book another.
+select t.as_user('00000000-0000-0000-0000-0000000f3001');
+select public.gym_save_class(:'gym', :'open_yoga', jsonb_build_object('name', 'Open yoga', 'weekday', :dow,
+                             'starts_at', '08:00', 'capacity', 3, 'open_to_all', false));
+select public.gym_save_class(:'gym', :'open_yoga', jsonb_build_object('name', 'Open yoga', 'weekday', :dow,
+                             'starts_at', '08:00', 'capacity', 3));
+select t.eq((select open_to_all::text from public.gym_classes where id = :'open_yoga'), 'false', 'saved without it, it stays as it was');
+select t.eq((select count(*) from public.gym_class_bookings where class_id = :'open_yoga' and status = 'booked')::int, 3,
+            'made members only, the places booked stay');
+select t.as_user('00000000-0000-0000-0000-0000000f3005');
+select t.fails(format($$select public.gym_book_class(%L, %L::date + 7)$$, :'open_yoga', :'tomorrow'),
+               'Only members of this gym can book Open yoga');
+
+-- Off the timetable: Xo is told, and pointed to the gym's page.
+select t.as_user('00000000-0000-0000-0000-0000000f3001');
+select public.gym_save_class(:'gym', :'open_yoga', jsonb_build_object('name', 'Open yoga', 'weekday', :dow,
+                             'starts_at', '08:00', 'capacity', 3, 'is_active', false));
+select t.as_user('00000000-0000-0000-0000-0000000f3005');
+select t.eq((select link from public.notifications where title like 'Open yoga on %' order by created_at desc limit 1),
+            '/gyms/' || :'gym', 'Xo is told the class was cancelled, with the gym''s page');
 
 reset role;
 do $$ begin raise notice 'ALL PROGRESS, PLAN AND CLASS CHECKS PASSED'; end $$;

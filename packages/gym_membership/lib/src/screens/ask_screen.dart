@@ -123,9 +123,9 @@ class AskChat extends ConsumerWidget {
       welcome: AssistantWelcome(
         title: 'Ask about ${access.venue.name}',
         intro: seesReports
-            ? 'Ask in your own words, in English or Dzongkha: about members, visits, packages and money, '
-                'or how to do something in Health Pro.'
-            : 'Ask in your own words, in English or Dzongkha, how to do something in Health Pro.',
+            ? 'Ask in your own words about members, visits, packages and money, '
+                'or how to do something in Health Pro. English works best.'
+            : 'Ask in your own words how to do something in Health Pro. English works best.',
         points: [
           if (seesReports)
             (Icons.insights_rounded, "Charts and lists come from your gym's own records, as your role allows."),

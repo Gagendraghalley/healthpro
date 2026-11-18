@@ -199,7 +199,7 @@ class HealthProAssistantPanel extends ConsumerWidget {
         welcome: AssistantWelcome(
           title: 'Hi! Ask me about Health Pro',
           intro: 'Finding a gym, joining one, checking in, putting your gym on Health Pro, or your account: '
-              'ask in your own words, in English or Dzongkha.',
+              'ask in your own words. English works best.',
           points: const [
             (Icons.bolt_rounded, "Suggestions answer straight away and don't count against today's questions."),
           ],

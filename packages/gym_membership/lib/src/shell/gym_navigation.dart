@@ -24,10 +24,14 @@ bool answersJoinRequests(VenueAccess a, GymSettings? settings) =>
     a.can(GymPermission.register) &&
     (settings == null || !settings.managersAnswerJoins || VenueRole.hasEverything(a.role) || a.role == VenueRole.manager);
 
+/// The menu groups' own colours, beside the brand's.
+const _violet = Color(0xFF7C5CDB);
+const _teal = Color(0xFF0E9384);
+
 /// Gym management's section of the side menu: the gym (with a switcher for
-/// someone at several), then its pages as their role there allows, under
-/// Front desk, Business and Manage; and its shortcuts. For someone with no
-/// gym yet, the way to set one up.
+/// someone at several), then its pages as their role there allows, in groups
+/// (Front desk, Requests, Training, Sales & money, Stock, Team & settings);
+/// and its shortcuts. For someone with no gym yet, the way to set one up.
 ServiceNav gymNavigation(WidgetRef ref, String location,
     {required String name, required IconData icon, required Color color}) {
   final gyms = ref.watch(myGymsProvider).valueOrNull ?? const <MyVenue>[];
@@ -43,10 +47,15 @@ ServiceNav gymNavigation(WidgetRef ref, String location,
       isSetUp: false,
       homeRoute: setUp,
       sections: [
-        NavSection(items: [NavDestination(label: 'Set up your gym', icon: Icons.rocket_launch_outlined, route: setUp)]),
+        NavSection(items: [NavDestination(label: 'Set up your gym', icon: Icons.rocket_launch_outlined, art: Art3D.rocket, route: setUp)]),
       ],
       actions: [
-        ServiceAction(label: 'Set up your gym', icon: Icons.add_business_rounded, route: setUp, hint: 'Then packages, staff and members'),
+        ServiceAction(
+            label: 'Set up your gym',
+            icon: Icons.add_business_rounded,
+            art: Art3D.rocket,
+            route: setUp,
+            hint: 'Then packages, staff and members'),
       ],
     );
   }
@@ -72,64 +81,96 @@ ServiceNav gymNavigation(WidgetRef ref, String location,
   final followUps = a.can(GymPermission.register)
       ? (ref.watch(gymEnquiriesProvider(id)).valueOrNull ?? const <GymEnquiry>[]).where((e) => e.needsActionOn(today)).length
       : 0;
+  // Small groups, each opening and closing under its heading: the day's
+  // work first, then what's waiting, training, money, stock and the team.
   final sections = [
     NavSection(items: [
-      NavDestination(label: 'Dashboard', icon: Icons.space_dashboard_outlined, route: GymRoutes.dashboardFor(id), exact: true),
+      NavDestination(
+          label: 'Dashboard',
+          icon: Icons.space_dashboard_outlined,
+          art: Art3D.chartIncreasing,
+          route: GymRoutes.dashboardFor(id),
+          exact: true),
+      if (a.can(GymPermission.members))
+        NavDestination(label: 'Reports & analytics', icon: Icons.insights_rounded, art: Art3D.barChart, route: GymRoutes.reportsFor(id)),
     ]),
-    NavSection(title: 'Front desk', items: [
+    NavSection(title: 'Front desk', icon: Icons.room_service_rounded, art: Art3D.bellhopBell, color: BrandColors.orange, items: [
       if (a.can(GymPermission.checkIn))
-        NavDestination(label: 'Check-in', icon: Icons.qr_code_scanner_rounded, route: GymRoutes.checkInFor(id)),
+        NavDestination(label: 'Check-in', icon: Icons.qr_code_scanner_rounded, art: Art3D.checkMark, route: GymRoutes.checkInFor(id)),
       if (a.can(GymPermission.members))
-        NavDestination(label: 'Members', icon: Icons.groups_outlined, route: GymRoutes.membersFor(id), notUnder: [register]),
+        NavDestination(label: 'Members', icon: Icons.groups_outlined, art: Art3D.person, route: GymRoutes.membersFor(id), notUnder: [register]),
       if (a.can(GymPermission.register))
-        NavDestination(label: 'Register member', icon: Icons.person_add_alt_1_outlined, route: register),
-      if (a.can(GymPermission.members))
-        NavDestination(label: 'Classes', icon: Icons.event_note_outlined, route: GymRoutes.classesFor(id)),
+        NavDestination(label: 'Register member', icon: Icons.person_add_alt_1_outlined, art: Art3D.memo, route: register),
       if (a.can(GymPermission.register))
+        NavDestination(label: 'Gym QR code', icon: Icons.qr_code_2_rounded, art: Art3D.phoneScan, route: GymRoutes.gymQrFor(id)),
+    ]),
+    NavSection(title: 'Requests', icon: Icons.inbox_rounded, art: Art3D.inbox, color: BrandColors.amber, items: [
+      if (answersJoins)
         NavDestination(
-            label: 'Enquiries & trials', icon: Icons.contact_phone_outlined, route: GymRoutes.enquiriesFor(id), badge: followUps),
+            label: 'Join requests',
+            icon: Icons.how_to_reg_outlined,
+            art: Art3D.handshake,
+            route: GymRoutes.requestsFor(id),
+            badge: waiting),
       if (a.can(GymPermission.payments))
         NavDestination(
-            label: 'Payments to confirm', icon: Icons.fact_check_outlined, route: GymRoutes.paymentsFor(id), badge: toConfirm),
-      if (answersJoins)
-        NavDestination(label: 'Join requests', icon: Icons.how_to_reg_outlined, route: GymRoutes.requestsFor(id), badge: waiting),
-      if (a.can(GymPermission.trainers))
-        NavDestination(label: 'Trainers', icon: Icons.sports_outlined, route: GymRoutes.gymTrainersFor(id), badge: trainersWaiting),
+            label: 'Payments to confirm',
+            icon: Icons.fact_check_outlined,
+            art: Art3D.creditCard,
+            route: GymRoutes.paymentsFor(id),
+            badge: toConfirm),
       if (a.can(GymPermission.register))
-        NavDestination(label: 'Gym QR code', icon: Icons.qr_code_2_rounded, route: GymRoutes.gymQrFor(id)),
+        NavDestination(
+            label: 'Enquiries & trials',
+            icon: Icons.contact_phone_outlined,
+            art: Art3D.speechBalloon,
+            route: GymRoutes.enquiriesFor(id),
+            badge: followUps),
     ]),
-    NavSection(title: 'Business', items: [
+    NavSection(title: 'Training', icon: Icons.directions_run_rounded, art: Art3D.runner, color: _violet, items: [
+      if (a.can(GymPermission.classes))
+        NavDestination(label: 'Classes', icon: Icons.event_note_outlined, art: Art3D.calendar, route: GymRoutes.classesFor(id)),
+      if (a.can(GymPermission.trainers))
+        NavDestination(
+            label: 'Trainers',
+            icon: Icons.sports_outlined,
+            art: Art3D.biceps,
+            route: GymRoutes.gymTrainersFor(id),
+            badge: trainersWaiting),
+    ]),
+    NavSection(title: 'Sales & money', icon: Icons.account_balance_wallet_rounded, art: Art3D.moneyBag, color: BrandColors.green, items: [
       if (a.can(GymPermission.plans))
-        NavDestination(label: 'Memberships & packages', icon: Icons.sell_outlined, route: GymRoutes.plansFor(id)),
+        NavDestination(label: 'Memberships & packages', icon: Icons.sell_outlined, art: Art3D.tickets, route: GymRoutes.plansFor(id)),
       if (a.can(GymPermission.plans))
-        NavDestination(label: 'Offers & discounts', icon: Icons.local_offer_outlined, route: GymRoutes.offersFor(id)),
+        NavDestination(label: 'Offers & discounts', icon: Icons.local_offer_outlined, art: Art3D.priceTag, route: GymRoutes.offersFor(id)),
       if (a.can(VenuePermission.income))
-        NavDestination(label: 'Payments & income', icon: Icons.payments_outlined, route: GymRoutes.incomeFor(id)),
+        NavDestination(label: 'Payments & income', icon: Icons.payments_outlined, art: Art3D.coin, route: GymRoutes.incomeFor(id)),
       if (a.can(VenuePermission.income))
-        NavDestination(label: 'Expenses & profit', icon: Icons.receipt_long_outlined, route: GymRoutes.expensesFor(id)),
-      if (a.can(GymPermission.members))
-        NavDestination(label: 'Reports & analytics', icon: Icons.insights_rounded, route: GymRoutes.reportsFor(id)),
+        NavDestination(label: 'Expenses & profit', icon: Icons.receipt_long_outlined, art: Art3D.receipt, route: GymRoutes.expensesFor(id)),
+    ]),
+    NavSection(title: 'Stock', icon: Icons.inventory_2_rounded, art: Art3D.package, color: _teal, items: [
       if (a.can(GymPermission.inventory))
         NavDestination(
             label: 'Inventory',
             icon: Icons.inventory_2_outlined,
+            art: Art3D.clipboard,
             route: GymRoutes.inventoryFor(id),
             notUnder: [suppliers],
             badge: lowStock),
       if (a.can(GymPermission.inventory))
-        NavDestination(label: 'Suppliers', icon: Icons.storefront_outlined, route: suppliers),
+        NavDestination(label: 'Suppliers', icon: Icons.storefront_outlined, art: Art3D.truck, route: suppliers),
     ]),
-    NavSection(title: 'Manage', items: [
+    NavSection(title: 'Team & settings', icon: Icons.settings_rounded, art: Art3D.gear, color: BrandColors.blue, items: [
       if (a.can(VenuePermission.staff))
-        NavDestination(label: 'Staff', icon: Icons.badge_outlined, route: CoreRoutes.venueStaffFor(id)),
+        NavDestination(label: 'Staff', icon: Icons.badge_outlined, art: Art3D.officeWorker, route: CoreRoutes.venueStaffFor(id)),
       if (a.can(VenuePermission.roles))
-        NavDestination(label: 'Roles & permissions', icon: Icons.verified_user_outlined, route: CoreRoutes.venueRolesFor(id)),
+        NavDestination(label: 'Roles & permissions', icon: Icons.verified_user_outlined, art: Art3D.key, route: CoreRoutes.venueRolesFor(id)),
       if (a.can(VenuePermission.edit))
-        NavDestination(label: 'Gym settings', icon: Icons.tune_rounded, route: CoreRoutes.editVenueFor(id)),
+        NavDestination(label: 'Gym settings', icon: Icons.tune_rounded, art: Art3D.tools, route: CoreRoutes.editVenueFor(id)),
       if (a.can(VenuePermission.edit))
-        NavDestination(label: 'Membership settings', icon: Icons.card_membership_rounded, route: GymRoutes.settingsFor(id)),
+        NavDestination(label: 'Membership settings', icon: Icons.card_membership_rounded, art: Art3D.knobs, route: GymRoutes.settingsFor(id)),
       if (a.can(GymPermission.activity))
-        NavDestination(label: 'Activity log', icon: Icons.manage_history_rounded, route: GymRoutes.activityFor(id)),
+        NavDestination(label: 'Activity log', icon: Icons.manage_history_rounded, art: Art3D.notepad, route: GymRoutes.activityFor(id)),
     ]),
   ];
   return ServiceNav(
@@ -158,15 +199,28 @@ ServiceNav gymNavigation(WidgetRef ref, String location,
     actions: [
       if (a.can(GymPermission.checkIn))
         ServiceAction(
-            label: 'Check in a member', icon: Icons.qr_code_scanner_rounded, route: GymRoutes.checkInFor(id), hint: 'Scan their QR card'),
+            label: 'Check in a member',
+            icon: Icons.qr_code_scanner_rounded,
+            art: Art3D.checkMark,
+            route: GymRoutes.checkInFor(id),
+            hint: 'Scan their QR card'),
       if (a.can(GymPermission.register))
-        ServiceAction(label: 'Register a member', icon: Icons.person_add_alt_1_rounded, route: register, hint: 'Details, photo and package'),
+        ServiceAction(
+            label: 'Register a member',
+            icon: Icons.person_add_alt_1_rounded,
+            art: Art3D.memo,
+            route: register,
+            hint: 'Details, photo and package'),
       if (a.can(GymPermission.plans))
         ServiceAction(
-            label: 'New package', icon: Icons.add_card_rounded, route: GymRoutes.newPlanFor(id), hint: 'What the desk sells'),
+            label: 'New package', icon: Icons.add_card_rounded, art: Art3D.tickets, route: GymRoutes.newPlanFor(id), hint: 'What the desk sells'),
       if (a.can(VenuePermission.staff))
         ServiceAction(
-            label: 'Add staff', icon: Icons.group_add_outlined, route: CoreRoutes.venueStaffFor(id), hint: 'And choose their role'),
+            label: 'Add staff',
+            icon: Icons.group_add_outlined,
+            art: Art3D.officeWorker,
+            route: CoreRoutes.venueStaffFor(id),
+            hint: 'And choose their role'),
     ],
   );
 }

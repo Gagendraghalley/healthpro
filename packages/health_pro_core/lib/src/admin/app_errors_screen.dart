@@ -126,6 +126,10 @@ class _ErrorsTable extends ConsumerWidget {
           sortBy: (e) => -e.lastSeen.millisecondsSinceEpoch,
           cell: (context, e) => Text(timeAgo(e.lastSeen), style: TextStyle(color: brand.muted)),
         ),
+        GridColumn.actions(
+          cell: (context, e) =>
+              GridOpenButton(onPressed: () => showDialog<void>(context: context, builder: (_) => _ErrorDialog(error: e))),
+        ),
       ],
     );
   }

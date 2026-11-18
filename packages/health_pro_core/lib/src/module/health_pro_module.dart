@@ -8,6 +8,7 @@ import '../shell/service_nav.dart';
 import '../theme/brand.dart';
 import '../utils/launch.dart';
 import '../venues/venue.dart';
+import '../widgets/art3d.dart';
 
 /// What every Health Pro service (gym management, later
 /// coaching, events...) gives the platform. A service is a module: a package
@@ -155,7 +156,11 @@ class ModuleMenuItem {
   final String? route;
   final Uri? externalUrl;
 
-  const ModuleMenuItem({required this.title, required this.icon, this.subtitle, this.route, this.externalUrl})
+  /// Its 3D icon in the side menu; [icon] elsewhere.
+  final Art3D? art;
+
+  const ModuleMenuItem(
+      {required this.title, required this.icon, this.subtitle, this.route, this.externalUrl, this.art})
       : assert((route == null) != (externalUrl == null), 'Give a route or an externalUrl');
 
   bool get isExternal => externalUrl != null;

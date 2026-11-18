@@ -9,7 +9,9 @@ import 'core_routes.dart';
 ///   ([mustChooseCode]) chooses their own before anything else opens.
 /// - Sign-in pages send signed-in users on (to ?next= when it's one of ours).
 /// - Everything not in [publicPatterns] needs an account: visitors sign in
-///   first and come back.
+///   first and come back. Except right after signing out ([justSignedOut]):
+///   that goes to Welcome, so whoever signs in next on this device isn't
+///   sent to the last person's page (another gym's, say).
 ///
 /// [pattern] is the matched route's pattern ('/gyms/:id'), so public pages
 /// with ids match.
@@ -21,6 +23,7 @@ String? guardRoute({
   String? moduleKey,
   Set<String>? enabledModuleKeys,
   bool mustChooseCode = false,
+  bool justSignedOut = false,
 }) {
   if (signedIn && mustChooseCode) return uri.path == CoreRoutes.setCode ? null : CoreRoutes.setCode;
   final start = signedIn ? CoreRoutes.home : CoreRoutes.welcome;
@@ -29,7 +32,9 @@ String? guardRoute({
   if (signedIn && CoreRoutes.signedOutOnly.contains(pattern)) {
     return safeNext(uri.queryParameters['next']) ?? CoreRoutes.home;
   }
-  if (!signedIn && !publicPatterns.contains(pattern)) return CoreRoutes.signInFor(uri.toString());
+  if (!signedIn && !publicPatterns.contains(pattern)) {
+    return justSignedOut ? CoreRoutes.welcome : CoreRoutes.signInFor(uri.toString());
+  }
   return null;
 }
 

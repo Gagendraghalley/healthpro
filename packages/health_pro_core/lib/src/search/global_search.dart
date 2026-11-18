@@ -15,6 +15,7 @@ import '../router/core_routes.dart';
 import '../shell/service_nav.dart';
 import '../theme/brand.dart';
 import '../venues/venue_repository.dart';
+import '../widgets/art3d.dart';
 import '../widgets/motion.dart';
 
 // The search in every page's bar (and Ctrl K / ⌘ K): one box for the whole
@@ -30,6 +31,9 @@ class SearchHit {
   final IconData icon;
   final String route;
 
+  /// Its 3D icon, as in the side menu; [icon] where there's none.
+  final Art3D? art;
+
   /// Its heading in the results: 'Pages', 'Members'...
   final String group;
 
@@ -44,6 +48,7 @@ class SearchHit {
     required this.icon,
     required this.route,
     required this.group,
+    this.art,
     this.subtitle,
     this.color,
     this.keywords = '',
@@ -90,22 +95,23 @@ List<SearchHit> searchablePages({
 }) {
   final pages = <SearchHit>[];
   final shortcuts = <SearchHit>[];
-  void page(String title, IconData icon, String route, {String? subtitle, Color? color, String keywords = ''}) {
+  void page(String title, IconData icon, String route,
+      {Art3D? art, String? subtitle, Color? color, String keywords = ''}) {
     if (pages.any((p) => p.route == route && p.title == title)) return;
     pages.add(SearchHit(
-        title: title, subtitle: subtitle, icon: icon, route: route, group: 'Pages', color: color, keywords: keywords));
+        title: title, subtitle: subtitle, icon: icon, art: art, route: route, group: 'Pages', color: color, keywords: keywords));
   }
 
   if (platformPages) {
-    page('Overview', Icons.space_dashboard_rounded, CoreRoutes.home, keywords: 'home platform');
-    page('My services', Icons.apps_rounded, CoreRoutes.services, keywords: 'services modules');
+    page('Overview', Icons.space_dashboard_rounded, CoreRoutes.home, art: Art3D.house, keywords: 'home platform');
+    page('My services', Icons.apps_rounded, CoreRoutes.services, art: Art3D.puzzle, keywords: 'services modules');
   }
   for (final nav in [...services, if (admin != null) admin]) {
     final where = nav.scope == null ? nav.name : '${nav.name} · ${nav.scope!.label}';
     for (final section in nav.sections) {
       for (final d in section.items) {
         if (d.route == null) continue;
-        page(d.label, d.icon, d.route!, subtitle: where, color: nav.color, keywords: '${nav.name} ${section.title ?? ''}');
+        page(d.label, d.icon, d.route!, art: d.art, subtitle: where, color: nav.color, keywords: '${nav.name} ${section.title ?? ''}');
       }
     }
     for (final a in nav.actions) {
@@ -113,6 +119,7 @@ List<SearchHit> searchablePages({
         title: a.label,
         subtitle: a.hint == null ? where : '${a.hint} · $where',
         icon: a.icon,
+        art: a.art,
         route: a.route,
         group: 'Shortcuts',
         color: nav.color,
@@ -120,12 +127,13 @@ List<SearchHit> searchablePages({
       ));
     }
   }
-  page('My dashboard', Icons.dashboard_rounded, CoreRoutes.myQr, subtitle: 'Your QR code and memberships', keywords: 'qr card me');
+  page('My dashboard', Icons.dashboard_rounded, CoreRoutes.myQr,
+      art: Art3D.idCard, subtitle: 'Your QR code and memberships', keywords: 'qr card me');
   for (final item in memberItems) {
-    if (item.route != null) page(item.title, item.icon, item.route!, subtitle: item.subtitle, keywords: 'my me');
+    if (item.route != null) page(item.title, item.icon, item.route!, art: item.art, subtitle: item.subtitle, keywords: 'my me');
   }
-  page('Notifications', Icons.notifications_none_rounded, CoreRoutes.notifications, keywords: 'alerts updates bell');
-  page('Account', Icons.person_outline_rounded, CoreRoutes.account, keywords: 'profile settings sign-in code me');
+  page('Notifications', Icons.notifications_none_rounded, CoreRoutes.notifications, art: Art3D.bell, keywords: 'alerts updates bell');
+  page('Account', Icons.person_outline_rounded, CoreRoutes.account, art: Art3D.person, keywords: 'profile settings sign-in code me');
   return [...pages, ...shortcuts];
 }
 
@@ -169,6 +177,7 @@ Future<List<SearchHit>> _platformSearch(Ref ref, String q, PlatformAccess access
               title: v.venue.name,
               subtitle: '${v.venue.place} · ${v.roleName}',
               icon: Icons.storefront_rounded,
+              art: Art3D.officeBuilding,
               route: venueHomeRoute(modules, v.venue),
               group: 'Your venues',
             ),
@@ -179,6 +188,7 @@ Future<List<SearchHit>> _platformSearch(Ref ref, String q, PlatformAccess access
             title: u.fullName.isEmpty ? (u.email ?? 'No name') : u.fullName,
             subtitle: [u.email, u.phone, if (!u.isActive) 'Turned off'].whereType<String>().join(' · '),
             icon: Icons.person_rounded,
+            art: Art3D.person,
             route: CoreRoutes.adminUserFor(u.id),
             group: 'People',
             color: BrandColors.blue,
@@ -191,6 +201,7 @@ Future<List<SearchHit>> _platformSearch(Ref ref, String q, PlatformAccess access
               title: o.name,
               subtitle: o.venueCount == 1 ? '1 venue' : '${o.venueCount} venues',
               icon: Icons.apartment_rounded,
+              art: Art3D.classicalBuilding,
               route: CoreRoutes.adminOrganisationFor(o.id),
               group: 'Organisations',
               color: BrandColors.blue,
@@ -203,6 +214,7 @@ Future<List<SearchHit>> _platformSearch(Ref ref, String q, PlatformAccess access
               title: v.name,
               subtitle: '${v.place} · Waiting to be verified',
               icon: Icons.fact_check_outlined,
+              art: Art3D.magnifier,
               route: CoreRoutes.adminVenues,
               group: 'Venues to verify',
               color: BrandColors.blue,
@@ -493,7 +505,7 @@ class _Heading extends StatelessWidget {
   }
 }
 
-/// One result: its icon on a tile of its service's colour, what it is, and
+/// One result: its 3D icon (or flat one) on a tile of its service's colour, what it is, and
 /// where; marked when chosen (by the arrows or the mouse).
 class _ResultTile extends StatelessWidget {
   final SearchHit hit;
@@ -535,8 +547,11 @@ class _ResultTile extends StatelessWidget {
               Container(
                 width: 36,
                 height: 36,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-                child: Icon(hit.icon, size: 19, color: color),
+                child: hit.art == null
+                    ? Icon(hit.icon, size: 19, color: color)
+                    : Art3DIcon(hit.art!, size: 24, fallback: hit.icon, fallbackColor: color),
               ),
               const SizedBox(width: 12),
               Expanded(

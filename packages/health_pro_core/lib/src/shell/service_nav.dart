@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../module/module_providers.dart';
 import '../module/health_pro_module.dart';
+import '../widgets/art3d.dart';
 
 // The side menu is made of services, not features. Each service (a module:
 // gym management, later coaching...) describes its own
@@ -32,9 +33,13 @@ class NavDestination {
   /// A count beside it: requests waiting, unread.
   final int badge;
 
+  /// Its 3D icon in the side menu and the search; [icon] where there's none.
+  final Art3D? art;
+
   const NavDestination({
     required this.label,
     required this.icon,
+    this.art,
     this.route,
     this.externalUrl,
     this.exact = false,
@@ -55,13 +60,30 @@ class NavDestination {
   }
 }
 
-/// Some of a service's pages under a small heading ('Front desk',
-/// 'Business'); a [title] of null for the first, unheaded ones.
+/// Some of a service's pages under a heading ('Front desk', 'Business') that
+/// opens and closes them; a [title] of null for the first, unheaded ones,
+/// always shown.
 class NavSection {
   final String? title;
   final List<NavDestination> items;
 
-  const NavSection({this.title, required this.items});
+  /// The heading's icon, on a small tile of [color] (the service's when null).
+  final IconData? icon;
+  final Color? color;
+
+  /// The heading's 3D icon, in place of [icon]'s tile.
+  final Art3D? art;
+
+  const NavSection({this.title, required this.items, this.icon, this.color, this.art});
+
+  /// Its key among every service's groups, for remembering it open or closed.
+  String keyIn(ServiceNav nav) => '${nav.key}/$title';
+
+  /// Whether [location] is one of its pages.
+  bool isOpenAt(String location) => items.any((d) => d.isOpenAt(location));
+
+  /// Its pages' counts together, shown on the heading while it's closed.
+  int get badge => items.fold(0, (sum, d) => sum + d.badge);
 }
 
 /// One of the things a service can be working on: a gym of several.
@@ -108,7 +130,10 @@ class ServiceAction {
   /// A line under it on Overview.
   final String? hint;
 
-  const ServiceAction({required this.label, required this.icon, required this.route, this.hint});
+  /// Its 3D icon in the search; [icon] where there's none.
+  final Art3D? art;
+
+  const ServiceAction({required this.label, required this.icon, required this.route, this.hint, this.art});
 }
 
 /// A service's place in the app for the person signed in: its name, icon and

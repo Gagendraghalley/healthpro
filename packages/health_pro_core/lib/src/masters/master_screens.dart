@@ -325,13 +325,7 @@ class _MasterTable extends StatelessWidget {
               ? StatusChip(label: 'In use', color: brand.success)
               : StatusChip(label: 'Off', color: brand.muted),
         ),
-        GridColumn(
-          key: 'edit',
-          label: '',
-          width: 40,
-          alignEnd: true,
-          cell: (context, i) => Icon(Icons.edit_outlined, size: 18, color: brand.muted),
-        ),
+        GridColumn.actions(cell: (context, i) => GridOpenButton(onPressed: () => onTap(i))),
       ],
     );
   }

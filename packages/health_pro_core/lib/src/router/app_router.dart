@@ -47,6 +47,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   // copied link opens that page rather than the one under it.
   GoRouter.optionURLReflectsImperativeAPIs = true;
 
+  // Signed in at the last redirect: a page that finds them signed out now
+  // has just seen them sign out.
+  var wasSignedIn = auth.isLoggedIn;
+
   final router = GoRouter(
     initialLocation: CoreRoutes.root,
     // Supabase.initialize has already read an email link's result; one that
@@ -58,14 +62,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       for (final m in modules) {
         if (m.ownsPath(state.uri.path)) moduleKey = m.key;
       }
+      final signedIn = auth.isLoggedIn;
+      final justSignedOut = wasSignedIn && !signedIn;
+      wasSignedIn = signedIn;
       return guardRoute(
         uri: state.uri,
         pattern: state.fullPath ?? state.uri.path,
-        signedIn: auth.isLoggedIn,
+        signedIn: signedIn,
         publicPatterns: publicPatterns,
         moduleKey: moduleKey,
         enabledModuleKeys: refresh.enabledKeys,
         mustChooseCode: auth.mustChooseCode,
+        justSignedOut: justSignedOut,
       );
     },
     errorBuilder: (context, state) => const NotFoundScreen(),

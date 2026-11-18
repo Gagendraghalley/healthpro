@@ -44,7 +44,8 @@ packages/health_pro_core/lib/src/
   people/         my_qr_screen (My dashboard, /my-qr), person_qr
   theme/          brand.dart (BrandColors, LightColors, Brand.pick), app_theme, theme_mode, phone_size
   widgets/        dashboard_kit, motion (Motion, reduceMotion), common (AsyncValueView), feedback (runAction),
-                  data_grid, app_page, form_fields, searchable_dropdown
+                  data_grid, app_page, form_fields, searchable_dropdown, art3d (Art3D: the menu's 3D icons,
+                  assets/icons3d/, Fluent Emoji 3D, MIT; every menu entry, ServiceAction and SearchHit gets an `art:`)
   assistant/ push/ pwa/ masters/ notifications/ payments/ admin/ profiles/ utils/
 packages/gym_membership/lib/src/
   gym_routes.dart (every /gyms path), gym_module.dart, gym_permissions.dart

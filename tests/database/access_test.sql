@@ -113,8 +113,8 @@ select t.eq((select count(*) from public.role_permissions rp join public.roles r
             (select count(*) from public.permissions where scope = 'venue')::int, 'the owner role lists every venue permission');
 select t.eq((select array_agg(permission_key order by permission_key) from public.role_permissions rp
              join public.roles r on r.id = rp.role_id where r.key = 'staff'),
-            array['gym.check_in', 'gym.members', 'gym.payments', 'gym.register', 'gym.trainers'],
-            'front desk: members, payments, check-in, registering and checking trainers');
+            array['gym.check_in', 'gym.classes', 'gym.members', 'gym.payments', 'gym.register', 'gym.trainers'],
+            'front desk: members, payments, check-in, registering, checking trainers and classes');
 
 select t.as_user('00000000-0000-0000-0000-0000000001b0');
 select public.gym_save_plan(:'gym', null, 'Monthly', null, 30, 1000, true) as plan \gset

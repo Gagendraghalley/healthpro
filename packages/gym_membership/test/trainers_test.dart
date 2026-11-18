@@ -11,7 +11,7 @@ import 'package:gym_membership/src/screens/trainer_screens.dart';
 import 'package:gym_membership/src/widgets/trainer_widgets.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
-import 'gym_navigation_test.dart' as nav show gymId, inMenu, openGym, owner, person, showApp;
+import 'gym_navigation_test.dart' as nav show gymId, groupBadge, inMenu, openGroup, openGym, owner, person, showApp;
 import 'gym_screens_test.dart' show day, inDialog, overrides, show;
 
 // Trainers: verified by each gym, their week, attendance taken at the desk,
@@ -332,7 +332,11 @@ void main() {
       myTrainingProvider.overrideWith((ref) async => const MyTraining(profile: tandin, joinedPublicly: true)),
     ], at: '/gyms/${nav.gymId}/manage');
     await nav.openGym(tester);
+    // Closed, its group counts those waiting; open, the page does.
+    expect(nav.groupBadge('Training', 1), findsOneWidget);
+    await nav.openGroup(tester, 'Training');
     expect(nav.inMenu('Trainers'), findsOneWidget);
+    expect(nav.groupBadge('Training', 1), findsNothing);
     expect(nav.inMenu('Trainer profile'), findsOneWidget);
   });
 

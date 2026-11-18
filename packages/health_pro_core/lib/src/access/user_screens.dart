@@ -326,13 +326,7 @@ class _UsersTable extends StatelessWidget {
           sortBy: (u) => u.createdAt ?? DateTime(0),
           cell: (context, u) => _Plain(u.createdAt == null ? null : formatDate(u.createdAt!.toLocal())),
         ),
-        GridColumn(
-          key: 'open',
-          label: '',
-          width: 40,
-          alignEnd: true,
-          cell: (context, u) => Icon(Icons.chevron_right_rounded, color: context.brand.muted),
-        ),
+        GridColumn.actions(cell: (context, u) => GridOpenButton(onPressed: () => context.push(CoreRoutes.adminUserFor(u.id)))),
       ],
     );
   }

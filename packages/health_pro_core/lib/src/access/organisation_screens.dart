@@ -169,13 +169,7 @@ class _OrganisationsTable extends StatelessWidget {
           sortBy: (o) => o.venueCount,
           cell: (context, o) => Text(venues(o), style: TextStyle(color: brand.body, fontWeight: FontWeight.w600)),
         ),
-        GridColumn(
-          key: 'open',
-          label: '',
-          width: 40,
-          alignEnd: true,
-          cell: (context, o) => Icon(Icons.chevron_right_rounded, color: brand.muted),
-        ),
+        GridColumn.actions(cell: (context, o) => GridOpenButton(onPressed: () => onOpen(o))),
       ],
     );
   }

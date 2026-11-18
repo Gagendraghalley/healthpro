@@ -283,8 +283,15 @@ Widget _cells<T>(List<GridColumn<T>> columns, Widget Function(GridColumn<T> c) c
       ],
     );
 
-/// 'accounts' -> 'account', 'packages' -> 'package', 'staff' stays.
-String _singular(String noun) => noun.endsWith('s') ? noun.substring(0, noun.length - 1) : noun;
+/// 'accounts' -> 'account', 'packages' -> 'package', 'classes' -> 'class',
+/// 'people' -> 'person', 'staff' stays.
+String _singular(String noun) {
+  if (noun.endsWith('people')) return '${noun.substring(0, noun.length - 6)}person';
+  for (final end in const ['sses', 'xes', 'ches', 'shes']) {
+    if (noun.endsWith(end)) return noun.substring(0, noun.length - 2);
+  }
+  return noun.endsWith('s') ? noun.substring(0, noun.length - 1) : noun;
+}
 
 const _cellPadding = EdgeInsets.symmetric(horizontal: 8);
 const _rowPadding = EdgeInsets.symmetric(horizontal: 10);

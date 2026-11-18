@@ -6,7 +6,8 @@ import 'package:gym_membership/src/data/online_payments.dart';
 import 'package:gym_membership/src/screens/payment_screens.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
-import 'gym_navigation_test.dart' as nav show frontDesk, gymId, inMenu, openGym, owner, person, showApp;
+import 'gym_navigation_test.dart' as nav
+    show frontDesk, groupBadge, gymId, inMenu, openGroup, openGym, owner, person, showApp;
 import 'gym_screens_test.dart' show day, inDialog, overrides, show;
 
 // Paying online with a journal number, and the gym's settings (the database
@@ -228,9 +229,12 @@ void main() {
         gymSettingsProvider.overrideWith((ref, id) async => GymSettings.defaults(id)),
       ]);
       await nav.openGym(tester);
+      expect(nav.groupBadge('Requests', 2), findsOneWidget, reason: 'closed, its group counts them');
+      await nav.openGroup(tester, 'Requests');
       expect(nav.inMenu('Payments to confirm'), findsOneWidget);
-      expect(nav.inMenu('Membership settings'), findsOneWidget);
       expect(nav.inMenu('Join requests'), findsOneWidget);
+      await nav.openGroup(tester, 'Team & settings');
+      expect(nav.inMenu('Membership settings'), findsOneWidget);
     });
 
     testWidgets('the front desk, where managers answer requests to join: none for them', (tester) async {
@@ -241,6 +245,7 @@ void main() {
         gymSettingsProvider.overrideWith((ref, id) async => GymSettings(venueId: id, joinApproval: JoinApproval.managers)),
       ], at: '/gyms/${nav.gymId}/manage');
       await nav.openGym(tester);
+      await nav.openGroup(tester, 'Requests');
       expect(nav.inMenu('Payments to confirm'), findsOneWidget, reason: 'they take payments');
       expect(nav.inMenu('Join requests'), findsNothing);
       expect(nav.inMenu('Membership settings'), findsNothing, reason: "they don't edit the gym");

@@ -633,13 +633,7 @@ class _MembersTable extends StatelessWidget {
               );
             },
           ),
-        GridColumn(
-          key: 'open',
-          label: '',
-          width: 40,
-          alignEnd: true,
-          cell: (context, r) => Icon(Icons.chevron_right_rounded, color: brand.muted),
-        ),
+        GridColumn.actions(cell: (context, r) => GridOpenButton(onPressed: () => onOpen(r.member))),
       ],
     );
   }

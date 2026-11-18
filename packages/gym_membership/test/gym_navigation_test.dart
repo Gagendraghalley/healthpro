@@ -33,7 +33,13 @@ final owner = [MyVenue(venue(gymId, 'Druk Fitness Club'), VenueRole.owner), MyVe
 final frontDesk = [
   MyVenue(venue(gymId, 'Druk Fitness Club'), VenueRole.staff,
       roleName: 'Front desk',
-      permissions: const {GymPermission.register, GymPermission.members, GymPermission.payments, GymPermission.checkIn}),
+      permissions: const {
+        GymPermission.register,
+        GymPermission.members,
+        GymPermission.payments,
+        GymPermission.checkIn,
+        GymPermission.classes,
+      }),
 ];
 
 /// The platform's frame (the gym is one service in it) with a stand-in for
@@ -103,6 +109,19 @@ Future<void> openGym(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// A group of the gym's pages ('Requests') starts closed: open it from its
+/// heading.
+Future<void> openGroup(WidgetTester tester, String heading) async {
+  await tester.ensureVisible(inMenu(heading));
+  await tester.pumpAndSettle();
+  await tester.tap(inMenu(heading));
+  await tester.pumpAndSettle();
+}
+
+/// The count on a group's heading while it's closed.
+Finder groupBadge(String heading, int count) => find.descendant(
+    of: find.ancestor(of: inMenu(heading), matching: find.byType(InkWell)).first, matching: find.text('$count'));
+
 bool selected(WidgetTester tester, String label) =>
     tester.widget<SideNavTile>(find.ancestor(of: inMenu(label), matching: find.byType(SideNavTile))).selected;
 
@@ -124,16 +143,35 @@ void main() {
     for (final label in ['My QR code', 'My gyms', 'Notifications']) {
       expect(inMenu(label), findsNothing, reason: '$label: on the dashboard, or the bell at the top');
     }
-    for (final label in [
-      'Dashboard', 'Check-in', 'Members', 'Register member', 'Join requests', 'Gym QR code', 'Memberships & packages',
-      'Payments & income',
-      'Reports & analytics', 'Inventory', 'Suppliers', 'Staff', 'Roles & permissions', 'Gym settings',
-    ]) {
+    // The dashboard, and the day's work open; the other groups closed under
+    // their headings until opened.
+    for (final label in ['Dashboard', 'Reports & analytics', 'Check-in', 'Members', 'Register member', 'Gym QR code']) {
       expect(inMenu(label), findsOneWidget, reason: label);
     }
-    for (final heading in ['Front desk', 'Business', 'Manage']) {
-      expect(inMenu(heading), findsOneWidget, reason: heading);
+    final groups = {
+      'Requests': ['Join requests', 'Payments to confirm'],
+      'Training': ['Classes', 'Trainers'],
+      'Sales & money': ['Memberships & packages', 'Payments & income'],
+      'Stock': ['Inventory', 'Suppliers'],
+      'Team & settings': ['Staff', 'Roles & permissions', 'Gym settings'],
+    };
+    // One open at a time, as with the services: opening one closes the last.
+    var (previous, previousPage) = ('Front desk', 'Check-in');
+    for (final MapEntry(key: heading, value: pages) in groups.entries) {
+      expect(inMenu(pages.first), findsNothing, reason: '$heading: closed');
+      await openGroup(tester, heading);
+      for (final label in pages) {
+        expect(inMenu(label), findsOneWidget, reason: '$heading: $label');
+      }
+      expect(inMenu(previousPage), findsNothing, reason: 'opening $heading closes $previous');
+      (previous, previousPage) = (heading, pages.first);
     }
+    // Closed by hand, none is open.
+    await tester.tap(inMenu(previous));
+    await tester.pumpAndSettle();
+    expect(inMenu(previousPage), findsNothing, reason: '$previous: closed again');
+    expect(inMenu('Check-in'), findsNothing);
+    await openGroup(tester, 'Front desk');
     expect(inMenu('ADMINISTRATION'), findsNothing);
     expect(selected(tester, 'Dashboard'), isTrue);
 

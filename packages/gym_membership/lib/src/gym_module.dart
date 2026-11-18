@@ -158,6 +158,7 @@ class GymModule extends HealthProModule {
         title: 'My gym',
         subtitle: 'Your gym: photos, facilities, where it is and its trainers',
         icon: Icons.fitness_center_rounded,
+        art: Art3D.liftingWeights,
         route: GymRoutes.my,
       ),
       if (training?.profile != null)
@@ -167,6 +168,7 @@ class GymModule extends HealthProModule {
               ? 'Your public profile, gyms, schedule and attendance'
               : 'Your gyms, schedule and attendance',
           icon: Icons.sports_rounded,
+          art: Art3D.biceps,
           route: GymRoutes.trainerHome,
         ),
       // A trainer verified at a gym: the members they train.
@@ -175,6 +177,7 @@ class GymModule extends HealthProModule {
           title: 'My members',
           subtitle: 'The members you train: their progress, and their workout and diet plans',
           icon: Icons.groups_rounded,
+          art: Art3D.person,
           route: GymRoutes.trainerMembers,
         ),
     ];
@@ -220,10 +223,10 @@ class GymModule extends HealthProModule {
             icon: Icons.person_add_alt_1_rounded,
             route: GymRoutes.registerMemberFor(venue.id),
           ),
-        if (access.can(GymPermission.members))
+        if (access.can(GymPermission.classes))
           ModuleMenuItem(
             title: 'Classes',
-            subtitle: 'The weekly timetable, and who\'s booked into each class',
+            subtitle: 'The weekly timetable of yoga, zumba and the rest, and who\'s booked into each',
             icon: Icons.event_note_rounded,
             route: GymRoutes.classesFor(venue.id),
           ),

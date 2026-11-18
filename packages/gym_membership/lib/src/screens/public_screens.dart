@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
+import '../data/classes.dart';
 import '../data/gym_models.dart';
 import '../data/gym_repository.dart';
 import '../gym_routes.dart';
+import '../widgets/class_widgets.dart';
 import '../widgets/gym_public_widgets.dart';
 import '../widgets/trainer_widgets.dart';
 import '../data/trainers.dart';
@@ -316,8 +318,9 @@ class _MenuChip<T> extends StatelessWidget {
 }
 
 /// Public information about one gym: photos, where it is, its packages and
-/// prices, how to reach it and how to join (ask in the app, or at its front
-/// desk), reviews. Its staff also get a way into running it. Its QR code
+/// prices, its classes (anyone on Health Pro books those open to all), how to
+/// reach it and how to join (ask in the app, or at its front desk), reviews.
+/// Its staff also get a way into running it. Its QR code
 /// opens it with [join]: asking to join comes first.
 class GymDetailsScreen extends ConsumerWidget {
   final String venueId;
@@ -434,6 +437,16 @@ class GymDetailsScreen extends ConsumerWidget {
               ? null
               : GymSection(icon: Icons.policy_outlined, title: 'Cancellation and refunds', child: Text(gym.cancellationPolicy!, style: text));
           final trainers = _GymTrainers(venueId: gym.id);
+          // Its classes this week, open to anyone on Health Pro.
+          final timetable = ref.watch(gymClassesProvider(gym.id)).valueOrNull ?? const <GymClass>[];
+          final member = signedIn && (ref.watch(myMembershipsProvider).valueOrNull?.gyms.any((g) => g.venueId == gym.id) ?? false);
+          final classes = !timetable.any((c) => c.isActive)
+              ? null
+              : GymSection(
+                  icon: Icons.event_note_outlined,
+                  title: 'Classes',
+                  child: ClassWeek(venueId: gym.id, signedIn: signedIn, member: member, explain: true),
+                );
           // Its heading brings its own room above it.
           final reviews = GymSection(padding: const EdgeInsets.fromLTRB(18, 0, 18, 18), child: ReviewsSection(venue: gym));
           final trainHere = gym.isVerified ? TrainHereCard(gym: gym) : null;
@@ -444,6 +457,8 @@ class GymDetailsScreen extends ConsumerWidget {
               ref.invalidate(venueProvider(venueId));
               ref.invalidate(gymPlansProvider((venueId: venueId, all: false)));
               ref.invalidate(myMembershipsProvider);
+              ref.invalidate(gymClassesProvider(venueId));
+              ref.invalidate(gymClassPlacesProvider(venueId));
             },
             child: ListView(
               padding: pagePadding(context),
@@ -483,6 +498,7 @@ class GymDetailsScreen extends ConsumerWidget {
                         facts,
                         joinHere,
                         packages,
+                        classes,
                         about,
                         facilities,
                         contact,
@@ -503,7 +519,7 @@ class GymDetailsScreen extends ConsumerWidget {
                         const SizedBox(width: 22),
                         Expanded(
                           flex: 2,
-                          child: _stack([joinHere, trainHere, packages, contact, hours, map, cancellation], after: Motion.stagger),
+                          child: _stack([joinHere, trainHere, packages, classes, contact, hours, map, cancellation], after: Motion.stagger),
                         ),
                       ],
                     );

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
+import '../data/classes.dart';
 import '../data/gym_models.dart';
 import '../data/gym_repository.dart';
 import '../data/joining.dart';
@@ -208,6 +209,7 @@ class MyGymsDashboard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final workouts = ref.watch(myClassBookingsProvider).valueOrNull ?? const <MyClassBooking>[];
     return AsyncValueView<MyMemberships>(
       value: ref.watch(myMembershipsProvider),
       onRetry: () => ref.invalidate(myMembershipsProvider),
@@ -215,7 +217,7 @@ class MyGymsDashboard extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [SkeletonBox(height: 112, radius: 20), SizedBox(height: 20), SkeletonBox(height: 240, radius: 20)],
       ),
-      data: (m) => _MyGymsBody(mine: m, today: BhutanTime.today()),
+      data: (m) => _MyGymsBody(mine: m, workouts: workouts, today: BhutanTime.today()),
     );
   }
 }
@@ -226,9 +228,12 @@ int _daysLeft(DateTime end, DateTime today) => end.difference(today).inDays + 1;
 
 class _MyGymsBody extends StatelessWidget {
   final MyMemberships mine;
+
+  /// The classes they've booked, at any gym (members or not).
+  final List<MyClassBooking> workouts;
   final DateTime today;
 
-  const _MyGymsBody({required this.mine, required this.today});
+  const _MyGymsBody({required this.mine, this.workouts = const [], required this.today});
 
   /// What they should act on, most pressing first: a payment the gym
   /// couldn't find, a package that ended or ends within a week, a gym with
@@ -394,7 +399,18 @@ class _MyGymsBody extends StatelessWidget {
     ];
     final attention = _attention(context);
 
+    final booked = MyClassBookingsList.ahead(workouts, BhutanTime.now());
     final panels = [
+      if (booked.isNotEmpty)
+        ConsoleCard(
+          icon: Icons.event_note_outlined,
+          title: 'My classes',
+          trailing: Text(
+            '${booked.length} booked',
+            style: TextStyle(color: brand.muted, fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          child: Material(type: MaterialType.transparency, child: MyClassBookingsList(bookings: booked)),
+        ),
       if (mine.gyms.isNotEmpty)
         ConsoleCard(
           icon: Icons.bar_chart_rounded,

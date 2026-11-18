@@ -88,3 +88,33 @@ class SideMenuCollapsed extends Notifier<bool> {
     }
   }
 }
+
+/// Which of a service's menu groups ('Front desk', 'Requests') is open: one
+/// at a time, as with the services themselves. It follows the page (the
+/// group holding it; on a page in none, the last that did, or the first);
+/// one opened or closed by hand stays so until another page opens.
+final navGroupsProvider = NotifierProvider<NavGroups, Map<String, ({String? group, String at})>>(NavGroups.new);
+
+class NavGroups extends Notifier<Map<String, ({String? group, String at})>> {
+  /// Each service's group that last held the open page. Not state: noted
+  /// while the menu draws, it changes nothing on its own.
+  final _last = <String, String>{};
+
+  @override
+  Map<String, ({String? group, String at})> build() => const {};
+
+  /// The key ([NavSection.keyIn]) of [nav]'s open group at [location]; null
+  /// for none.
+  String? openIn(ServiceNav nav, String location) {
+    final groups = nav.sections.where((s) => s.title != null);
+    final here = groups.where((s) => s.isOpenAt(location)).firstOrNull?.keyIn(nav);
+    if (here != null) _last[nav.key] = here;
+    final hand = state[nav.key];
+    if (hand != null && hand.at == location) return hand.group;
+    return here ?? _last[nav.key] ?? groups.firstOrNull?.keyIn(nav);
+  }
+
+  /// Opens [group] of [service] by hand, closing its others (null closes
+  /// them all), while [at] stays the page open.
+  void choose(String service, String? group, {required String at}) => state = {...state, service: (group: group, at: at)};
+}
