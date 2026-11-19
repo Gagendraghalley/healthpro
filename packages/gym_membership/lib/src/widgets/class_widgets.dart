@@ -113,9 +113,10 @@ class ClassWeek extends ConsumerWidget {
           )
         else
           for (final (i, day) in days.entries.indexed) ...[
-            Padding(
-              padding: EdgeInsets.only(top: i == 0 && explain ? 0 : 10, bottom: 2),
-              child: Text(classDayLabel(day.key, today), style: TextStyle(fontWeight: FontWeight.w800, color: brand.muted, fontSize: 12.5)),
+            _DayHeader(
+              label: classDayLabel(day.key, today),
+              count: day.value.length,
+              top: i == 0 ? (explain ? 0 : 8) : 14,
             ),
             for (final s in day.value)
               _SessionRow(
@@ -127,11 +128,46 @@ class ClassWeek extends ConsumerWidget {
               ),
           ],
         if (note != null && note.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Text(note, style: TextStyle(color: brand.muted, fontSize: 12.5, height: 1.5)),
+          Container(
+            margin: const EdgeInsets.only(top: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(color: brand.surfaceAlt, borderRadius: BorderRadius.circular(12)),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline_rounded, size: 17, color: brand.muted),
+                const SizedBox(width: 10),
+                Expanded(child: Text(note, style: TextStyle(color: brand.body, fontSize: 12.5, height: 1.5))),
+              ],
+            ),
           ),
       ],
+    );
+  }
+}
+
+/// 'Sat 21 Nov  2 classes ————': the day, then a hairline to the edge.
+class _DayHeader extends StatelessWidget {
+  final String label;
+  final int count;
+  final double top;
+
+  const _DayHeader({required this.label, required this.count, required this.top});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Padding(
+      padding: EdgeInsets.only(top: top, bottom: 8),
+      child: Row(
+        children: [
+          Text(label, style: TextStyle(fontWeight: FontWeight.w800, color: brand.ink, fontSize: 13, letterSpacing: 0.2)),
+          const SizedBox(width: 8),
+          Text(count == 1 ? '1 class' : '$count classes', style: TextStyle(color: brand.muted, fontSize: 12)),
+          const SizedBox(width: 10),
+          Expanded(child: Container(height: 1, color: brand.fieldBorder.withValues(alpha: 0.6))),
+        ],
+      ),
     );
   }
 }
@@ -159,54 +195,111 @@ class _SessionRow extends ConsumerWidget {
     final s = session;
     final c = s.gymClass;
     final started = s.startedBy(now);
+    final mine = s.myBookingId != null;
+    const size = Size(84, 38);
+    const pad = EdgeInsets.symmetric(horizontal: 18);
     final Widget action;
-    if (s.myBookingId != null) {
+    if (mine) {
       action = started
           ? StatusChip(label: 'Booked', color: brand.success, icon: Icons.check_rounded)
-          : TextButton(onPressed: () => onCancel(context, ref, s), child: const Text('Cancel'));
+          : OutlinedButton(
+              style: OutlinedButton.styleFrom(minimumSize: size, padding: pad),
+              onPressed: () => onCancel(context, ref, s),
+              child: const Text('Cancel'),
+            );
     } else if (s.isFull) {
       action = StatusChip(label: 'Full', color: brand.muted);
     } else if (membersOnly) {
       action = StatusChip(label: 'Members only', color: brand.muted, icon: Icons.lock_outline_rounded);
     } else {
-      action = FilledButton.tonal(onPressed: () => onBook(context, ref, s), child: const Text('Book'));
+      action = FilledButton(
+        style: FilledButton.styleFrom(minimumSize: size, padding: pad),
+        onPressed: () => onBook(context, ref, s),
+        child: const Text('Book'),
+      );
     }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
+    // A few places left: say so in amber.
+    final low = !s.isFull && s.left <= (c.capacity ~/ 5).clamp(2, 5);
+    final fill = c.capacity == 0 ? 1.0 : (s.booked / c.capacity).clamp(0.0, 1.0);
+    final barColor = s.isFull ? brand.muted : (low ? brand.warning : brand.accent);
+    final meta = [if (c.trainerName != null) 'with ${c.trainerName}', if (!c.openToAll) 'members only'];
+    final time = SizedBox(
+      width: 76,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 72,
-            child: Text(c.time, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(child: Text(c.name, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink))),
-                    if (s.myBookingId != null) ...[
-                      const SizedBox(width: 6),
-                      Icon(Icons.check_circle_rounded, size: 16, color: brand.success),
-                    ],
-                  ],
-                ),
-                Text(
-                  [
-                    if (c.trainerName != null) 'with ${c.trainerName}',
-                    '${c.durationMinutes} min',
-                    if (!c.openToAll) 'members only',
-                    s.isFull ? 'full' : '${s.left} of ${c.capacity} places left',
-                  ].join(' · '),
-                  style: TextStyle(color: brand.muted, fontSize: 12.5),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          action,
+          Text(c.time, style: TextStyle(fontWeight: FontWeight.w800, color: brand.ink, fontSize: 14)),
+          const SizedBox(height: 2),
+          Text('${c.durationMinutes} min', style: TextStyle(color: brand.muted, fontSize: 12)),
         ],
+      ),
+    );
+    final rule = Container(width: 1, height: 44, margin: const EdgeInsets.only(right: 14), color: brand.fieldBorder.withValues(alpha: 0.7));
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Flexible(
+              child: Text(c.name,
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink, fontSize: 15)),
+            ),
+            if (mine) ...[
+              const SizedBox(width: 6),
+              Icon(Icons.check_circle_rounded, size: 16, color: brand.success),
+            ],
+          ],
+        ),
+        if (meta.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(meta.join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.muted, fontSize: 12.5)),
+        ],
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Container(
+              width: 56,
+              height: 4,
+              alignment: Alignment.centerLeft,
+              decoration: BoxDecoration(color: brand.fieldBorder.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(2)),
+              child: FractionallySizedBox(
+                widthFactor: fill,
+                child: DecoratedBox(decoration: BoxDecoration(color: barColor, borderRadius: BorderRadius.circular(2))),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                s.isFull ? 'No places left' : '${s.left} of ${c.capacity} places left',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: low ? brand.warning : brand.muted, fontSize: 12, fontWeight: low ? FontWeight.w700 : FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: mine ? brand.success.withValues(alpha: 0.06) : brand.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: mine ? brand.success.withValues(alpha: 0.4) : brand.fieldBorder.withValues(alpha: 0.7)),
+      ),
+      // On a narrow phone the button drops under the class.
+      child: LayoutBuilder(
+        builder: (context, box) => box.maxWidth < 330
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(children: [time, rule, Expanded(child: details)]),
+                  const SizedBox(height: 10),
+                  Align(alignment: Alignment.centerRight, child: action),
+                ],
+              )
+            : Row(children: [time, rule, Expanded(child: details), const SizedBox(width: 12), action]),
       ),
     );
   }

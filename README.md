@@ -335,6 +335,25 @@ SUPABASE_ACCESS_TOKEN=sbp_... SUPABASE_DB_PASSWORD=... scripts/deploy_supabase.s
 
 Without the keys, nothing changes: notifications stay inside the app and nobody is asked.
 
+### Class emails
+
+Migrations `20261119000001_class_emails.sql` and `20261119000002_class_change_notices.sql`, the `send-email` Edge Function (`_shared/smtp.ts`, `send-email/class_emails.ts`), checks in `tests/database/class_emails_test.sql`, `tests/functions/smtp_test.ts` and `tests/functions/class_emails_test.ts`.
+
+- **What goes out**: whoever has a place in a class is emailed when they book it (or the desk books it for them): the class, day, time and length, the trainer, the gym, where it is (with a map link) and its phone. Any change the gym makes to the class (name, time, length, trainer, description, places, open to everyone or members only) reaches everyone booked on a day still to come: one email with what changed, and a notification in the app (bell and push), which goes out even before email is set up. When the gym cancels their place (class taken off the timetable, moved to another day, or cancelled by the desk), they're told why, by email and in the app. Cancelling your own place sends nothing.
+- **To whom**: the email of their Health Pro account, or else the one the desk keeps for the member. Members with neither get no email.
+- **How it's sent**: triggers put each email in `private.email_outbox` (out of the app's reach) and ask `send-email` (pg_net, after the commit) to send what's waiting over one SMTP connection. It takes nothing from the caller, sends each email once, and tries a failed one again with the next ones (3 tries, 2 days). Emails over a month old are cleared away.
+- **SMTP**: TLS on port 465 (Supabase's Edge Functions can't reach 587 or 25, so those become 465). Gmail works with an app password; for more than ~500 emails a day use a provider (Brevo, Resend, Amazon SES) and send from your own domain.
+
+**Turn it on** (once; the same mail account as sign-in's SMTP is fine):
+
+```sh
+SMTP_HOST=smtp.gmail.com SMTP_USER=you@gmail.com SMTP_PASS=your-app-password \
+SMTP_FROM='Health Pro <you@gmail.com>' SITE_URL=https://sporthubs.pages.dev \
+SUPABASE_ACCESS_TOKEN=sbp_... SUPABASE_DB_PASSWORD=... scripts/deploy_supabase.sh
+```
+
+This stores them as `send-email`'s secrets and tells the database where `send-email` is. Without SMTP, nothing is queued and the app works as before.
+
 ### Install app (a web app on the home screen)
 
 Health Pro ships as a web app people install, not a store app. The sign-in page has **Install app**: on Android, and Chrome or Edge on a computer, it opens the browser's own install window (`web/index.html` keeps the browser's `beforeinstallprompt` offer for it); on an iPhone or iPad it shows the steps (Share, Add to Home Screen, Add), since Safari can't be asked. Once installed (opened full screen), the button hides. On an iPhone, notifications from the web need it installed (iOS 16.4 or later).

@@ -17,7 +17,8 @@
 # enquiries, WhatsApp reminders and birthday wishes through follow_ups_test.sql, and
 # the gym's inventory and connected suppliers through inventory_test.sql, and
 # discounts, offers and expenses through money_test.sql, and body progress,
-# workout and diet plans and group classes through coaching_test.sql.
+# workout and diet plans and group classes through coaching_test.sql, and the
+# emails about classes through class_emails_test.sql.
 # Needs PostgreSQL 14+ installed (brew install postgresql). Touches nothing else.
 #
 #   scripts/test_database.sh
@@ -59,5 +60,6 @@ db -f tests/database/follow_ups_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED"
 db -f tests/database/inventory_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 db -f tests/database/money_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 db -f tests/database/coaching_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
+db -f tests/database/class_emails_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 echo "Applying supabase/seed.sql (local test data)"
 db -f supabase/seed.sql

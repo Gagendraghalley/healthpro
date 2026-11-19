@@ -9,6 +9,7 @@ import 'package:gym_membership/src/screens/join_screens.dart';
 import 'package:gym_membership/src/screens/members_screens.dart';
 import 'package:gym_membership/src/screens/my_gyms_screen.dart';
 import 'package:health_pro_core/health_pro_core.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import 'gym_screens_test.dart' show day, gym, inDialog, overrides, plans, show;
 
@@ -173,6 +174,11 @@ void main() {
     expect(find.text('SCAN TO JOIN'), findsOneWidget);
     expect(find.text('Download to print'), findsOneWidget);
     expect(gymJoinLink('g1'), endsWith('#/gyms/g1?join=1'));
+    // A clean code: M (not crowded) and whole-pixel modules (crisp, no seams).
+    final size = tester.getSize(find.bySemanticsLabel('QR code to join the gym')).width;
+    final modules = QrImage(QrCode.fromData(data: gymJoinLink('g1'), errorCorrectLevel: QrErrorCorrectLevel.M)).moduleCount;
+    expect(size % modules, 0);
+    expect(size, inInclusiveRange(190, 228));
     expect(tester.takeException(), isNull);
   });
 

@@ -135,12 +135,14 @@ class ReceiptPaper extends StatelessWidget {
               decoration: const BoxDecoration(
                 border: Border(top: BorderSide(color: _ink, width: 2), bottom: BorderSide(color: _line)),
               ),
-              child: Row(
+              // Number and date side by side; on a phone's narrow paper the date goes under it.
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 2,
                 children: [
-                  Expanded(
-                    child: Text('RECEIPT ${r.number}',
-                        style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.4)),
-                  ),
+                  Text('RECEIPT ${r.number}', style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.4)),
                   Text(formatMoment(r.paidAt), style: const TextStyle(color: _muted, fontSize: 12.5)),
                 ],
               ),

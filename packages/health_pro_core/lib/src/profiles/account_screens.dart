@@ -70,8 +70,6 @@ class AccountScreen extends ConsumerWidget {
               delay: const Duration(milliseconds: 240),
               child: _AccountCard(onSignOut: () => _signOut(context, ref), onDelete: () => _deleteAccount(context, ref)),
             ),
-            const SizedBox(height: 12),
-            const LegalLinks(),
           ],
         ),
       ),
@@ -661,7 +659,8 @@ class _MiniApp extends StatelessWidget {
 }
 
 /// Signing out, and deleting the account for good: side by side on a wide
-/// screen, one over the other on a narrow one.
+/// screen, one over the other on a narrow one. Under them, the terms and the
+/// privacy policy, each opening over the page.
 class _AccountCard extends StatelessWidget {
   final VoidCallback onSignOut;
   final VoidCallback onDelete;
@@ -678,8 +677,8 @@ class _AccountCard extends StatelessWidget {
         builder: (context, constraints) {
           // The button at the end of the row, or under it on a phone.
           Widget action(
-              {required IconData icon, required String title, required String subtitle, required Widget button, Color? color}) {
-            if (constraints.maxWidth >= 480) {
+              {required IconData icon, required String title, required String subtitle, required Widget button, Color? color, double besideFrom = 480}) {
+            if (constraints.maxWidth >= besideFrom) {
               return SettingRow(icon: icon, color: color, title: title, subtitle: subtitle, trailing: button);
             }
             return Column(
@@ -715,22 +714,47 @@ class _AccountCard extends StatelessWidget {
               child: const Text('Delete account'),
             ),
           );
+          // Both pages, beside each other at the row's end, or under it sharing the width where two buttons
+          // would squeeze the words.
+          const legalBesideFrom = 720.0;
+          final wide = constraints.maxWidth >= legalBesideFrom;
+          final legalButtons = [
+            for (final d in LegalDoc.values)
+              OutlinedButton.icon(onPressed: () => showLegal(context, d), icon: Icon(d.icon, size: 18), label: Text(d.title, maxLines: 1)),
+          ];
+          final legal = action(
+            icon: Icons.verified_user_outlined,
+            title: 'Terms and privacy',
+            subtitle: 'The rules for using Health Pro, and how we look after your information.',
+            besideFrom: legalBesideFrom,
+            button: wide
+                ? Row(mainAxisSize: MainAxisSize.min, children: [legalButtons[0], const SizedBox(width: 10), legalButtons[1]])
+                : Row(children: [Expanded(child: legalButtons[0]), const SizedBox(width: 10), Expanded(child: legalButtons[1])]),
+          );
+          final line = Divider(height: 24, color: brand.glassBorder);
           // Side by side only where each half still has room for its words.
           if (constraints.maxWidth < 1100) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [signOut, Divider(height: 24, color: brand.glassBorder), delete],
+              children: [signOut, line, delete, line, legal],
             );
           }
-          return IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: signOut),
-                VerticalDivider(width: 48, color: brand.glassBorder),
-                Expanded(child: delete),
-              ],
-            ),
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: signOut),
+                    VerticalDivider(width: 48, color: brand.glassBorder),
+                    Expanded(child: delete),
+                  ],
+                ),
+              ),
+              line,
+              legal,
+            ],
           );
         },
       ),

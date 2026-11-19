@@ -29,6 +29,15 @@
 #                        env.json for the app. VAPID_SUBJECT: who sends them
 #                        (mailto:... or the site's address; the website's by
 #                        default).
+# SMTP_HOST, SMTP_USER and SMTP_PASS: optional. Turn on the emails about
+#                        classes (booked, changed, cancelled) from the
+#                        send-email function; they're stored as its secrets.
+#                        The same mail account as sign-in's SMTP works (Gmail:
+#                        smtp.gmail.com, the address, an app password).
+#                        SMTP_PORT: 465 (587 and 25 become 465: Edge
+#                        Functions can't reach them). SMTP_FROM: who it's
+#                        from ('Health Pro <hello@...>'; SMTP_USER by
+#                        default). SITE_URL: the website, for links in them.
 # No secret is saved in the project.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -88,6 +97,25 @@ echo "== Push notifications: telling the database where send-push is"
 curl -fsS -X POST "https://$PROJECT_REF.supabase.co/functions/v1/send-push" \
   -H 'Content-Type: application/json' -d '{"setup":true}' && echo ||
   echo "   (send-push didn't answer; run this script again later)"
+
+if [[ -n "${SMTP_HOST:-}" && -n "${SMTP_USER:-}" && -n "${SMTP_PASS:-}" ]]; then
+  echo "== Emails: SMTP for send-email"
+  secrets="$(mktemp)"
+  trap 'rm -f "$secrets"' EXIT
+  printf 'SMTP_HOST=%s\nSMTP_PORT=%s\nSMTP_USER=%s\nSMTP_PASS=%s\nSMTP_FROM="%s"\nSITE_URL=%s\n' \
+    "$SMTP_HOST" "${SMTP_PORT:-465}" "$SMTP_USER" "$SMTP_PASS" "${SMTP_FROM:-Health Pro <$SMTP_USER>}" \
+    "${SITE_URL:-https://sporthubs.pages.dev}" > "$secrets"
+  sb secrets set --env-file "$secrets" --yes
+  rm -f "$secrets"
+else
+  echo "== Emails: SMTP_HOST, SMTP_USER and SMTP_PASS aren't all set here; send-email keeps the SMTP secrets it"
+  echo "   already has (Edge Functions -> Secrets). Below, \"configured\":false means class emails are off."
+fi
+
+echo "== Emails: telling the database where send-email is (or that there's no SMTP)"
+curl -fsS -X POST "https://$PROJECT_REF.supabase.co/functions/v1/send-email" \
+  -H 'Content-Type: application/json' -d '{"setup":true}' && echo ||
+  echo "   (send-email didn't answer; run this script again later)"
 
 echo "== Auth settings (email codes)"
 sb config push --yes

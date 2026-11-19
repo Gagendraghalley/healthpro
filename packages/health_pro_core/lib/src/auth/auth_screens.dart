@@ -503,6 +503,7 @@ class _VerifyCodeScreenState extends ConsumerState<VerifyCodeScreen> {
           controller: _code,
           autofocus: true,
           autofillHints: const [AutofillHints.oneTimeCode],
+          showPaste: true,
           refused: _error != null,
           onCompleted: (_) {
             if (!_busy) _verify(pending);

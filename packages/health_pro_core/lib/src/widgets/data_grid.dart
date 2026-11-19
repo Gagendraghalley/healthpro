@@ -205,12 +205,13 @@ class _DataGridState<T> extends State<DataGrid<T>> {
           final total = rows.length;
           final pages = (total / _pageSize).ceil();
           final page = rows.skip(_page * _pageSize).take(_pageSize).toList();
+          final wide = box.maxWidth >= 480;
           return _GridScope(
             shown: {for (final c in shown) c.key},
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _Header<T>(columns: shown, sortKey: _sortKey, ascending: _ascending, onSort: _sortBy),
+                _Header<T>(columns: shown, wide: wide, sortKey: _sortKey, ascending: _ascending, onSort: _sortBy),
                 const Divider(height: 1),
                 // A new page or order cross-fades in.
                 AnimatedSwitcher(
@@ -227,6 +228,9 @@ class _DataGridState<T> extends State<DataGrid<T>> {
                         if (i > 0) const Divider(height: 1),
                         _Row<T>(
                           columns: shown,
+                          // Counts on across pages, in the order shown.
+                          serial: _page * _pageSize + i + 1,
+                          wide: wide,
                           row: row,
                           label: widget.rowLabel?.call(row),
                           dimmed: widget.dimmed?.call(row) ?? false,
@@ -246,7 +250,7 @@ class _DataGridState<T> extends State<DataGrid<T>> {
                   noun: widget.noun,
                   pageSize: _pageSize,
                   pageSizes: widget.pageSizes,
-                  wide: box.maxWidth >= 480,
+                  wide: wide,
                   onPageSize: (n) => setState(() {
                     _pageSize = n;
                     _page = 0;
@@ -272,9 +276,11 @@ class _GridScope extends InheritedWidget {
   bool updateShouldNotify(_GridScope old) => old.shown.length != shown.length || !old.shown.containsAll(shown);
 }
 
-/// The cells of a row (or the header) laid out by their columns.
-Widget _cells<T>(List<GridColumn<T>> columns, Widget Function(GridColumn<T> c) cell) => Row(
+/// The cells of a row (or the header) laid out by their columns, after the
+/// serial number column ([serial]) that every table starts with.
+Widget _cells<T>(List<GridColumn<T>> columns, bool wide, Widget serial, Widget Function(GridColumn<T> c) cell) => Row(
       children: [
+        SizedBox(width: wide ? 72 : 44, child: serial),
         for (final c in columns)
           if (c.width != null)
             SizedBox(width: c.width, child: cell(c))
@@ -298,19 +304,31 @@ const _rowPadding = EdgeInsets.symmetric(horizontal: 10);
 
 class _Header<T> extends StatelessWidget {
   final List<GridColumn<T>> columns;
+  final bool wide;
   final String? sortKey;
   final bool ascending;
   final ValueChanged<GridColumn<T>> onSort;
 
-  const _Header({required this.columns, required this.sortKey, required this.ascending, required this.onSort});
+  const _Header({required this.columns, required this.wide, required this.sortKey, required this.ascending, required this.onSort});
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
+    // 'Sl. No.', or just '#' on a phone.
+    final serial = Semantics(
+      label: 'Serial number',
+      excludeSemantics: true,
+      // Centred over the numbers' tiles.
+      child: Center(
+        child: Text(wide ? 'Sl. No.' : '#',
+            maxLines: 1, overflow: TextOverflow.clip, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: brand.body)),
+      ),
+    );
     return Container(
-      color: context.brand.subtle,
+      color: brand.subtle,
       padding: _rowPadding,
       constraints: const BoxConstraints(minHeight: 52),
-      child: _cells<T>(columns, (c) => _HeaderCell(column: c, sorted: sortKey == c.key, ascending: ascending, onSort: onSort)),
+      child: _cells<T>(columns, wide, serial, (c) => _HeaderCell(column: c, sorted: sortKey == c.key, ascending: ascending, onSort: onSort)),
     );
   }
 }
@@ -383,12 +401,16 @@ class _HeaderCellState<T> extends State<_HeaderCell<T>> {
 /// A row: lights up under the mouse, and opens on a tap.
 class _Row<T> extends StatefulWidget {
   final List<GridColumn<T>> columns;
+
+  /// Its place in the table, from 1.
+  final int serial;
+  final bool wide;
   final T row;
   final String? label;
   final bool dimmed;
   final VoidCallback? onTap;
 
-  const _Row({required this.columns, required this.row, this.label, this.dimmed = false, this.onTap});
+  const _Row({required this.columns, required this.serial, required this.wide, required this.row, this.label, this.dimmed = false, this.onTap});
 
   @override
   State<_Row<T>> createState() => _RowState<T>();
@@ -411,6 +433,8 @@ class _RowState<T> extends State<_Row<T>> {
           constraints: const BoxConstraints(minHeight: 64),
           child: _cells<T>(
             widget.columns,
+            widget.wide,
+            _SerialBadge(serial: widget.serial, lit: _hover),
             (c) => Padding(
               padding: _cellPadding.add(const EdgeInsets.symmetric(vertical: 10)),
               child: Align(
@@ -432,6 +456,52 @@ class _RowState<T> extends State<_Row<T>> {
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
         child: content,
+      ),
+    );
+  }
+}
+
+/// A row's serial number in a small rounded tile: quiet grey, taking the
+/// brand's colour while the mouse is over its row, so a row is easy to
+/// follow across a wide table.
+class _SerialBadge extends StatelessWidget {
+  final int serial;
+  final bool lit;
+
+  const _SerialBadge({required this.serial, required this.lit});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final tint = brand.highlight;
+    return Center(
+      child: AnimatedContainer(
+        duration: Motion.hover,
+        curve: Motion.ease,
+        constraints: const BoxConstraints(minWidth: 30, minHeight: 28),
+        padding: const EdgeInsets.symmetric(horizontal: 7),
+        decoration: BoxDecoration(
+          color: lit ? tint.withValues(alpha: 0.12) : brand.subtle,
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: lit ? tint.withValues(alpha: 0.4) : brand.fieldBorder.withValues(alpha: 0.7)),
+        ),
+        // Sized to the number, at least the tile's square, and centred in it.
+        child: Align(
+          widthFactor: 1,
+          heightFactor: 1,
+          child: AnimatedDefaultTextStyle(
+            duration: Motion.hover,
+            style: TextStyle(
+              fontFamily: brandFont,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+              height: 1,
+              color: lit ? tint : brand.body,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+            child: Text('$serial', maxLines: 1),
+          ),
+        ),
       ),
     );
   }

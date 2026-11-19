@@ -58,7 +58,8 @@ packages/gym_membership/lib/src/
   shell/          gym_navigation (the gym's menu section), current_gym
   dashboard/ welcome/ (public landing page) widgets/
 supabase/migrations/    YYYYMMDDNNNNNN_name.sql, one per change
-supabase/functions/     admin-users, ask-ai, ask-health-pro, delete-account, send-push, supplier-catalog, _shared/
+supabase/functions/     admin-users, ask-ai, ask-health-pro, delete-account, send-email (class emails, SMTP), send-push,
+                        supplier-catalog, _shared/
 tests/database/         *_test.sql, run by scripts/test_database.sh
 tests/functions/        Deno tests for the Edge Functions
 ```

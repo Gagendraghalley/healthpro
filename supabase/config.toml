@@ -261,12 +261,13 @@ otp_expiry = 3600
 # The app signs people up and in with a 6-digit code they type, on the
 # website and in the apps alike, so the emails show {{ .Token }}.
 # New accounts get 'confirmation'; existing ones 'magic_link'.
+# The code leads the subject, so phones and Gmail offer to copy or fill it.
 [auth.email.template.confirmation]
-subject = "Your Health Pro code"
+subject = "{{ .Token }} is your Health Pro code"
 content_path = "./supabase/templates/code.html"
 
 [auth.email.template.magic_link]
-subject = "Your Health Pro code"
+subject = "{{ .Token }} is your Health Pro code"
 content_path = "./supabase/templates/code.html"
 
 [auth.sms]
@@ -463,4 +464,10 @@ verify_jwt = true
 # (pg_net), with no token. It only ever sends a notification once, to its own
 # person, so a stranger calling it can't send anything.
 [functions.send-push]
+verify_jwt = false
+
+# Emails about classes: the database calls it when it queues some (pg_net),
+# with no token. It takes nothing from the caller and only sends what the
+# database queued, each once, so a stranger calling it can't send anything.
+[functions.send-email]
 verify_jwt = false

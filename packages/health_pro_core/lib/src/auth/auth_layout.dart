@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../assistant/assistant_chat.dart';
 import '../assistant/public_assistant.dart';
 import '../theme/brand.dart';
+import '../widgets/feedback.dart';
 import '../widgets/logo.dart';
 import '../widgets/motion.dart';
 
@@ -1084,6 +1085,17 @@ class CodeBoxes extends StatefulWidget {
   /// turns true.
   final bool refused;
 
+  /// A Paste code button under the boxes, for a code from an email (phones
+  /// have no other way to paste into the boxes).
+  final bool showPaste;
+
+  /// A whole code in [text] ("895955", "895 955", "8-9-5-9-5-5", or inside
+  /// a sentence), else every digit in it.
+  static String codeIn(String text, int length) {
+    final run = RegExp('(?:^|[^0-9])([0-9](?:[ -]?[0-9]){${length - 1}})(?![0-9])').firstMatch(text);
+    return (run?[1] ?? text).replaceAll(_notDigit, '');
+  }
+
   const CodeBoxes({
     super.key,
     required this.controller,
@@ -1099,6 +1111,7 @@ class CodeBoxes extends StatefulWidget {
     this.onCompleted,
     this.onSubmitted,
     this.refused = false,
+    this.showPaste = false,
   });
 
   @override
@@ -1225,7 +1238,7 @@ class _CodeBoxesState extends State<CodeBoxes> with TickerProviderStateMixin {
                             enableInteractiveSelection: false,
                             autofillHints: widget.autofillHints,
                             textInputAction: widget.textInputAction,
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            inputFormatters: [_CodeFormatter(widget.length)],
                             decoration: const InputDecoration(counterText: ''),
                             onChanged: (v) {
                               if (field.hasError) field.validate();
@@ -1347,10 +1360,74 @@ class _CodeBoxesState extends State<CodeBoxes> with TickerProviderStateMixin {
                   style: TextStyle(fontSize: 12.5, color: brand.danger),
                 ),
               ),
+            if (widget.showPaste)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Center(
+                  child: TextButton.icon(
+                    onPressed: () => _paste(field),
+                    icon: const Icon(Icons.content_paste_rounded, size: 18),
+                    label: const Text('Paste code'),
+                  ),
+                ),
+              ),
           ],
         );
       },
     );
+  }
+
+  /// Paste code: the code on the clipboard fills the boxes.
+  Future<void> _paste(FormFieldState<String> field) async {
+    var copied = '';
+    try {
+      copied = (await Clipboard.getData(Clipboard.kTextPlain))?.text ?? '';
+    } catch (_) {
+      // The browser said no: the same as nothing copied.
+    }
+    if (!mounted) return;
+    var code = CodeBoxes.codeIn(copied, widget.length);
+    if (code.isEmpty) {
+      showFeedback(context, 'No code copied yet. Copy it from the email, then tap Paste code.', problem: true);
+      return;
+    }
+    if (code.length > widget.length) code = code.substring(0, widget.length);
+    widget.controller.value = TextEditingValue(text: code, selection: TextSelection.collapsed(offset: code.length));
+    _focus.requestFocus();
+    if (field.hasError) field.validate();
+    if (code.length == widget.length) widget.onCompleted?.call(code);
+  }
+}
+
+final _notDigit = RegExp('[^0-9]');
+
+/// Keeps a code to digits, at most [length]. A whole code arriving at once
+/// (pasted, autofilled, or the keyboard's suggestion) takes the place of
+/// what was typed, whatever is around it: "895 955", "8-9-5-9-5-5" or
+/// "Your code is 895955".
+class _CodeFormatter extends TextInputFormatter {
+  final int length;
+
+  const _CodeFormatter(this.length);
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue old, TextEditingValue next) {
+    final before = old.text, after = next.text;
+    // What this edit put in: the part between what stayed the same at each end.
+    var start = 0;
+    while (start < before.length && start < after.length && before[start] == after[start]) {
+      start++;
+    }
+    var end = 0;
+    while (end < before.length - start &&
+        end < after.length - start &&
+        before[before.length - 1 - end] == after[after.length - 1 - end]) {
+      end++;
+    }
+    final added = CodeBoxes.codeIn(after.substring(start, after.length - end), length);
+    var code = added.length == length ? added : after.replaceAll(_notDigit, '');
+    if (code.length > length) code = code.substring(0, length);
+    return TextEditingValue(text: code, selection: TextSelection.collapsed(offset: code.length));
   }
 }
 

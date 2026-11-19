@@ -47,6 +47,28 @@ void main() {
     expect(find.text('21–23 of 23'), findsOneWidget);
   });
 
+  testWidgets('every row has a serial number, counting on across pages', (tester) async {
+    await show(tester);
+    expect(find.text('Sl. No.'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('9'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Next page'));
+    await tester.pumpAndSettle();
+    expect(find.text('11'), findsOneWidget);
+    expect(find.text('20'), findsOneWidget);
+    expect(find.text('1'), findsNothing);
+
+    // Sorted, they still run 1, 2, 3 down the page.
+    await tester.tap(find.text('Name'));
+    await tester.pumpAndSettle();
+    expect(find.text('1'), findsOneWidget);
+
+    await show(tester, width: 360);
+    expect(find.text('#'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a header sorts up, then down, then back as it came', (tester) async {
     await show(tester);
     final sorted = [...names]..sort();

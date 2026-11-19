@@ -181,5 +181,27 @@ void main() {
       expect(find.text('Privacy policy'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    for (final size in [phone, laptop]) {
+      testWidgets('the links open them over the page on a ${size == phone ? 'phone' : 'laptop'}, and switch in place', (tester) async {
+        await show(tester, const Scaffold(body: Center(child: LegalLinks(lead: 'By registering, you agree to the'))), size);
+        await tester.tap(find.text('Privacy policy'));
+        await tester.pumpAndSettle();
+        expect(find.text('In short'), findsOneWidget);
+        expect(find.textContaining('don\'t sell your information'), findsOneWidget);
+        expect(find.text('By registering, you agree to the'), findsOneWidget, reason: 'the page stays underneath');
+
+        await tester.tap(find.text('Terms of use').last);
+        await tester.pumpAndSettle();
+        expect(find.textContaining('never holds your money'), findsOneWidget);
+        expect(find.textContaining('don\'t sell your information'), findsNothing);
+
+        await tester.scrollUntilVisible(find.text('Contact us'), 300, scrollable: find.byType(Scrollable).last);
+        await tester.tap(find.text('Done'));
+        await tester.pumpAndSettle();
+        expect(find.text('In short'), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+    }
   });
 }

@@ -62,6 +62,21 @@ void main() {
     });
   }
 
+  for (final width in [1180.0, 390.0]) {
+    testWidgets('Account: the terms and privacy row opens each over the page at $width wide', (tester) async {
+      await show(tester, const AccountScreen(), Size(width, 1800));
+      expect(find.text('Terms and privacy'), findsOneWidget);
+      final privacy = find.widgetWithText(OutlinedButton, 'Privacy policy');
+      await tester.ensureVisible(privacy);
+      await tester.pumpAndSettle();
+      await tester.tap(privacy);
+      await tester.pumpAndSettle();
+      expect(find.text('In short'), findsOneWidget);
+      expect(find.text('Terms and privacy'), findsOneWidget, reason: 'the account page stays underneath');
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('Edit profile: the initials follow the name being typed', (tester) async {
     await show(tester, const EditProfileScreen(), const Size(390, 900));
     expect(tester.takeException(), isNull);

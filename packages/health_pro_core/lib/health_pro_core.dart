@@ -14,6 +14,7 @@ export 'src/assistant/public_assistant.dart';
 export 'src/auth/auth_repository.dart';
 export 'src/config/env.dart';
 export 'src/errors/error_reporter.dart' show ErrorReporter;
+export 'src/legal/legal_pages.dart' show LegalDoc, LegalLinks, showLegal;
 export 'src/masters/location.dart';
 export 'src/masters/location_fields.dart';
 export 'src/masters/master_repository.dart';

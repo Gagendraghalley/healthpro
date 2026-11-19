@@ -603,29 +603,7 @@ class _GymPoster extends StatelessWidget {
                   const SizedBox(height: 20),
                   CustomPaint(
                     painter: _ScanCorners(accent),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          // H keeps it readable with the mark over the middle.
-                          QrImageView(
-                            data: link,
-                            size: 220,
-                            padding: EdgeInsets.zero,
-                            errorCorrectionLevel: QrErrorCorrectLevel.H,
-                            backgroundColor: Colors.white,
-                            eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: _ink),
-                            dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: _ink),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.all(5),
-                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
-                            child: const HealthProLogo(height: 36, markOnly: true, onDark: false),
-                          ),
-                        ],
-                      ),
-                    ),
+                    child: Padding(padding: const EdgeInsets.all(16), child: _JoinCode(link: link, ink: _ink)),
                   ),
                   const SizedBox(height: 22),
                   Row(
@@ -706,6 +684,102 @@ class _GymPoster extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The join code: M correction so the long link isn't crowded (37 modules, not
+/// 49 at H), every module a whole number of pixels so it prints crisp, and the
+/// mark on a clear patch of whole modules in the middle, well inside what M
+/// recovers. Drawn rounded ([_JoinCodePainter]) so it reads smooth, not scattered.
+class _JoinCode extends StatelessWidget {
+  final String link;
+  final Color ink;
+
+  const _JoinCode({required this.link, required this.ink});
+
+  static const _maxSize = 228.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final code = QrImage(QrCode.fromData(data: link, errorCorrectLevel: QrErrorCorrectLevel.M));
+    final modules = code.moduleCount;
+    final cell = (_maxSize / modules).floorToDouble();
+    // An odd count, so the patch sits exactly on the grid around the middle module.
+    final patch = (modules * 0.2).round() | 1;
+    return Semantics(
+      label: 'QR code to join the gym',
+      image: true,
+      child: CustomPaint(
+        painter: _JoinCodePainter(code, ink: ink, patch: patch),
+        child: SizedBox.square(
+          dimension: cell * modules,
+          child: Center(
+            child: SizedBox.square(
+              dimension: patch * cell,
+              child: Padding(
+                padding: EdgeInsets.all(cell * 0.6),
+                child: const FittedBox(child: HealthProLogo(height: 40, markOnly: true, onDark: false)),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Paints [code] the way today's apps draw QR codes: modules joined to their
+/// neighbours with only the outside corners rounded (a lone module is a dot),
+/// standard square eyes, and the middle [patch] left clear for the mark. One
+/// path for all modules, so neighbours meet without hairline seams.
+class _JoinCodePainter extends CustomPainter {
+  final QrImage code;
+  final Color ink;
+  final int patch;
+
+  const _JoinCodePainter(this.code, {required this.ink, required this.patch});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = code.moduleCount;
+    final c = size.width / n;
+    final from = (n - patch) ~/ 2;
+    final to = from + patch;
+    bool eye(int r, int k) => (r < 7 && (k < 7 || k >= n - 7)) || (r >= n - 7 && k < 7);
+    bool on(int r, int k) =>
+        r >= 0 && k >= 0 && r < n && k < n && !eye(r, k) && !(r >= from && r < to && k >= from && k < to) && code.isDark(r, k);
+    final round = Radius.circular(c / 2);
+    final modules = Path();
+    for (var r = 0; r < n; r++) {
+      for (var k = 0; k < n; k++) {
+        if (!on(r, k)) continue;
+        final (up, down, left, right) = (on(r - 1, k), on(r + 1, k), on(r, k - 1), on(r, k + 1));
+        modules.addRRect(RRect.fromLTRBAndCorners(k * c, r * c, (k + 1) * c, (r + 1) * c,
+            topLeft: up || left ? Radius.zero : round,
+            topRight: up || right ? Radius.zero : round,
+            bottomLeft: down || left ? Radius.zero : round,
+            bottomRight: down || right ? Radius.zero : round));
+      }
+    }
+    final paint = Paint()..color = ink;
+    canvas
+      ..drawRect(Offset.zero & size, Paint()..color = Colors.white)
+      ..drawPath(modules, paint);
+    // Square eyes: scanners find the code by them, and rounded ones failed to decode.
+    for (final (r, k) in [(0, 0), (0, n - 7), (n - 7, 0)]) {
+      final at = Offset(k * c, r * c);
+      canvas
+        ..drawPath(
+            Path()
+              ..fillType = PathFillType.evenOdd
+              ..addRect(at & Size.square(7 * c))
+              ..addRect(at.translate(c, c) & Size.square(5 * c)),
+            paint)
+        ..drawRect(at.translate(2 * c, 2 * c) & Size.square(3 * c), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_JoinCodePainter old) => old.code != code || old.ink != ink || old.patch != patch;
 }
 
 /// A scanner's four corner brackets around the code.
