@@ -14,6 +14,7 @@ import '../module/module_providers.dart';
 import '../router/core_routes.dart';
 import '../shell/service_nav.dart';
 import '../theme/brand.dart';
+import '../venues/venue.dart';
 import '../venues/venue_repository.dart';
 import '../widgets/art3d.dart';
 import '../widgets/motion.dart';
@@ -170,8 +171,9 @@ Future<List<SearchHit>> _platformSearch(Ref ref, String q, PlatformAccess access
     return words.every(all.contains);
   }
 
+  final mine = await ref.watch(myVenuesProvider.future);
   Future<List<SearchHit>> venues() async => [
-        for (final v in await ref.watch(myVenuesProvider.future))
+        for (final v in mine)
           if (has([v.venue.name, v.venue.place, v.organisationName]))
             SearchHit(
               title: v.venue.name,
@@ -180,6 +182,20 @@ Future<List<SearchHit>> _platformSearch(Ref ref, String q, PlatformAccess access
               art: Art3D.officeBuilding,
               route: venueHomeRoute(modules, v.venue),
               group: 'Your venues',
+            ),
+      ];
+  // The staff of the venues whose role lets them see Staff; with several
+  // venues, each says which.
+  Future<List<SearchHit>> staff(MyVenue v) async => [
+        for (final s in await ref.watch(venueStaffProvider(v.venue.id).future))
+          if (has([s.name, s.email, s.phone, s.roleName]))
+            SearchHit(
+              title: s.name,
+              subtitle: [s.roleName, s.phone, if (mine.length > 1) v.venue.name].whereType<String>().join(' · '),
+              icon: Icons.badge_outlined,
+              art: Art3D.officeWorker,
+              route: CoreRoutes.venueStaffFor(v.venue.id, open: s.userId),
+              group: 'Staff',
             ),
       ];
   Future<List<SearchHit>> people() async => [
@@ -221,8 +237,18 @@ Future<List<SearchHit>> _platformSearch(Ref ref, String q, PlatformAccess access
             ),
       ];
 
+  Future<List<SearchHit>> safely(Future<List<SearchHit>> Function() find) async {
+    try {
+      return await find();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   final found = await Future.wait([
     venues(),
+    for (final v in mine)
+      if (v.access.can(VenuePermission.staff)) safely(() => staff(v)),
     if (access.can(PlatformPermission.users)) people(),
     if (access.can(PlatformPermission.organisations)) organisations(),
     if (access.can(PlatformPermission.venuesVerify)) toVerify(),
@@ -462,7 +488,7 @@ class _GlobalSearchDialogState extends ConsumerState<GlobalSearchDialog> {
               textInputAction: TextInputAction.search,
               style: TextStyle(fontSize: 16.5, color: brand.ink, fontWeight: FontWeight.w500),
               decoration: InputDecoration(
-                hintText: 'Search pages, people, members…',
+                hintText: 'Search pages, members, payments, classes, stock…',
                 hintStyle: TextStyle(color: brand.muted, fontWeight: FontWeight.w400),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
@@ -641,7 +667,7 @@ class _NothingFound extends StatelessWidget {
               textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink, fontSize: 15)),
           const SizedBox(height: 4),
           Text(
-            short ? 'Type another letter or two.' : 'Check the spelling, or try a name, phone number or code.',
+            short ? 'Type another letter or two.' : 'Check the spelling, or try a name, phone number, card code or JRN.',
             textAlign: TextAlign.center,
             style: TextStyle(color: brand.muted, fontSize: 13),
           ),

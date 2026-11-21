@@ -105,7 +105,7 @@ class BirthdaysCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
                   children: [
-                    MemberPhoto(path: b.member.photoPath, name: b.member.fullName, size: 36),
+                    MemberPhoto(path: b.member.photoPath, photoUrl: b.member.avatarUrl, name: b.member.fullName, size: 36),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(

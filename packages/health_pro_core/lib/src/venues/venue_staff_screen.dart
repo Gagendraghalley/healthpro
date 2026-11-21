@@ -12,6 +12,8 @@ import '../widgets/common.dart';
 import '../widgets/data_grid.dart';
 import '../widgets/feedback.dart';
 import '../widgets/form_fields.dart';
+import '../widgets/open_from_link.dart';
+import '../widgets/person_avatar.dart';
 
 import 'venue.dart';
 import 'venue_repository.dart';
@@ -34,7 +36,11 @@ List<AppRole> givableVenueRoles(List<AppRole> roles, VenueAccess? venue, Platfor
 class VenueStaffScreen extends ConsumerWidget {
   final String venueId;
 
-  const VenueStaffScreen({super.key, required this.venueId});
+  /// The person to open, by user id (a link's `?open=`): Change role /
+  /// Remove, where they may change them.
+  final String? openId;
+
+  const VenueStaffScreen({super.key, required this.venueId, this.openId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -44,7 +50,15 @@ class VenueStaffScreen extends ConsumerWidget {
     final roles = givableVenueRoles(choices ?? const [], access, platform);
     final canEdit = roles.isNotEmpty;
     final me = ref.watch(currentUserIdProvider);
-    return AppPage(
+    return OpenFromLink<VenueStaffMember>(
+      id: openId,
+      // Once the roles they may give are known.
+      items: access == null || choices == null ? null : ref.watch(venueStaffProvider(venueId)).valueOrNull,
+      idOf: (s) => s.userId,
+      open: (s) {
+        if (_canChange(s, roles, me)) _change(context, ref, s, roles);
+      },
+      child: AppPage(
       title: 'Staff',
       floatingActionButton: canEdit
           ? FloatingActionButton.extended(
@@ -77,6 +91,7 @@ class VenueStaffScreen extends ConsumerWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -186,15 +201,10 @@ class _StaffTable extends StatelessWidget {
           flex: 4,
           sortBy: (s) => s.name.toLowerCase(),
           cell: (context, s) {
-            final initials = s.name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).take(2).map((p) => p[0]).join();
             final color = s.role == VenueRole.owner ? brand.accent : context.colors.primary;
             return Row(
               children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: color.withValues(alpha: 0.12),
-                  child: Text(initials.toUpperCase(), style: TextStyle(color: color, fontWeight: FontWeight.w800)),
-                ),
+                PersonAvatar(name: s.name, photoUrl: s.avatarUrl, color: color),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(

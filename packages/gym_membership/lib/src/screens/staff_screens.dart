@@ -58,7 +58,10 @@ class PlansScreen extends ConsumerStatefulWidget {
   /// Open with the form for a new package (the New package shortcut).
   final bool openNew;
 
-  const PlansScreen({super.key, required this.venueId, this.openNew = false});
+  /// The package to open (a link's `?open=`).
+  final String? openId;
+
+  const PlansScreen({super.key, required this.venueId, this.openNew = false, this.openId});
 
   @override
   ConsumerState<PlansScreen> createState() => _PlansScreenState();
@@ -87,7 +90,12 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
       venueId: _id,
       title: 'Memberships & packages',
       permission: GymPermission.plans,
-      builder: (context, access) => AppPage(
+      builder: (context, access) => OpenFromLink<GymPlan>(
+        id: widget.openId,
+        items: ref.watch(gymPlansProvider(query)).valueOrNull,
+        idOf: (p) => p.id,
+        open: _edit,
+        child: AppPage(
         title: 'Memberships & packages',
         floatingActionButton: wide
             ? null
@@ -222,6 +230,7 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
             );
           },
         ),
+      ),
       ),
     );
   }

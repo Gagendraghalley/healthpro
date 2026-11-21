@@ -1,3 +1,5 @@
+import 'package:health_pro_core/health_pro_core.dart' show withOpen;
+
 /// The gym module's pages. Everything lives under /gyms, so the router can
 /// close them all while the module is turned off.
 abstract final class GymRoutes {
@@ -75,12 +77,12 @@ abstract final class GymRoutes {
   /// have: shown only, bought in the supplier's own system.
   static const inventory = '/gyms/:id/manage/inventory';
   static const suppliers = '/gyms/:id/manage/inventory/suppliers';
-  static String inventoryFor(String id) => '/gyms/$id/manage/inventory';
-  static String suppliersFor(String id) => '/gyms/$id/manage/inventory/suppliers';
+  static String inventoryFor(String id, {String? open}) => withOpen('/gyms/$id/manage/inventory', open);
+  static String suppliersFor(String id, {String? open}) => withOpen('/gyms/$id/manage/inventory/suppliers', open);
 
   /// People who asked about the gym, on a free trial or to follow up.
   static const enquiries = '/gyms/:id/manage/enquiries';
-  static String enquiriesFor(String id) => '/gyms/$id/manage/enquiries';
+  static String enquiriesFor(String id, {String? open}) => withOpen('/gyms/$id/manage/enquiries', open);
 
   /// Who did what at the gym (owner and managers).
   static const activity = '/gyms/:id/manage/activity';
@@ -88,15 +90,15 @@ abstract final class GymRoutes {
 
   /// The gym's offers, and the discounts given (who sets prices).
   static const offers = '/gyms/:id/manage/offers';
-  static String offersFor(String id) => '/gyms/$id/manage/offers';
+  static String offersFor(String id, {String? open}) => withOpen('/gyms/$id/manage/offers', open);
 
   /// What the gym spends, and its profit (who sees income).
   static const expenses = '/gyms/:id/manage/expenses';
-  static String expensesFor(String id) => '/gyms/$id/manage/expenses';
+  static String expensesFor(String id, {String? open}) => withOpen('/gyms/$id/manage/expenses', open);
 
   /// The gym's weekly timetable, and who's booked into each class.
   static const classes = '/gyms/:id/manage/classes';
-  static String classesFor(String id) => '/gyms/$id/manage/classes';
+  static String classesFor(String id, {String? open}) => withOpen('/gyms/$id/manage/classes', open);
 
   /// Register member, filled in from an enquiry: their name and phone.
   static String registerEnquiryFor(String id, {required String name, required String phone}) =>
@@ -119,13 +121,13 @@ abstract final class GymRoutes {
         path: '/gyms/$id/manage/members/new',
         queryParameters: {if (qrToken != null) 'person': qrToken, if (requestId != null) 'request': requestId},
       ).toString();
-  static String requestsFor(String id) => '/gyms/$id/manage/requests';
+  static String requestsFor(String id, {String? open}) => withOpen('/gyms/$id/manage/requests', open);
   static String gymQrFor(String id) => '/gyms/$id/manage/qr';
-  static String paymentsFor(String id) => '/gyms/$id/manage/payments';
+  static String paymentsFor(String id, {String? open}) => withOpen('/gyms/$id/manage/payments', open);
   static String settingsFor(String id) => '/gyms/$id/manage/settings';
   static String payFor(String id) => '/gyms/my/$id/pay';
   static String chooseTrainerFor(String id) => '/gyms/my/$id/trainer';
-  static String gymTrainersFor(String id) => '/gyms/$id/manage/trainers';
+  static String gymTrainersFor(String id, {String? open}) => withOpen('/gyms/$id/manage/trainers', open);
   static String addTrainerFor(String id) => '/gyms/$id/manage/trainers/new';
 
   /// Making a trainer profile on the way to asking gym [id] to train there.
@@ -137,7 +139,7 @@ abstract final class GymRoutes {
   static String memberFor(String id, String memberId) => '/gyms/$id/manage/members/$memberId';
   static String editMemberFor(String id, String memberId) => '/gyms/$id/manage/members/$memberId/edit';
   static String memberRegisteredFor(String id, String memberId) => '/gyms/$id/manage/members/$memberId/registered';
-  static String plansFor(String id) => '/gyms/$id/manage/plans';
+  static String plansFor(String id, {String? open}) => withOpen('/gyms/$id/manage/plans', open);
 
   /// Packages, with the form for a new one open.
   static String newPlanFor(String id) => '/gyms/$id/manage/plans?new=1';

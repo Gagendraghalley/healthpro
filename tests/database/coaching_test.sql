@@ -14,7 +14,8 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-0000000f3003', 'coach.tashi@x.bt', '{"full_name":"Tashi Trainer"}'),
   ('00000000-0000-0000-0000-0000000f3004', 'coach.mindu@x.bt', '{"full_name":"Mindu Member"}'),
   ('00000000-0000-0000-0000-0000000f3005', 'coach.outsider@x.bt', '{"full_name":"Xo Out"}'),
-  ('00000000-0000-0000-0000-0000000f3006', 'coach.kinley@x.bt', '{"full_name":"Kinley Trainer"}');
+  ('00000000-0000-0000-0000-0000000f3006', 'coach.kinley@x.bt', '{"full_name":"Kinley Trainer"}'),
+  ('00000000-0000-0000-0000-0000000f3008', 'coach.host@gym.bt', '{"full_name":"Karma Host"}');
 -- Mindu's notifications, whoever is signed in.
 create function t.mindu_notes() returns setof public.notifications language sql security definer as $$
   select * from public.notifications where user_id = '00000000-0000-0000-0000-0000000f3004'
@@ -141,7 +142,12 @@ select t.fails(format($$select public.gym_save_class(%L, null, '{"name":"Zumba",
                       :'gym'), 'day of the week');
 select t.fails(format($$select public.gym_save_class(%L, null, '{"name":"Zumba","weekday":1,"starts_at":"18:00","capacity":0}')$$,
                       :'gym'), 'Places');
+-- Whoever has Classes keeps the timetable (20261121000002): the front desk changes Yoga; someone without it can't.
 select t.as_user('00000000-0000-0000-0000-0000000f3002');
+select t.eq(public.gym_save_class(:'gym', :'yoga', jsonb_build_object('name', 'Yoga', 'trainer_name', 'Tashi', 'weekday', :dow,
+                                  'starts_at', '07:00', 'duration_minutes', 60, 'capacity', 1, 'open_to_all', false))::text,
+            :'yoga', 'the front desk, given Classes, changes a class');
+select t.as_user('00000000-0000-0000-0000-0000000f3005');
 select t.fails(format($$select public.gym_save_class(%L, null, '{"name":"Zumba","weekday":1,"starts_at":"18:00","capacity":5}')$$,
                       :'gym'), 'change its timetable');
 set role anon;
@@ -337,6 +343,42 @@ select public.gym_save_class(:'gym', :'open_yoga', jsonb_build_object('name', 'O
 select t.as_user('00000000-0000-0000-0000-0000000f3005');
 select t.eq((select link from public.notifications where title like 'Open yoga on %' order by created_at desc limit 1),
             '/gyms/' || :'gym', 'Xo is told the class was cancelled, with the gym''s page');
+select t.eq((select count(*) from public.gym_classes where id = :'open_yoga')::int, 0, 'the public no longer sees it');
+select t.as_user('00000000-0000-0000-0000-0000000f3002');
+select t.eq((select count(*) from public.gym_classes where id = :'open_yoga')::int, 1,
+            'the front desk, with Classes, still sees it, to put it back');
+
+-- A role with Classes alone (20261121000003): it keeps the timetable, books members in from its own list,
+-- and registers newcomers with their first photo; members' details, photos once set and packages stay with the others.
+select t.as_user('00000000-0000-0000-0000-00000000000a');
+select public.save_role(null, 'venue', 'Class host', null, true, array['gym.classes']);
+select t.as_user('00000000-0000-0000-0000-0000000f3001');
+select public.add_venue_staff(:'gym', 'coach.host@gym.bt', 'class_host');
+select t.as_user('00000000-0000-0000-0000-0000000f3008');
+select public.gym_save_class(:'gym', null, jsonb_build_object('name', 'Spin', 'weekday', :dow, 'starts_at', '09:00',
+                             'capacity', 5)) as spin \gset
+select t.eq((select count(*) from jsonb_array_elements(public.gym_class_member_choices(:'gym')) c where c ->> 'id' = :'pem')::int, 1,
+            'Classes alone lists the members to book in');
+select public.gym_book_class(:'spin', :'tomorrow', :'pem');
+select t.eq((select count(*) from public.gym_class_bookings where class_id = :'spin' and status = 'booked')::int, 1,
+            '...and books one in');
+select public.gym_register_member(:'gym', '{"full_name":"Karma Newcomer","phone":"17700009"}') ->> 'gym_member_id' as karma \gset
+select t.eq((select c ->> 'full_name' from jsonb_array_elements(public.gym_class_member_choices(:'gym')) c where c ->> 'id' = :'karma'),
+            'Karma Newcomer', 'Classes alone registers a newcomer');
+insert into storage.objects (bucket_id, name) values ('gym-member-photos', :'gym' || '/' || :'karma' || '-1.jpg');
+select public.gym_set_member_photo(:'karma', :'gym' || '/' || :'karma' || '-1.jpg');
+select t.eq((select count(*) from storage.objects where bucket_id = 'gym-member-photos' and name = :'gym' || '/' || :'karma' || '-1.jpg')::int, 1,
+            '...with their photo');
+select t.fails(format($$select public.gym_set_member_photo(%L, %L)$$, :'karma', :'gym' || '/' || :'karma' || '-2.jpg'),
+               'change their photo');
+select t.fails(format($$select public.gym_update_member(%L, '{"full_name":"Karma N","phone":"17700009"}')$$, :'karma'),
+               'change their details');
+select t.fails(format($$select public.gym_register_member(%L, '{"full_name":"Sold Package","phone":"17700010"}', %L, 1, 1500, 'cash')$$,
+                      :'gym', :'plan'), 'not sell them a package');
+select t.fails(format($$select public.gym_register_member(%L, '{"full_name":"By QR","phone":"17700011"}', person_qr => 'qr')$$, :'gym'),
+               'register members can do this');
+select t.as_user('00000000-0000-0000-0000-0000000f3005');
+select t.fails(format($$select public.gym_class_member_choices(%L)$$, :'gym'), 'book members into its classes');
 
 reset role;
 do $$ begin raise notice 'ALL PROGRESS, PLAN AND CLASS CHECKS PASSED'; end $$;

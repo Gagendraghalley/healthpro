@@ -25,6 +25,7 @@ import '../shell/services_screen.dart';
 import '../shell/start_page.dart';
 import '../venues/venue_screens.dart';
 import '../venues/venue_staff_screen.dart';
+import '../widgets/open_from_link.dart';
 import 'core_routes.dart';
 import 'route_guard.dart';
 
@@ -109,7 +110,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(path: CoreRoutes.manage, builder: (_, __) => const MyVenuesScreen()),
           GoRoute(path: CoreRoutes.venueManage, builder: (_, s) => VenueManageScreen(venueId: s.pathParameters['id']!)),
           GoRoute(path: CoreRoutes.editVenue, builder: (_, s) => VenueFormScreen(venueId: s.pathParameters['id'])),
-          GoRoute(path: CoreRoutes.venueStaff, builder: (_, s) => VenueStaffScreen(venueId: s.pathParameters['id']!)),
+          GoRoute(
+              path: CoreRoutes.venueStaff,
+              builder: (_, s) => VenueStaffScreen(venueId: s.pathParameters['id']!, openId: s.uri.queryParameters[openParam])),
           GoRoute(path: CoreRoutes.venueRoles, builder: (_, s) => VenueRolesScreen(venueId: s.pathParameters['id']!)),
           // Before ':roleId', so 'new' isn't taken for a role's id.
           GoRoute(

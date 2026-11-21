@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -135,6 +136,37 @@ void main() {
       await wait(2000);
       expect(lit(), i % 5);
     }
+  });
+
+  testWidgets('the mouse takes the light from the beat, and gives it back on leaving', (tester) async {
+    await show(tester, sizes['computer']!);
+    Future<void> wait(int ms) async {
+      for (var t = 0; t < ms; t += 100) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    const titles = ['Membership Management', 'Attendance Tracking', 'Easy Payments', 'Staff & Roles', 'Business Insights'];
+    int lit() {
+      final colours = [for (final title in titles) tester.widget<Text>(find.text(title)).style!.color];
+      return [for (var i = 0; i < titles.length; i++) if (colours.where((c) => c == colours[i]).length == 1) i].single;
+    }
+
+    // Into the middle of the screen, clear of the header.
+    await Scrollable.ensureVisible(tester.element(find.text('Business Insights')), alignment: 0.5);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    await wait(1500);
+    expect(lit(), 0);
+    await mouse.moveTo(tester.getCenter(find.text('Business Insights')));
+    // It stays while the beat goes on.
+    await wait(4500);
+    expect(lit(), 4);
+    expect(tester.takeException(), isNull);
+    await mouse.moveTo(Offset.zero);
+    await wait(1000);
+    expect(lit(), isNot(4));
   });
 
   testWidgets('it claims no member counts, ratings or prices', (tester) async {

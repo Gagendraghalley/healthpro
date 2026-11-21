@@ -143,12 +143,12 @@ void main() {
     for (final label in ['My QR code', 'My gyms', 'Notifications']) {
       expect(inMenu(label), findsNothing, reason: '$label: on the dashboard, or the bell at the top');
     }
-    // The dashboard, and the day's work open; the other groups closed under
-    // their headings until opened.
-    for (final label in ['Dashboard', 'Reports & analytics', 'Check-in', 'Members', 'Register member', 'Gym QR code']) {
+    // On the dashboard every group is closed under its heading until opened.
+    for (final label in ['Dashboard', 'Reports & analytics']) {
       expect(inMenu(label), findsOneWidget, reason: label);
     }
     final groups = {
+      'Front desk': ['Check-in', 'Members', 'Register member', 'Gym QR code'],
       'Requests': ['Join requests', 'Payments to confirm'],
       'Training': ['Classes', 'Trainers'],
       'Sales & money': ['Memberships & packages', 'Payments & income'],
@@ -156,14 +156,14 @@ void main() {
       'Team & settings': ['Staff', 'Roles & permissions', 'Gym settings'],
     };
     // One open at a time, as with the services: opening one closes the last.
-    var (previous, previousPage) = ('Front desk', 'Check-in');
+    var (previous, previousPage) = ('', '');
     for (final MapEntry(key: heading, value: pages) in groups.entries) {
       expect(inMenu(pages.first), findsNothing, reason: '$heading: closed');
       await openGroup(tester, heading);
       for (final label in pages) {
         expect(inMenu(label), findsOneWidget, reason: '$heading: $label');
       }
-      expect(inMenu(previousPage), findsNothing, reason: 'opening $heading closes $previous');
+      if (previous.isNotEmpty) expect(inMenu(previousPage), findsNothing, reason: 'opening $heading closes $previous');
       (previous, previousPage) = (heading, pages.first);
     }
     // Closed by hand, none is open.
@@ -181,8 +181,9 @@ void main() {
     expect(selected(tester, 'Members'), isTrue);
     expect(selected(tester, 'Dashboard'), isFalse);
     expect(router.routerDelegate.currentConfiguration.uri.path, GymRoutes.membersFor(gymId));
-    // The page says whose it is: the service and the gym, over its title.
-    expect(find.text('Gym management · Druk Fitness Club'), findsOneWidget);
+    // The page says whose it is: the gym's name, over its title.
+    expect(find.text('Gym management · Druk Fitness Club'), findsNothing);
+    expect(find.text('DRUK FITNESS CLUB'), findsOneWidget);
     expect(find.byTooltip('Menu'), findsNothing);
 
     // Still open on a page without the Ask AI button (the register form).
@@ -225,6 +226,9 @@ void main() {
   testWidgets('the front desk sees only what its role allows', (tester) async {
     await showApp(tester, computer, person(gyms: frontDesk));
     await openGym(tester);
+    // Their role says 'Front desk' too, over the gym; the group's heading is below.
+    await tester.tap(inMenu('Front desk').last);
+    await tester.pumpAndSettle();
     for (final label in ['Check-in', 'Members', 'Register member', 'Reports & analytics']) {
       expect(inMenu(label), findsOneWidget, reason: label);
     }
@@ -314,6 +318,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byTooltip('Collapse menu'), findsNothing);
     await openGym(tester);
+    await openGroup(tester, 'Front desk');
     await tester.tap(inMenu('Check-in'));
     await tester.pumpAndSettle();
     expect(find.text('Page: Check-in'), findsOneWidget);

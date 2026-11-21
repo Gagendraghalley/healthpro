@@ -19,7 +19,10 @@ import '../widgets/gym_widgets.dart';
 class GymInventoryScreen extends ConsumerStatefulWidget {
   final String venueId;
 
-  const GymInventoryScreen({super.key, required this.venueId});
+  /// The item to open (a link's `?open=`).
+  final String? openId;
+
+  const GymInventoryScreen({super.key, required this.venueId, this.openId});
 
   @override
   ConsumerState<GymInventoryScreen> createState() => _GymInventoryScreenState();
@@ -91,7 +94,12 @@ class _GymInventoryScreenState extends ConsumerState<GymInventoryScreen> {
       title: 'Inventory',
       permission: GymPermission.inventory,
       // The page's buttons sit under the bar, not in it.
-      builder: (context, access) => AppPage(
+      builder: (context, access) => OpenFromLink<InventoryItem>(
+        id: widget.openId,
+        items: ref.watch(gymInventoryProvider(_id)).valueOrNull,
+        idOf: (i) => i.id,
+        open: _edit,
+        child: AppPage(
         title: 'Inventory',
         body: AsyncValueView<List<InventoryItem>>(
           value: ref.watch(gymInventoryProvider(_id)),
@@ -157,6 +165,7 @@ class _GymInventoryScreenState extends ConsumerState<GymInventoryScreen> {
             );
           },
         ),
+      ),
       ),
     );
   }
@@ -838,14 +847,24 @@ class _HistorySheet extends ConsumerWidget {
 class SuppliersScreen extends ConsumerStatefulWidget {
   final String venueId;
 
-  const SuppliersScreen({super.key, required this.venueId});
+  /// The supplier shown first, by key (a link's `?open=`).
+  final String? openId;
+
+  const SuppliersScreen({super.key, required this.venueId, this.openId});
 
   @override
   ConsumerState<SuppliersScreen> createState() => _SuppliersScreenState();
 }
 
 class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
-  String? _supplier;
+  late String? _supplier = widget.openId;
+
+  @override
+  void didUpdateWidget(covariant SuppliersScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.openId != null && widget.openId != oldWidget.openId) _supplier = widget.openId;
+  }
+
   String _query = '';
   Timer? _typing;
 

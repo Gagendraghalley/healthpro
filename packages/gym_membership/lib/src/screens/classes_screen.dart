@@ -5,8 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/classes.dart';
-import '../data/gym_repository.dart';
-import '../data/registered_member.dart';
 import '../gym_permissions.dart';
 import '../gym_routes.dart';
 import '../widgets/class_widgets.dart';
@@ -15,12 +13,15 @@ import '../widgets/gym_widgets.dart';
 /// Group classes, for the desk: who's booked into each class on a day (the
 /// next two weeks), members of the gym and non-members on Health Pro, booking
 /// members in and taking anyone out; how many have registered to date; and
-/// the weekly timetable, kept by who sets the packages. For the roles given
-/// Classes (GymPermission.classes): front desk, manager...
+/// the weekly timetable. Every role given Classes (GymPermission.classes:
+/// front desk, trainer, manager...) adds and changes classes too.
 class ClassesScreen extends ConsumerStatefulWidget {
   final String venueId;
 
-  const ClassesScreen({super.key, required this.venueId});
+  /// The class to open (a link's `?open=`).
+  final String? openId;
+
+  const ClassesScreen({super.key, required this.venueId, this.openId});
 
   @override
   ConsumerState<ClassesScreen> createState() => _ClassesScreenState();
@@ -52,11 +53,17 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
       title: 'Classes',
       permission: GymPermission.classes,
       builder: (context, access) {
-        final canEdit = access.can(GymPermission.plans);
-        final canRegister = access.can(GymPermission.register);
-        // Booking a member in picks from the members list.
-        final canBook = access.can(GymPermission.members);
-        return AppPage(
+        // Classes covers the whole page: the timetable, booking members in and
+        // registering non-members (20261121000002, 20261121000003).
+        final canEdit = access.can(GymPermission.classes);
+        final canRegister = access.can(GymPermission.register) || access.can(GymPermission.classes);
+        final canBook = access.can(GymPermission.members) || access.can(GymPermission.classes);
+        return OpenFromLink<GymClass>(
+          id: widget.openId,
+          items: ref.watch(gymClassesProvider(id)).valueOrNull,
+          idOf: (c) => c.id,
+          open: (c) => _openClass(c, canEdit: canEdit, canRegister: canRegister, canBook: canBook),
+          child: AppPage(
           title: 'Classes',
           body: AsyncValueView<List<GymClass>>(
             value: ref.watch(gymClassesProvider(id)),
@@ -109,7 +116,7 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
                         message: canEdit
                             ? 'Add the gym\'s classes (yoga, zumba...): the day, time, length and how many places. Members book them on My gym, '
                                 'and anyone on Health Pro on your public page.'
-                            : 'The owner adds the gym\'s classes here.',
+                            : 'The gym\'s staff add its classes here.',
                         actionLabel: canEdit ? 'Add a class' : null,
                         onAction: canEdit ? _edit : null,
                       )
@@ -163,7 +170,7 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
                             if (!canEdit)
                               Padding(
                                 padding: const EdgeInsets.only(top: 10, left: 2),
-                                child: Text('Whoever sets the gym\'s packages changes the timetable.',
+                                child: Text('The gym\'s staff with Classes change the timetable.',
                                     style: TextStyle(color: context.brand.muted, fontSize: 12.5)),
                               ),
                           ],
@@ -174,11 +181,54 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
               );
             },
           ),
+          ),
         );
       },
     );
   }
+
+  /// A class a link asks for: its next session, who's booked, on Bookings;
+  /// one off the timetable on Timetable, to change for who can.
+  void _openClass(GymClass c, {required bool canEdit, required bool canRegister, required bool canBook}) {
+    if (!c.isActive) {
+      setState(() => _view = _View.timetable);
+      if (canEdit) _edit(c);
+      return;
+    }
+    final today = BhutanTime.today();
+    final day = DateTime(today.year, today.month, today.day + (c.weekday - today.weekday + 7) % 7);
+    setState(() {
+      _view = _View.bookings;
+      _picked = day;
+    });
+    _openSession(context, c, venueId: widget.venueId, day: day, canRegister: canRegister, canBook: canBook);
+  }
 }
+
+/// Shows a class on [day]: who's booked (each can be taken out, and a
+/// non-member registered), and books a member in.
+void _openSession(BuildContext context, GymClass c,
+        {required String venueId,
+        required DateTime day,
+        List<ClassBooking> bookings = const [],
+        bool canRegister = false,
+        bool canBook = false}) =>
+    showRowDetails(
+      context,
+      title: 'Class',
+      // Watched, so a booking made or taken out shows straight away.
+      builder: (context) => Consumer(builder: (context, ref, _) {
+        final now = ref.watch(gymClassBookingsProvider((venueId: venueId, date: day))).valueOrNull ?? bookings;
+        final mine = now.where((b) => b.classId == c.id).toList();
+        return _SessionCard(
+          venueId: venueId,
+          session: ClassSession(gymClass: c, date: day, booked: mine.length),
+          bookings: mine,
+          canRegister: canRegister,
+          canBook: canBook,
+        );
+      }),
+    );
 
 /// The chosen day's classes as a table, with how many of those booked are
 /// members and how many non-members. Open shows who's booked (each can be
@@ -200,22 +250,8 @@ class _SessionsTable extends StatelessWidget {
     this.canBook = false,
   });
 
-  void _open(BuildContext context, GymClass c) => showRowDetails(
-        context,
-        title: 'Class',
-        // Watched, so a booking made or taken out shows straight away.
-        builder: (context) => Consumer(builder: (context, ref, _) {
-          final now = ref.watch(gymClassBookingsProvider((venueId: venueId, date: day))).valueOrNull ?? bookings;
-          final mine = now.where((b) => b.classId == c.id).toList();
-          return _SessionCard(
-            venueId: venueId,
-            session: ClassSession(gymClass: c, date: day, booked: mine.length),
-            bookings: mine,
-            canRegister: canRegister,
-            canBook: canBook,
-          );
-        }),
-      );
+  void _open(BuildContext context, GymClass c) =>
+      _openSession(context, c, venueId: venueId, day: day, bookings: bookings, canRegister: canRegister, canBook: canBook);
 
   @override
   Widget build(BuildContext context) {
@@ -685,7 +721,7 @@ class _SessionCard extends ConsumerWidget {
   }
 
   Future<void> _book(BuildContext context, WidgetRef ref) async {
-    final member = await showAppDialog<GymMember>(
+    final member = await showAppDialog<ClassMemberChoice>(
       context: context,
       builder: (_) => _PickMemberDialog(venueId: venueId, booked: {for (final b in bookings) if (b.gymMemberId != null) b.gymMemberId!}),
     );
@@ -806,7 +842,7 @@ class _PickMemberDialogState extends ConsumerState<_PickMemberDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final all = ref.watch(gymMembersProvider(widget.venueId)).valueOrNull ?? const <GymMember>[];
+    final all = ref.watch(gymClassMemberChoicesProvider(widget.venueId)).valueOrNull ?? const <ClassMemberChoice>[];
     final digits = _search.replaceAll(RegExp(r'\D'), '');
     final found = all
         .where((m) => !widget.booked.contains(m.id))

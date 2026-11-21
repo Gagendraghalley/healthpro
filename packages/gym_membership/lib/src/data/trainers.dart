@@ -148,6 +148,12 @@ class GymTrainer {
   final String? email;
   final String? phone;
 
+  /// Their account's profile photo: shown when they have no trainer photo.
+  final String? avatarUrl;
+
+  /// The trainer photo, else their profile photo.
+  String? get photoUrl => profile.photoUrl ?? avatarUrl;
+
   const GymTrainer({
     required this.profile,
     required this.status,
@@ -162,6 +168,7 @@ class GymTrainer {
     this.addedByGym = false,
     this.email,
     this.phone,
+    this.avatarUrl,
   });
 
   factory GymTrainer.fromJson(Map<String, dynamic> json) => GymTrainer(
@@ -180,6 +187,7 @@ class GymTrainer {
         addedByGym: json['source'] == 'gym',
         email: json['email'] as String?,
         phone: json['phone'] as String?,
+        avatarUrl: json['avatar_url'] as String?,
       );
 }
 

@@ -91,14 +91,16 @@ class SubscriptionStatusChip extends StatelessWidget {
 }
 
 /// A gym page only its staff may open: those whose role there has
-/// [permission] (any of its staff, when null).
+/// [permission] or [orPermission] (any of its staff, when null).
 class GymStaffPage extends ConsumerWidget {
   final String venueId;
   final String title;
   final String? permission;
+  final String? orPermission;
   final Widget Function(BuildContext context, VenueAccess access) builder;
 
-  const GymStaffPage({super.key, required this.venueId, required this.title, required this.builder, this.permission});
+  const GymStaffPage(
+      {super.key, required this.venueId, required this.title, required this.builder, this.permission, this.orPermission});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -107,7 +109,8 @@ class GymStaffPage extends ConsumerWidget {
       onRetry: () => ref.invalidate(myVenuesProvider),
       data: (access) {
         final works = access != null && access.venue.type == gymVenueType;
-        if (!works || (permission != null && !access.can(permission!))) {
+        if (!works ||
+            (permission != null && !access.can(permission!) && (orPermission == null || !access.can(orPermission!)))) {
           return AppPage(
             title: title,
             body: EmptyState(

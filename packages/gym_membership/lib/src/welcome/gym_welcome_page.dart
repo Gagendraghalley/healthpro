@@ -12,7 +12,7 @@ import '../gym_routes.dart';
 import '../widgets/gym_art.dart';
 import '../widgets/gym_type.dart';
 
-/// The landing page for visitors, with a multi-sport introduction and service
+/// The landing page for visitors, with a gym and health introduction and service
 /// links supplied by the modules enabled for this installation.
 ///
 /// Everything it claims is what the app does today: no member counts or
@@ -83,7 +83,7 @@ class _GymWelcomePageState extends ConsumerState<GymWelcomePage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // The sport photos, ready before the top's slides sweep them in.
+    // The slide photos, ready before the top's slides sweep them in.
     for (final slide in _slides) {
       precacheImage(GymPhoto.provider(slide.photo), context);
     }
@@ -398,11 +398,12 @@ class _NavBar extends StatelessWidget {
 // ─── The top ───────────────────────────────────────────────────────────────
 
 /// The headline, what Health Pro is, Get Started and Explore Services, and
-/// three things that are true of it, beside a slide show of sports filling
-/// the right of the window (a card under them on a phone); a membership card
-/// and a check-in float over it, and a wave runs along the foot.
+/// three things that are true of it, beside a slide show of gym training
+/// filling the right of the window (a card under them on a phone); a
+/// membership card and a check-in float over it, and a wave runs along the
+/// foot.
 ///
-/// The slides move like 108.bt's opening scene: each sport sweeps in from
+/// The slides move like 108.bt's opening scene: each photo sweeps in from
 /// the right behind the page's navy and orange bands, drifts slowly closer
 /// while it shows, then gives way to the next.
 class _Hero extends StatefulWidget {
@@ -480,7 +481,7 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
     );
   }
 
-  /// [child], swiped left for the next sport or right for the one before.
+  /// [child], swiped left for the next slide or right for the one before.
   Widget _swipe(Widget child) => GestureDetector(
         behavior: HitTestBehavior.opaque,
         onHorizontalDragEnd: (details) {
@@ -524,17 +525,17 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
     final words = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: staggered(step: const Duration(milliseconds: 90), offset: 18, [
-        const Padding(padding: EdgeInsets.only(bottom: 24), child: _HeroBadge('SPORTS & FITNESS PLATFORM')),
+        const Padding(padding: EdgeInsets.only(bottom: 24), child: _HeroBadge('GYM & FITNESS PLATFORM')),
         Text('One Platform.', style: headline),
-        Text('Every Sport.', style: headline),
-        _AccentText('Endless Possibilities.', style: headline),
+        Text('Every Gym.', style: headline),
+        _AccentText('A Healthier You.', style: headline),
         Padding(
           padding: EdgeInsets.only(top: layout.wide ? 26 : 20, bottom: layout.wide ? 36 : 30),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 470),
             child: Text(
               'Discover gyms, manage memberships and track visits in Health Pro. '
-              'Connected sports services help bring facilities and activities across Bhutan together.',
+              'Train with a gym near you and build healthy habits that last.',
               style: TextStyle(fontSize: layout.wide ? 18 : 16, height: 1.65, color: ink.body),
             ),
           ),
@@ -553,7 +554,7 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
             spacing: 22,
             runSpacing: 12,
             children: [
-              for (final point in const ['Made for Bhutan', 'Gym memberships live', 'Built for every sport'])
+              for (final point in const ['Made for Bhutan', 'Gym memberships live', 'QR check-in at the desk'])
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -584,7 +585,7 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
 
   /// The slides fill the right of the window behind a clean slanted edge
   /// (leaning like the page's stripes, an orange rule along it), graded
-  /// towards navy so every sport sits in the brand's colours, with the way
+  /// towards navy so every slide sits in the brand's colours, with the way
   /// between them on glass under the cards. The whole window, like a stage
   /// (never shorter than what's on it).
   Widget _wide(BuildContext context, Widget words, Color bg, double top) {
@@ -723,7 +724,7 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
                             children: [
                               _swipe(_SlideStage(show: _show)),
                               const IgnorePointer(child: _PhotoGrade()),
-                              // A shade under the ticks and the sport's name,
+                              // A shade under the ticks and the slide's name,
                               // so they read over any photo.
                               const IgnorePointer(
                                 child: DecoratedBox(
@@ -783,8 +784,9 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
 
 // ─── The top's slides ──────────────────────────────────────────────────────
 
-/// One sport in the top's slide show, from the sports photography already
-/// in the app (local, so the page never waits on an image service).
+/// One side of training and health in the top's slide show, from the gym
+/// photography already in the app (local, so the page never waits on an
+/// image service).
 class _Slide {
   /// Its photo in assets/welcome.
   final String photo;
@@ -793,21 +795,18 @@ class _Slide {
   /// What the photo keeps in view as it fills its space.
   final Alignment alignment;
 
-  /// Where it slowly draws closer to (the ball, the player).
+  /// Where it slowly draws closer to (the bar, the people training).
   final Alignment focus;
 
   const _Slide(this.photo, this.name, {this.alignment = Alignment.center, this.focus = Alignment.center});
 }
 
 const _slides = [
-  _Slide('outdoor', 'Football',
-      alignment: Alignment(0.55, 0), focus: Alignment(0.45, -0.35)),
-  _Slide('indoor', 'Basketball',
-      alignment: Alignment(-0.3, 0), focus: Alignment(-0.1, -0.5)),
-  _Slide('racket', 'Tennis', focus: Alignment(0, 0.1)),
-  _Slide('swimming', 'Swimming'),
   _Slide('hero', 'Strength', focus: Alignment(-0.1, -0.5)),
-  _Slide('yoga', 'Yoga', focus: Alignment(0, -0.2)),
+  _Slide('cardio', 'Cardio', focus: Alignment(-0.2, -0.1)),
+  _Slide('training', 'Training', alignment: Alignment(0.2, 0), focus: Alignment(0.1, -0.2)),
+  _Slide('classes', 'Classes', focus: Alignment(-0.1, -0.2)),
+  _Slide('active', 'Healthy Living', alignment: Alignment(0, 0.3), focus: Alignment(0, 0.3)),
 ];
 
 /// A photo on the stage: [reveal] sweeps it in; [life] draws it closer
@@ -831,11 +830,11 @@ class _SlideLayer {
   }
 }
 
-/// The top's slide show: which sport is showing, the photos still sweeping
-/// in over it, and the clock that moves it on. It plays every sport twice
+/// The top's slide show: which slide is showing, the photos still sweeping
+/// in over it, and the clock that moves it on. It plays every slide twice
 /// and then rests (Play starts it again), rests while the top is out of
 /// sight, and stands still when motion is reduced (the arrows and ticks
-/// still change sport, at once).
+/// still change slide, at once).
 class _SlideShow extends ChangeNotifier {
   _SlideShow(this._vsync) {
     _clock = AnimationController(vsync: _vsync, duration: dwell)
@@ -844,13 +843,13 @@ class _SlideShow extends ChangeNotifier {
       });
   }
 
-  /// How long each sport shows, from when it starts to sweep in.
+  /// How long each slide shows, from when it starts to sweep in.
   static const dwell = Duration(milliseconds: 6500);
 
   /// How long a photo takes to sweep in.
   static const sweep = Duration(milliseconds: 1150);
 
-  /// Times through every sport before the show rests.
+  /// Times through every slide before the show rests.
   static const rounds = 2;
 
   final TickerProvider _vsync;
@@ -861,7 +860,7 @@ class _SlideShow extends ChangeNotifier {
   /// sweeping in.
   final layers = <_SlideLayer>[];
 
-  /// The sport showing (or sweeping in).
+  /// The slide showing (or sweeping in).
   int index = 0;
 
   /// Whether it moves on by itself (Pause stops it).
@@ -873,7 +872,7 @@ class _SlideShow extends ChangeNotifier {
   int _serial = 0;
   int _advances = 0;
 
-  /// How far through its time the showing sport is, 0 to 1.
+  /// How far through its time the showing slide is, 0 to 1.
   Animation<double> get progress => _clock;
 
   /// Motion is reduced: no clock, no sweeping, no drift.
@@ -881,7 +880,7 @@ class _SlideShow extends ChangeNotifier {
 
   bool get _moving => playing && _visible && !_still;
 
-  /// Starts the show (sweeping the first sport in, a moment after the page
+  /// Starts the show (sweeping the first slide in, a moment after the page
   /// arrives), or stills it or sets it going when [still] changes.
   void setStill(bool still) {
     if (_started && still == _still) return;
@@ -1168,11 +1167,11 @@ class _SweepBandsPainter extends CustomPainter {
   bool shouldRepaint(_SweepBandsPainter oldDelegate) => oldDelegate.shown != shown || oldDelegate.color != color;
 }
 
-/// Which sport is showing and the way between them, on polished glass under
+/// Which slide is showing and the way between them, on polished glass under
 /// the photos: its number and name set like a scoreboard, a slim track whose
-/// segment for the sport showing stretches out (tap one to see that sport),
-/// the sport before and after, and beside them Pause, ringed by the time
-/// the sport has left. A gleam crosses the glass as each sport arrives. Over
+/// segment for the slide showing stretches out (tap one to see that slide),
+/// the slide before and after, and beside them Pause, ringed by the time
+/// the slide has left. A gleam crosses the glass as each slide arrives. Over
 /// the photo's top on a phone ([compact]), where a swipe moves between them.
 class _SlideControls extends StatelessWidget {
   final _SlideShow show;
@@ -1212,9 +1211,9 @@ class _SlideControls extends StatelessWidget {
                   Expanded(child: _SlideName(index: show.index)),
                   const SizedBox(width: 10),
                 ],
-                _arrow(context, Icons.arrow_back_rounded, 'Previous sport', show.previous),
+                _arrow(context, Icons.arrow_back_rounded, 'Previous slide', show.previous),
                 const SizedBox(width: 6),
-                _arrow(context, Icons.arrow_forward_rounded, 'Next sport', show.next),
+                _arrow(context, Icons.arrow_forward_rounded, 'Next slide', show.next),
                 const SizedBox(width: 10),
               ],
             );
@@ -1278,7 +1277,7 @@ class _SlideControls extends StatelessWidget {
   }
 
   /// Pause (or Play) on its own glass, ringed by how much of the showing
-  /// sport's time has gone.
+  /// slide's time has gone.
   Widget _pause(BuildContext context, {required double size, required bool onPhoto}) {
     final ink = _Ink.of(context);
     final face = Stack(
@@ -1633,9 +1632,9 @@ class _RingPainter extends CustomPainter {
       oldDelegate.value != value || oldDelegate.track != track || oldDelegate.color != color || oldDelegate.soft != soft;
 }
 
-/// The showing sport's number, large and slanted like the headline and
+/// The showing slide's number, large and slanted like the headline and
 /// fading downward, out of how many, small: "02 /06". The number rolls over
-/// as the sport changes.
+/// as the slide changes.
 class _SlideNumber extends StatelessWidget {
   final int index;
 
@@ -1701,7 +1700,7 @@ class _SlideNumber extends StatelessWidget {
   }
 }
 
-/// The showing sport's name in spaced capitals, rolling over as it changes.
+/// The showing slide's name in spaced capitals, rolling over as it changes.
 class _SlideName extends StatelessWidget {
   final int index;
 
@@ -1770,9 +1769,9 @@ class _Roll extends StatelessWidget {
   }
 }
 
-/// A slim track, a segment for each sport: the one showing stretches out,
+/// A slim track, a segment for each slide: the one showing stretches out,
 /// glowing orange fading to peach, as the others draw in; tap a segment to
-/// see that sport.
+/// see that slide.
 class _SlideTrack extends StatelessWidget {
   final _SlideShow show;
 
@@ -1900,7 +1899,7 @@ class _SlantRulePainter extends CustomPainter {
 }
 
 /// A quiet colour grade over the top's photos: navy settling in from the
-/// foot and the left, so each sport sits in the brand's colours and the
+/// foot and the left, so each slide sits in the brand's colours and the
 /// cards and the way between them read over any photo.
 class _PhotoGrade extends StatelessWidget {
   const _PhotoGrade();
@@ -2326,8 +2325,14 @@ class _Highlight {
 /// edge first, the other catching up), the light along the top edge riding
 /// with it on a computer. As it arrives the item lights up: its tile fills
 /// with orange, sends out a ripple and breathes, its name turns orange, and a
-/// thin bar along the panel's foot fills while it stays. With less motion
-/// nothing moves; the mouse still lights an item.
+/// thin bar along the panel's foot fills while it stays, and a sheen of light
+/// sweeps once across the panel.
+///
+/// The mouse takes the light: the panel glides to the item under it, from
+/// wherever it is (even mid-glide), and stays there until the mouse leaves
+/// the card, when it glides back to where the beat has got to. A soft orange
+/// light follows the mouse over the card, warming the border nearest it.
+/// With less motion nothing moves; the mouse still lights an item.
 class _Highlights extends StatefulWidget {
   final _Layout layout;
 
@@ -2350,14 +2355,19 @@ class _HighlightsState extends State<_Highlights> with TickerProviderStateMixin 
   static const _lead = Interval(0, 0.7, curve: Curves.easeOutCubic);
   static const _trail = Interval(0.3, 1, curve: Curves.easeInOutCubic);
 
-  /// The lit item and the one before it; none when the device asks for less
-  /// motion.
+  /// The lit item; none when the device asks for less motion.
   int? _active;
-  int? _previous;
+
+  /// Where the panel set off from, when it's gliding to the lit item.
+  Rect? _from;
 
   /// Back round to the first: the panel pops in there, rather than gliding
   /// back across the whole card.
   bool _popIn = false;
+
+  /// The item the mouse lit, and where the beat has got to meanwhile.
+  int? _hovered;
+  int _beatAt = 0;
 
   /// Where each item sits on the card, measured once it's laid out.
   List<Rect>? _rects;
@@ -2366,38 +2376,78 @@ class _HighlightsState extends State<_Highlights> with TickerProviderStateMixin 
 
   late final AnimationController _breath = AnimationController(vsync: this, duration: _Beat.settle);
 
-  /// The panel's glide from the item before to the lit one.
+  /// The panel's glide from where it was to the lit item.
   late final AnimationController _glide = AnimationController(vsync: this, duration: Motion.card, value: 1);
+
+  /// The light following the mouse: where it is, and how far it's faded in.
+  final _pointer = ValueNotifier<Offset?>(null);
+  late final AnimationController _spot = AnimationController(vsync: this, duration: Motion.theme);
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final beat = _Beat.of(context);
     if (reduceMotion(context)) {
-      _active = _previous = null;
+      _active = _from = _hovered = null;
       _popIn = false;
       _breath.value = 0;
       _glide.value = 1;
+      _spot.value = 0;
       return;
     }
-    final active = beat % _Highlights.items.length;
-    if (active == _active) return;
-    _popIn = _active != null && active < _active!;
-    _previous = _popIn ? null : _active;
-    _active = active;
-    _breath.forward(from: 0);
-    if (_previous == null && !_popIn) {
-      _glide.value = 1;
-    } else {
-      _glide.forward(from: 0);
-    }
+    _beatAt = beat % _Highlights.items.length;
+    if (_hovered == null) _light(_beatAt, wrap: true);
   }
 
   @override
   void dispose() {
     _breath.dispose();
     _glide.dispose();
+    _spot.dispose();
+    _pointer.dispose();
     super.dispose();
+  }
+
+  /// Lights [index]: the panel glides over from wherever it is now, or pops
+  /// in when the beat has come back round to the first ([wrap]).
+  void _light(int index, {bool wrap = false}) {
+    final was = _active;
+    if (index == was) return;
+    final rects = _rects;
+    _popIn = wrap && was != null && index < was;
+    _from = _popIn || was == null || rects == null ? null : _panel(rects, was, _glide.value);
+    _active = index;
+    _breath.forward(from: 0);
+    if (_from == null && !_popIn) {
+      _glide.value = 1;
+    } else {
+      _glide.forward(from: 0);
+    }
+  }
+
+  void _enter(int index) {
+    if (reduceMotion(context) || index == _hovered) return;
+    setState(() {
+      _hovered = index;
+      _light(index);
+    });
+  }
+
+  /// The mouse has left the card: the light goes back to the beat.
+  void _leave() {
+    if (!mounted) return;
+    _spot.reverse();
+    if (_hovered == null) return;
+    setState(() {
+      _hovered = null;
+      _light(_beatAt);
+    });
+  }
+
+  void _follow(Offset at) {
+    if (reduceMotion(context)) return;
+    _pointer.value = at;
+    _spot.forward();
   }
 
   /// Measures where the items sit on the card, for the panel to glide between.
@@ -2422,7 +2472,7 @@ class _HighlightsState extends State<_Highlights> with TickerProviderStateMixin 
   /// its own, the leading one first, so it stretches and then catches up.
   Rect _panel(List<Rect> rects, int active, double t) {
     final to = rects[active].deflate(4);
-    final from = rects[_previous ?? active].deflate(4);
+    final from = _from ?? to;
     final forward = to.center.dx >= from.center.dx;
     final down = to.center.dy >= from.center.dy;
     double edge(double a, double b, bool leads) => a + (b - a) * (leads ? _lead : _trail).transform(t);
@@ -2449,7 +2499,14 @@ class _HighlightsState extends State<_Highlights> with TickerProviderStateMixin 
           key: _items[i],
           child: _RevealItem(
             order: i + 2,
-            child: _HighlightCell(item: item, number: i + 1, inRow: !layout.wide, lit: i == active, breath: _breath),
+            child: _HighlightCell(
+              item: item,
+              number: i + 1,
+              inRow: !layout.wide,
+              lit: i == active,
+              breath: _breath,
+              onEnter: () => _enter(i),
+            ),
           ),
         ),
     ];
@@ -2494,53 +2551,70 @@ class _HighlightsState extends State<_Highlights> with TickerProviderStateMixin 
               border: Border.all(color: brand.glassBorder),
               boxShadow: ink.shadow(light: 0.1, dark: 0.4, blur: 48, dy: 20),
             ),
-            child: Stack(
-              key: _card,
-              children: [
-                if (moving)
-                  AnimatedBuilder(
-                    animation: Listenable.merge([_glide, _breath]),
-                    builder: (context, _) {
-                      final t = _glide.value;
-                      final panel = _HighlightPanel(turn: _breath.value);
-                      return Positioned.fromRect(
-                        rect: _panel(rects, active, t),
-                        child: _popIn
-                            ? Opacity(
-                                opacity: Motion.ease.transform(t),
-                                child: Transform.scale(scale: 0.9 + 0.1 * Motion.pop.transform(t), child: panel),
-                              )
-                            : panel,
-                      );
-                    },
+            child: MouseRegion(
+              onHover: (event) => _follow(event.localPosition),
+              onExit: (_) => _leave(),
+              child: Stack(
+                key: _card,
+                children: [
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: CustomPaint(
+                        painter: _Spotlight(
+                          pointer: _pointer,
+                          shown: _spot,
+                          color: brand.highlight,
+                          wash: ink.dark ? 0.1 : 0.07,
+                          radius: BorderRadius.circular(24),
+                        ),
+                      ),
+                    ),
                   ),
-                Padding(padding: EdgeInsets.all(layout.medium ? 10 : 6), child: content),
-                // A thin light of the brand's orange along the top edge,
-                // brightest in the middle; on a computer, brightest over the
-                // lit item and riding along with the panel.
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 0,
-                  height: 2,
-                  child: DecoratedBox(decoration: BoxDecoration(gradient: glow(moving && layout.wide ? 0.3 : 0.9))),
-                ),
-                if (moving && layout.wide)
-                  AnimatedBuilder(
-                    animation: _glide,
-                    builder: (context, _) {
-                      final panel = _panel(rects, active, _glide.value);
-                      final width = panel.width * 1.4;
-                      return Positioned(
-                        left: panel.center.dx - width / 2,
-                        width: width,
-                        top: 0,
-                        height: 2.5,
-                        child: DecoratedBox(decoration: BoxDecoration(gradient: glow(1))),
-                      );
-                    },
+                  if (moving)
+                    AnimatedBuilder(
+                      animation: Listenable.merge([_glide, _breath]),
+                      builder: (context, _) {
+                        final t = _glide.value;
+                        final panel = _HighlightPanel(turn: _breath.value);
+                        return Positioned.fromRect(
+                          rect: _panel(rects, active, t),
+                          child: _popIn
+                              ? Opacity(
+                                  opacity: Motion.ease.transform(t),
+                                  child: Transform.scale(scale: 0.9 + 0.1 * Motion.pop.transform(t), child: panel),
+                                )
+                              : panel,
+                        );
+                      },
+                    ),
+                  Padding(padding: EdgeInsets.all(layout.medium ? 10 : 6), child: content),
+                  // A thin light of the brand's orange along the top edge,
+                  // brightest in the middle; on a computer, brightest over the
+                  // lit item and riding along with the panel.
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    height: 2,
+                    child: DecoratedBox(decoration: BoxDecoration(gradient: glow(moving && layout.wide ? 0.3 : 0.9))),
                   ),
-              ],
+                  if (moving && layout.wide)
+                    AnimatedBuilder(
+                      animation: _glide,
+                      builder: (context, _) {
+                        final panel = _panel(rects, active, _glide.value);
+                        final width = panel.width * 1.4;
+                        return Positioned(
+                          left: panel.center.dx - width / 2,
+                          width: width,
+                          top: 0,
+                          height: 2.5,
+                          child: DecoratedBox(decoration: BoxDecoration(gradient: glow(1))),
+                        );
+                      },
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -2549,17 +2623,67 @@ class _HighlightsState extends State<_Highlights> with TickerProviderStateMixin 
   }
 }
 
+/// A soft light under the mouse: a faint wash of [color] round [pointer] and,
+/// brighter, along the card's border nearest it. [shown] fades it in and out.
+class _Spotlight extends CustomPainter {
+  final ValueNotifier<Offset?> pointer;
+  final Animation<double> shown;
+  final Color color;
+  final double wash;
+  final BorderRadius radius;
+
+  _Spotlight({required this.pointer, required this.shown, required this.color, required this.wash, required this.radius})
+      : super(repaint: Listenable.merge([pointer, shown]));
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final at = pointer.value;
+    final t = Motion.ease.transform(shown.value);
+    if (at == null || t == 0) return;
+    Shader light(double alpha, double reach) => RadialGradient(
+          colors: [color.withValues(alpha: alpha * t), color.withValues(alpha: 0)],
+        ).createShader(Rect.fromCircle(center: at, radius: reach));
+    final card = Offset.zero & size;
+    canvas.drawRect(card, Paint()..shader = light(wash, 280));
+    canvas.drawRRect(
+      radius.toRRect(card.deflate(0.75)),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..shader = light(0.75, 220),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_Spotlight old) =>
+      old.pointer != pointer || old.shown != shown || old.color != color || old.wash != wash || old.radius != radius;
+}
+
 /// The soft orange panel under the lit item, with a bar along its foot
-/// showing how far through its [turn] (0 to 1) the item is.
+/// showing how far through its [turn] (0 to 1) the item is. Once it has
+/// landed a sheen of light sweeps across it, corner to corner.
 class _HighlightPanel extends StatelessWidget {
   final double turn;
 
   const _HighlightPanel({required this.turn});
 
+  /// The sheen sets off as the panel lands and is gone well within the turn.
+  static const _sheen = Interval(0.28, 0.68);
+
   @override
   Widget build(BuildContext context) {
     final ink = _Ink.of(context);
     final accent = context.brand.accent;
+    final sweep = _sheen.transform(turn.clamp(0.0, 1.0));
+    final at = -0.25 + 1.5 * Motion.easeInOut.transform(sweep);
+    final shine = Colors.white.withValues(alpha: (ink.dark ? 0.1 : 0.55) * math.sin(math.pi * sweep));
+    final bar = Align(
+      alignment: Alignment.bottomCenter,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 7),
+        child: _TurnBar(turn: turn),
+      ),
+    );
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
@@ -2574,13 +2698,25 @@ class _HighlightPanel extends StatelessWidget {
         border: Border.all(color: accent.withValues(alpha: 0.3)),
         boxShadow: [BoxShadow(color: accent.withValues(alpha: 0.16), blurRadius: 24, offset: const Offset(0, 10))],
       ),
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 0, 14, 7),
-          child: _TurnBar(turn: turn),
-        ),
-      ),
+      child: sweep == 0 || sweep == 1
+          ? bar
+          : Stack(
+              fit: StackFit.expand,
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    gradient: LinearGradient(
+                      begin: const Alignment(-1, -0.6),
+                      end: const Alignment(1, 0.6),
+                      colors: [shine.withValues(alpha: 0), shine, shine.withValues(alpha: 0)],
+                      stops: [(at - 0.18).clamp(0.0, 1.0), at.clamp(0.0, 1.0), (at + 0.18).clamp(0.0, 1.0)],
+                    ),
+                  ),
+                ),
+                bar,
+              ],
+            ),
     );
   }
 }
@@ -2672,7 +2808,17 @@ class _HighlightCell extends StatefulWidget {
   final bool lit;
   final Animation<double> breath;
 
-  const _HighlightCell({required this.item, required this.number, required this.breath, this.inRow = false, this.lit = false});
+  /// The mouse has come onto it.
+  final VoidCallback? onEnter;
+
+  const _HighlightCell({
+    required this.item,
+    required this.number,
+    required this.breath,
+    this.inRow = false,
+    this.lit = false,
+    this.onEnter,
+  });
 
   @override
   State<_HighlightCell> createState() => _HighlightCellState();
@@ -2686,7 +2832,10 @@ class _HighlightCellState extends State<_HighlightCell> {
     final still = reduceMotion(context);
     final light = _lighting(context, widget.lit);
     return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
+      onEnter: (_) {
+        setState(() => _hover = true);
+        widget.onEnter?.call();
+      },
       onExit: (_) => setState(() => _hover = false),
       child: TweenAnimationBuilder<double>(
         tween: Tween(end: widget.lit ? 1 : 0),
@@ -2843,11 +2992,19 @@ class _Service {
   /// Open now; the rest are coming.
   final bool open;
 
-  const _Service(this.name, this.icon, this.photo, {this.open = false});
+  /// A word on training or health under its name. Without one (and not
+  /// open), it's a service still to come.
+  final String? note;
+
+  const _Service(this.name, this.icon, this.photo, {this.open = false, this.note});
+
+  /// A service still to come: muted until the pointer warms it.
+  bool get coming => !open && note == null;
 }
 
-/// Services currently available in Health Pro and links contributed by the
-/// enabled service modules.
+/// The gym, open now, large, with what it offers and simple healthy habits
+/// around it, and links contributed by the enabled service modules. Other
+/// services join [services] as they open.
 class _Services extends StatelessWidget {
   final _Layout layout;
   final List<ModuleMenuItem> serviceLinks;
@@ -2857,11 +3014,11 @@ class _Services extends StatelessWidget {
 
   static const services = [
     _Service('Gym & Fitness', Icons.fitness_center_rounded, 'gym', open: true),
-    _Service('Yoga & Wellness', Icons.self_improvement_rounded, 'yoga'),
-    _Service('Swimming', Icons.pool_rounded, 'swimming'),
-    _Service('Indoor Sports', Icons.sports_basketball_rounded, 'indoor'),
-    _Service('Outdoor Sports', Icons.sports_soccer_rounded, 'outdoor'),
-    _Service('Racket Sports', Icons.sports_tennis_rounded, 'racket'),
+    _Service('Strength Training', Icons.sports_gymnastics_rounded, 'strength', note: 'Builds muscle and bone'),
+    _Service('Cardio', Icons.monitor_heart_outlined, 'cardio', note: 'Aim for 150 minutes a week'),
+    _Service('Classes', Icons.groups_rounded, 'classes', note: 'Train together with a coach'),
+    _Service('Healthy Eating', Icons.restaurant_rounded, 'eating', note: 'Fuel every workout'),
+    _Service('Everyday Movement', Icons.directions_walk_rounded, 'active', note: 'Walk more, sit less'),
   ];
 
   @override
@@ -2890,15 +3047,16 @@ class _Services extends StatelessWidget {
       children: [
         const _Eyebrow('OUR SERVICES', lineBefore: true),
         const SizedBox(height: 16),
-        Text('Explore Sports', style: title),
-        _AccentText('& Services', style: title),
+        Text('Train Well', style: title),
+        _AccentText('& Live Healthy', style: title),
         const SizedBox(height: 18),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 470),
           child: Text(
             serviceLinks.isEmpty
-                ? 'Manage gym memberships and check-ins in Health Pro. The platform is built to connect more sports and facilities across Bhutan.'
-                : 'Manage gym memberships and check-ins in Health Pro. Its other services open from here.',
+                ? 'Find a gym, join and check in with your QR in Health Pro. Strength, cardio and classes at the gym, '
+                    'and simple habits that keep you healthy every day.'
+                : 'Find a gym, join and check in with your QR in Health Pro. Its other services open from here.',
             style: TextStyle(fontSize: layout.wide ? 17 : 16, height: 1.65, color: ink.body),
           ),
         ),
@@ -2915,7 +3073,7 @@ class _Services extends StatelessWidget {
           ),
       ],
     );
-    // The service that's open first, large; the ones to come around it.
+    // The service that's open first, large; the rest around it.
     final ordered = [...services.where((s) => s.open), ...services.where((s) => !s.open)];
     final tiles = _ServiceBento(
       layout: layout,
@@ -3020,9 +3178,10 @@ List<double> _saturation(double s) {
 }
 
 /// A service on its photo, graded to navy at the foot for its name. The one
-/// open now ([featured]) is large, with what it does and the way in; those
-/// still to come wait in muted colour, which warms under the pointer. Every
-/// photo eases in a little under the pointer.
+/// open now ([featured]) is large, with what it does and the way in; the
+/// others carry a word on training or health, and any still to come wait in
+/// muted colour, which warms under the pointer. Every photo eases in a
+/// little under the pointer.
 class _ServiceTile extends StatefulWidget {
   final _Service service;
   final VoidCallback? onTap;
@@ -3041,7 +3200,7 @@ class _ServiceTileState extends State<_ServiceTile> {
   Widget build(BuildContext context) {
     final service = widget.service;
     final featured = widget.featured;
-    final badge = service.open ? 'Open now' : 'Coming soon';
+    final badge = service.open ? 'Open now' : service.note ?? 'Coming soon';
     final ink = _Ink.of(context);
     final hover = _hover && !reduceMotion(context);
     // In the light, a navy haze under the photo rather than a grey smudge.
@@ -3053,7 +3212,7 @@ class _ServiceTileState extends State<_ServiceTile> {
       curve: Motion.ease,
       child: GymPhoto(service.photo),
     );
-    if (!service.open) {
+    if (service.coming) {
       photo = TweenAnimationBuilder<double>(
         tween: Tween(end: hover ? 1 : 0.4),
         duration: const Duration(milliseconds: 450),
@@ -3118,7 +3277,7 @@ class _ServiceTileState extends State<_ServiceTile> {
                     border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                   ),
                 ),
-                if (featured) ..._featured(context, hover) else ..._small(hover),
+                if (featured) ..._featured(context, hover) else ..._small(hover, badge),
                 if (widget.onTap != null) Material(type: MaterialType.transparency, child: InkWell(onTap: widget.onTap)),
               ],
             ),
@@ -3215,8 +3374,9 @@ class _ServiceTileState extends State<_ServiceTile> {
     ];
   }
 
-  /// A service to come: over the foot its icon, name, and that it's coming.
-  List<Widget> _small(bool hover) {
+  /// A smaller tile: over the foot its icon, name, and its [note] (or that
+  /// it's coming).
+  List<Widget> _small(bool hover, String note) {
     final service = widget.service;
     return [
       AnimatedPositioned(
@@ -3251,7 +3411,7 @@ class _ServiceTileState extends State<_ServiceTile> {
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
-                    'Coming soon',
+                    note,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: Colors.white.withValues(alpha: 0.72), fontSize: 12, fontWeight: FontWeight.w600),
@@ -3342,13 +3502,13 @@ class _About extends StatelessWidget {
         const _Eyebrow('ABOUT HEALTH PRO', lineBefore: true),
         const SizedBox(height: 16),
         Text('The Digital Home', style: title),
-        _AccentText('for Sports & Fitness', style: title),
+        _AccentText('for Gyms & Fitness', style: title),
         const SizedBox(height: 18),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
           child: Text(
-            'Health Pro connects people, facilities and sports services through one platform built for Bhutan. '
-            'Gym memberships are managed here, while enabled sports services connect members to their existing tools.',
+            'Health Pro brings members, trainers and gyms together on one platform built for Bhutan. '
+            'Memberships, check-ins and payments live in one place, so you can focus on training and staying healthy.',
             style: TextStyle(fontSize: layout.wide ? 16.5 : 16, height: 1.65, color: ink.body),
           ),
         ),

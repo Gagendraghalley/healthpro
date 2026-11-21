@@ -26,7 +26,10 @@ IconData _iconOf(ExpenseCategory c) => switch (c) {
 class ExpensesScreen extends ConsumerStatefulWidget {
   final String venueId;
 
-  const ExpensesScreen({super.key, required this.venueId});
+  /// The expense to open (a link's `?open=`).
+  final String? openId;
+
+  const ExpensesScreen({super.key, required this.venueId, this.openId});
 
   @override
   ConsumerState<ExpensesScreen> createState() => _ExpensesScreenState();
@@ -64,15 +67,25 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       builder: (context, access) {
         final today = BhutanTime.today();
         final query = _paymentsQuery(today);
-        return AppPage(
-          title: 'Expenses & profit',
-          body: AsyncValueView<List<GymExpense>>(
-            value: ref.watch(gymExpensesProvider(id)),
-            onRetry: () => ref.invalidate(gymExpensesProvider(id)),
-            data: (expenses) => AsyncValueView<List<Payment>>(
-              value: ref.watch(venuePaymentsProvider(query)),
-              onRetry: () => ref.invalidate(venuePaymentsProvider(query)),
-              data: (payments) => _content(context, access, expenses, payments, today, wide),
+        return OpenFromLink<GymExpense>(
+          id: widget.openId,
+          items: ref.watch(gymExpensesProvider(id)).valueOrNull,
+          idOf: (e) => e.id,
+          // On its month, so its line is behind it.
+          open: (e) {
+            setState(() => _month = DateTime(e.spentOn.year, e.spentOn.month));
+            _edit(e);
+          },
+          child: AppPage(
+            title: 'Expenses & profit',
+            body: AsyncValueView<List<GymExpense>>(
+              value: ref.watch(gymExpensesProvider(id)),
+              onRetry: () => ref.invalidate(gymExpensesProvider(id)),
+              data: (expenses) => AsyncValueView<List<Payment>>(
+                value: ref.watch(venuePaymentsProvider(query)),
+                onRetry: () => ref.invalidate(venuePaymentsProvider(query)),
+                data: (payments) => _content(context, access, expenses, payments, today, wide),
+              ),
             ),
           ),
         );

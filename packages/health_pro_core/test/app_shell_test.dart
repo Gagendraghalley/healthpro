@@ -162,6 +162,10 @@ void main() {
     await showShell(tester, const [shop, cafe], at: '/cafe');
     await tester.tap(inMenu('Shop'));
     await tester.pumpAndSettle();
+    // Its groups start closed too.
+    expect(inMenu('Shop orders'), findsNothing);
+    await tester.tap(inMenu('Work'));
+    await tester.pumpAndSettle();
     expect(inMenu('Shop orders'), findsOneWidget);
     expect(inMenu('Cafe orders'), findsNothing);
     await tester.tap(inMenu('Shop orders'));
@@ -240,6 +244,8 @@ void main() {
     await tester.tap(find.byTooltip('Menu'));
     await tester.pumpAndSettle();
     await tester.tap(inMenu('Shop'));
+    await tester.pumpAndSettle();
+    await tester.tap(inMenu('Work'));
     await tester.pumpAndSettle();
     expect(inMenu('Shop orders'), findsOneWidget);
     await tester.tap(inMenu('Shop orders'));

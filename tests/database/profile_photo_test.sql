@@ -59,5 +59,28 @@ select t.fails($$update public.profiles set avatar_url = 'https://x/p.jpg'$$, 'p
 select t.fails($$insert into storage.objects (bucket_id, name) values ('profile-photos', 'x/1.jpg')$$,
                'permission denied');
 
+-- The gym's lists show the photos people uploaded: its Members list
+-- (people_test.sql's Jigme at Alpha Gym) and its Trainers list
+-- (trainers_test.sql's Xi at Zeta Gym).
+reset role;
+update public.profiles set avatar_url = 'https://x/jigme.jpg' where id = '00000000-0000-0000-0000-000000000703';
+update public.profiles set avatar_url = 'https://x/xi.jpg' where id = '00000000-0000-0000-0000-000000001007';
+select id as gym_a from public.venues where name = 'Alpha Gym' \gset
+select id as zeta from public.venues where name = 'Zeta Gym' \gset
+set role authenticated;
+select t.as_user('00000000-0000-0000-0000-000000000702');
+select t.eq((select public.avatar_url(x) from public.gym_members g join public.people x on x.id = g.person_id
+             where g.venue_id = :'gym_a' and x.user_id = '00000000-0000-0000-0000-000000000703'), 'https://x/jigme.jpg',
+            'the front desk sees a member''s profile photo');
+select t.as_user('00000000-0000-0000-0000-000000000705');
+select t.eq((select count(*) from public.people x where public.avatar_url(x) is not null
+             and x.user_id = '00000000-0000-0000-0000-000000000703')::int, 0, '...and no one else');
+select t.as_user('00000000-0000-0000-0000-000000001002');
+select t.eq((select o ->> 'avatar_url' from jsonb_array_elements(public.gym_trainers_overview(:'zeta')) o
+             where o ->> 'user_id' = '00000000-0000-0000-0000-000000001007'), 'https://x/xi.jpg',
+            'the gym sees a trainer''s profile photo');
+set role anon;
+select t.fails($$select public.avatar_url(x) from public.people x$$, 'permission denied');
+
 reset role;
 do $$ begin raise notice 'ALL PROFILE PHOTO CHECKS PASSED'; end $$;

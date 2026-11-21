@@ -9,8 +9,9 @@ import '../data/gym_repository.dart';
 /// A photo the front desk took or chose, before it's uploaded.
 typedef PickedPhoto = ({Uint8List bytes, String contentType});
 
-/// A registered member's photo (private, from the gym's folder), or their
-/// initials while there's none.
+/// A registered member's photo (private, from the gym's folder), else the
+/// one they uploaded to their account ([photoUrl]), or their initials while
+/// there's none.
 class MemberPhoto extends ConsumerWidget {
   final String? path;
   final String name;
@@ -19,7 +20,10 @@ class MemberPhoto extends ConsumerWidget {
   /// A photo just taken, shown instead of [path].
   final Uint8List? bytes;
 
-  const MemberPhoto({super.key, required this.path, required this.name, this.size = 56, this.bytes});
+  /// Their account's profile photo, for when the gym has none.
+  final String? photoUrl;
+
+  const MemberPhoto({super.key, required this.path, required this.name, this.size = 56, this.bytes, this.photoUrl});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -31,14 +35,29 @@ class MemberPhoto extends ConsumerWidget {
         child: Image.memory(data, width: size, height: size, fit: BoxFit.cover, gaplessPlayback: true),
       );
     }
-    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-    final initials = parts.isEmpty ? '?' : (parts.first[0] + (parts.length > 1 ? parts.last[0] : '')).toUpperCase();
-    return Container(
+    final initials = Container(
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(color: BrandColors.blue.withValues(alpha: 0.14), borderRadius: radius),
-      child: Text(initials, style: TextStyle(color: BrandColors.blue, fontWeight: FontWeight.w800, fontSize: size * 0.34)),
+      child: Text(PersonAvatar.initialsOf(name),
+          style: TextStyle(color: BrandColors.blue, fontWeight: FontWeight.w800, fontSize: size * 0.34)),
+    );
+    // The gym's own photo is still loading: hold the initials, don't flash theirs.
+    final url = photoUrl;
+    if (url == null || url.isEmpty || path != null) return initials;
+    return ClipRRect(
+      borderRadius: radius,
+      child: Image.network(
+        url,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        semanticLabel: name,
+        cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
+        frameBuilder: (context, child, frame, sync) => frame == null && !sync ? initials : child,
+        errorBuilder: (_, __, ___) => initials,
+      ),
     );
   }
 }

@@ -551,7 +551,7 @@ class _MembersTable extends StatelessWidget {
             ];
             return Row(
               children: [
-                MemberPhoto(path: r.member.photoPath, name: r.member.fullName, size: 40),
+                MemberPhoto(path: r.member.photoPath, photoUrl: r.member.avatarUrl, name: r.member.fullName, size: 40),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -668,7 +668,7 @@ class _MemberTile extends StatelessWidget {
       onTap: onTap,
       child: Row(
         children: [
-          MemberPhoto(path: member.photoPath, name: member.fullName, size: 52),
+          MemberPhoto(path: member.photoPath, photoUrl: member.avatarUrl, name: member.fullName, size: 52),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -733,6 +733,8 @@ class RegisterMemberScreen extends ConsumerWidget {
       venueId: venueId,
       title: editing ? 'Edit member' : 'Register member',
       permission: GymPermission.register,
+      // Someone new, as a non-member who booked a class: Classes too (20261121000003).
+      orPermission: editing || existing ? null : GymPermission.classes,
       builder: (context, access) {
         if (existing) {
           final query = (venueId: venueId, qrToken: personQr, requestId: requestId);
@@ -896,6 +898,12 @@ class _MemberFormState extends ConsumerState<_MemberForm> {
     ref.invalidate(gymMemberProvider(id!));
     if (photoProblem != null || _editing) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(photoProblem ?? 'Saved')));
+    }
+    // Registered from Classes by a role that doesn't see the members: back to Classes.
+    if (!_editing && !widget.access.can(GymPermission.members)) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${_name.text.trim()} is registered as a member')));
+      context.go(GymRoutes.classesFor(widget.venueId));
+      return;
     }
     // A new member: the page that says so, with their QR card to send.
     context.go(_editing ? GymRoutes.memberFor(widget.venueId, id!) : GymRoutes.memberRegisteredFor(widget.venueId, id!));
@@ -1079,7 +1087,11 @@ class _MemberFormState extends ConsumerState<_MemberForm> {
     final cancel = TextButton(
       onPressed: _saving
           ? null
-          : () => context.go(_editing ? GymRoutes.memberFor(widget.venueId, widget.member!.id) : GymRoutes.membersFor(widget.venueId)),
+          : () => context.go(_editing
+              ? GymRoutes.memberFor(widget.venueId, widget.member!.id)
+              : widget.access.can(GymPermission.members)
+                  ? GymRoutes.membersFor(widget.venueId)
+                  : GymRoutes.classesFor(widget.venueId)),
       child: const Text('Cancel'),
     );
     final submit = FilledButton.icon(
@@ -1498,7 +1510,7 @@ class _MemberPageState extends ConsumerState<_MemberPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          MemberPhoto(path: m.photoPath, name: m.fullName, size: 96),
+          MemberPhoto(path: m.photoPath, photoUrl: m.avatarUrl, name: m.fullName, size: 96),
           const SizedBox(width: 18),
           Expanded(
             child: Column(

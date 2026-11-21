@@ -61,9 +61,6 @@ class _PlatformShellState extends ConsumerState<PlatformShell> {
   /// from page to page leaves them all closed.
   bool _touched = false;
 
-  /// The last service a page was in, kept open on the platform's own pages.
-  String? _lastService;
-
   /// What the search finds without asking the services: the menu's pages
   /// and shortcuts, as of the last build.
   List<SearchHit> _pages = const [];
@@ -126,10 +123,8 @@ class _PlatformShellState extends ConsumerState<PlatformShell> {
         if (s.nav.isOpenAt(location) || s.module.ownsPath(location)) s.nav,
       if (admin != null && admin.isOpenAt(location)) admin,
     ].firstOrNull;
-    if (active != null) _lastService = active.key;
-    final open = _openedByHand
-        ? _opened
-        : active?.key ?? _lastService ?? (services.length == 1 ? services.first.nav.key : null);
+    // Closed by default: only the service holding the page opens with it.
+    final open = _openedByHand ? _opened : active?.key;
     _pages = searchablePages(
       platformPages: platformPages,
       services: [for (final s in services) s.nav],

@@ -11,7 +11,7 @@
 # a venue's profile, prices and reviews through profile_test.sql, and
 # trainers (verification, timings, attendance, reviews) through trainers_test.sql,
 # and push notifications through push_test.sql, and each person's app colours
-# through theme_test.sql, and their profile photo through profile_photo_test.sql, and
+# through theme_test.sql, and their profile photo (and it in the gym's lists) through profile_photo_test.sql, and
 # errors the app reports through app_errors_test.sql, and pausing memberships and
 # numbered receipts through pauses_receipts_test.sql, and the activity log,
 # enquiries, WhatsApp reminders and birthday wishes through follow_ups_test.sql, and

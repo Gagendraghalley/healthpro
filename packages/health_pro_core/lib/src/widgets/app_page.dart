@@ -11,6 +11,7 @@ import '../shell/app_shell.dart';
 import '../shell/service_nav.dart';
 import '../theme/brand.dart';
 import '../theme/theme_mode.dart';
+import 'art3d.dart';
 import 'motion.dart';
 
 /// Every page's frame: a frosted-glass app bar with the page blurred behind
@@ -136,9 +137,9 @@ class AppPage extends StatelessWidget {
   }
 }
 
-/// A service page's title: the service's name small above it. On a computer
-/// the service's icon on a tile of its colour leads; on a phone a dot of its
-/// colour.
+/// A service page's title: the page's 3D icon (the side menu's) in a tile
+/// ringed in the theme's two colours, the gym on a badge, the title in a
+/// gradient. On a phone the badge and the title only.
 class _ServiceTitle extends StatelessWidget {
   final ServiceNav service;
   final String title;
@@ -148,46 +149,131 @@ class _ServiceTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 700;
-    final color = context.brand.themed(service.color);
-    final name = Text(
-      service.scope == null ? service.name : '${service.name} · ${service.scope!.label}',
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: context.brand.muted, letterSpacing: 0.2),
+    final brand = context.brand;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // The theme's two colours (Account -> Appearance): the primary (orange
+    // until picked) for the gym, the accent (navy until picked, deep into a
+    // brighter shade of it) for the title. Text is white under the shader.
+    final warm = brand.accent;
+    final ink = HSLColor.fromColor(Theme.of(context).colorScheme.primary);
+    final cool = ink
+        .withLightness((ink.lightness + (dark ? 0.12 : 0.22)).clamp(0.0, dark ? 0.9 : 0.5))
+        .withSaturation((ink.saturation + 0.15).clamp(0.0, 1.0))
+        .toColor();
+    Widget gradient(List<Color> colors, Widget child) => ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (bounds) => LinearGradient(colors: colors).createShader(bounds),
+          child: child,
+        );
+
+    final name = gradient(
+      [brand.accentText, warm],
+      Text(
+        (service.scope?.label ?? service.name).toUpperCase(),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 1.2, height: 1.3),
+      ),
+    );
+    // On a computer the gym sits on a badge with a glowing dot; a phone's bar
+    // has no room for it, so there the name alone.
+    final badge = Container(
+      padding: const EdgeInsets.fromLTRB(7, 2.5, 9, 2.5),
+      decoration: BoxDecoration(
+        color: warm.withValues(alpha: dark ? 0.16 : 0.08),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: warm.withValues(alpha: dark ? 0.32 : 0.22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(colors: [warm, brand.accentText]),
+              boxShadow: [BoxShadow(color: warm.withValues(alpha: 0.6), blurRadius: 5)],
+            ),
+          ),
+          const SizedBox(width: 6),
+          Flexible(child: name),
+        ],
+      ),
     );
     final text = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (wide)
-          name
-        else
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-              const SizedBox(width: 6),
-              Flexible(child: name),
-            ],
-          ),
-        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        if (wide) badge else name,
+        const SizedBox(height: 3),
+        gradient(
+          [ink.toColor(), cool],
+          Text(title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, letterSpacing: -0.4, height: 1.1)),
+        ),
       ],
     );
     if (!wide) return text;
+
+    // The page's own 3D icon, as in the side menu; the service's where it has none.
+    final location = GoRouter.maybeOf(context)?.routerDelegate.currentConfiguration.uri.path;
+    final art = location == null ? null : service.openAt(location)?.art;
+    final surface = brand.card;
+    final mark = art == null ? Icon(service.icon, size: 21, color: brand.accentText) : Art3DIcon(art, size: 26, fallback: service.icon);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // A ring that is the primary at one corner and the accent at the
+        // other, fading through the bar between; a glow of each beneath.
         Container(
-          width: 36,
-          height: 36,
+          width: 44,
+          height: 44,
+          padding: const EdgeInsets.all(1.5),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: color.withValues(alpha: 0.18)),
+            borderRadius: BorderRadius.circular(14),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [warm, warm.withValues(alpha: 0.15), cool.withValues(alpha: 0.15), cool],
+              stops: const [0, 0.45, 0.55, 1],
+            ),
+            boxShadow: [
+              BoxShadow(color: warm.withValues(alpha: dark ? 0.2 : 0.22), blurRadius: 16, offset: const Offset(-3, 4)),
+              BoxShadow(color: cool.withValues(alpha: dark ? 0.2 : 0.16), blurRadius: 16, offset: const Offset(4, 6)),
+            ],
           ),
-          child: Icon(service.icon, size: 19, color: color),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12.5),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color.alphaBlend(warm.withValues(alpha: dark ? 0.18 : 0.12), surface),
+                  Color.alphaBlend(cool.withValues(alpha: dark ? 0.16 : 0.08), surface),
+                ],
+              ),
+            ),
+            // Pops in with each page, still when they ask for less motion.
+            child: Center(
+              child: TweenAnimationBuilder<double>(
+                key: ValueKey(art?.name ?? service.key),
+                tween: Tween(begin: 0, end: 1),
+                duration: reduceMotion(context) ? Duration.zero : Motion.card,
+                curve: Motion.pop,
+                builder: (context, t, child) => Opacity(
+                  opacity: t.clamp(0.0, 1.0),
+                  child: Transform.scale(scale: 0.7 + 0.3 * t, child: child),
+                ),
+                child: mark,
+              ),
+            ),
+          ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 14),
         Flexible(child: text),
       ],
     );
@@ -372,7 +458,7 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final searchWidth = (width * 0.34).clamp(280.0, 460.0);
+        final searchWidth = (width * 0.42).clamp(300.0, 560.0);
         // The title has everything left of the search, less a gap.
         final start = ((width - searchWidth) / 2 - 24).clamp(0.0, width);
         // AppBar's own back button, as it would have put it.

@@ -18,7 +18,10 @@ import '../widgets/gym_widgets.dart';
 class OffersScreen extends ConsumerStatefulWidget {
   final String venueId;
 
-  const OffersScreen({super.key, required this.venueId});
+  /// The offer to open (a link's `?open=`).
+  final String? openId;
+
+  const OffersScreen({super.key, required this.venueId, this.openId});
 
   @override
   ConsumerState<OffersScreen> createState() => _OffersScreenState();
@@ -43,7 +46,12 @@ class _OffersScreenState extends ConsumerState<OffersScreen> {
       title: 'Offers & discounts',
       permission: GymPermission.plans,
       builder: (context, access) {
-        return AppPage(
+        return OpenFromLink<GymOffer>(
+          id: widget.openId,
+          items: ref.watch(gymOffersProvider(id)).valueOrNull,
+          idOf: (o) => o.id,
+          open: _edit,
+          child: AppPage(
           title: 'Offers & discounts',
           body: AsyncValueView<List<GymOffer>>(
             value: ref.watch(gymOffersProvider(id)),
@@ -86,6 +94,7 @@ class _OffersScreenState extends ConsumerState<OffersScreen> {
                 ),
               );
             },
+          ),
           ),
         );
       },

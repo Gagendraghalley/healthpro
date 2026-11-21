@@ -21,7 +21,10 @@ import 'trainer_screens.dart' show pickTrainerSlots;
 class GymTrainersScreen extends ConsumerStatefulWidget {
   final String venueId;
 
-  const GymTrainersScreen({super.key, required this.venueId});
+  /// The trainer to open, by their user id (a link's `?open=`).
+  final String? openId;
+
+  const GymTrainersScreen({super.key, required this.venueId, this.openId});
 
   @override
   ConsumerState<GymTrainersScreen> createState() => _GymTrainersScreenState();
@@ -41,7 +44,12 @@ class _GymTrainersScreenState extends ConsumerState<GymTrainersScreen> {
       venueId: venueId,
       title: 'Trainers',
       permission: GymPermission.trainers,
-      builder: (context, access) => AppPage(
+      builder: (context, access) => OpenFromLink<GymTrainer>(
+        id: widget.openId,
+        items: ref.watch(gymTrainersProvider(venueId)).valueOrNull,
+        idOf: (t) => t.profile.userId,
+        open: (t) => _openTrainer(context, t, venueId),
+        child: AppPage(
         title: 'Trainers',
         body: AsyncValueView<List<GymTrainer>>(
           value: ref.watch(gymTrainersProvider(venueId)),
@@ -116,9 +124,21 @@ class _GymTrainersScreenState extends ConsumerState<GymTrainersScreen> {
           },
         ),
       ),
+      ),
     );
   }
 }
+
+/// Shows a trainer's details and what can be done.
+void _openTrainer(BuildContext context, GymTrainer t, String venueId) => showRowDetails(
+      context,
+      title: 'Trainer',
+      // Watched, so a decision here shows straight away.
+      builder: (context) => Consumer(builder: (context, ref, _) {
+        final now = ref.watch(gymTrainersProvider(venueId)).valueOrNull?.where((x) => x.profile.userId == t.profile.userId);
+        return _TrainerDetails(trainer: now?.firstOrNull ?? t, venueId: venueId);
+      }),
+    );
 
 /// The trainers as a table; Open shows one's details and what can be done.
 class _TrainersTable extends StatelessWidget {
@@ -127,15 +147,7 @@ class _TrainersTable extends StatelessWidget {
 
   const _TrainersTable({required this.trainers, required this.venueId});
 
-  void _open(BuildContext context, GymTrainer t) => showRowDetails(
-        context,
-        title: 'Trainer',
-        // Watched, so a decision here shows straight away.
-        builder: (context) => Consumer(builder: (context, ref, _) {
-          final now = ref.watch(gymTrainersProvider(venueId)).valueOrNull?.where((x) => x.profile.userId == t.profile.userId);
-          return _TrainerDetails(trainer: now?.firstOrNull ?? t, venueId: venueId);
-        }),
-      );
+  void _open(BuildContext context, GymTrainer t) => _openTrainer(context, t, venueId);
 
   @override
   Widget build(BuildContext context) {
@@ -180,7 +192,7 @@ class _TrainersTable extends StatelessWidget {
             ];
             return Row(
               children: [
-                TrainerAvatar(name: p.name, photoUrl: p.photoUrl, size: 40),
+                TrainerAvatar(name: p.name, photoUrl: t.photoUrl, size: 40),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -391,7 +403,7 @@ class _TrainerDetails extends ConsumerWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TrainerAvatar(name: p.name, photoUrl: p.photoUrl, size: 56),
+                    TrainerAvatar(name: p.name, photoUrl: trainer.photoUrl, size: 56),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(

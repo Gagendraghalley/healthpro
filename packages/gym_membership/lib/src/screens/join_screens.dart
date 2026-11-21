@@ -22,7 +22,10 @@ import '../widgets/gym_widgets.dart';
 class JoinRequestsScreen extends ConsumerWidget {
   final String venueId;
 
-  const JoinRequestsScreen({super.key, required this.venueId});
+  /// The request to open (a link's `?open=`).
+  final String? openId;
+
+  const JoinRequestsScreen({super.key, required this.venueId, this.openId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -32,7 +35,12 @@ class JoinRequestsScreen extends ConsumerWidget {
       permission: GymPermission.register,
       builder: (context, access) {
         final requests = ref.watch(gymJoinRequestsProvider(venueId));
-        return AppPage(
+        return OpenFromLink<JoinRequest>(
+          id: openId,
+          items: requests.valueOrNull,
+          idOf: (r) => r.id,
+          open: (r) => _openRequest(context, r, venueId),
+          child: AppPage(
           title: 'Join requests',
           body: AsyncValueView<List<JoinRequest>>(
             value: requests,
@@ -78,9 +86,20 @@ class JoinRequestsScreen extends ConsumerWidget {
               );
             },
           ),
+          ),
         );
       },
     );
+  }
+}
+
+/// Opens a waiting request's details (to add them or decline), or the
+/// member an added one became.
+void _openRequest(BuildContext context, JoinRequest r, String venueId) {
+  if (r.isPending) {
+    showRowDetails(context, title: 'Join request', builder: (_) => _RequestDetails(request: r, venueId: venueId));
+  } else if (r.gymMemberId != null) {
+    context.go(GymRoutes.memberFor(venueId, r.gymMemberId!));
   }
 }
 
@@ -92,13 +111,7 @@ class _RequestsTable extends StatelessWidget {
 
   const _RequestsTable({required this.requests, required this.venueId});
 
-  void _open(BuildContext context, JoinRequest r) {
-    if (r.isPending) {
-      showRowDetails(context, title: 'Join request', builder: (_) => _RequestDetails(request: r, venueId: venueId));
-    } else if (r.gymMemberId != null) {
-      context.go(GymRoutes.memberFor(venueId, r.gymMemberId!));
-    }
-  }
+  void _open(BuildContext context, JoinRequest r) => _openRequest(context, r, venueId);
 
   bool _opens(JoinRequest r) => r.isPending || r.gymMemberId != null;
 

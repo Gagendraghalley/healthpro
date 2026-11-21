@@ -34,6 +34,10 @@ class GymMember {
   final String? emergencyContactPhone;
   final String? medicalNotes;
   final String? photoPath;
+
+  /// The photo they uploaded to their Health Pro account, if they have one:
+  /// shown when the desk took none.
+  final String? avatarUrl;
   final DateTime joinedOn;
   final DateTime createdAt;
 
@@ -58,6 +62,7 @@ class GymMember {
     this.emergencyContactPhone,
     this.medicalNotes,
     this.photoPath,
+    this.avatarUrl,
   });
 
   /// What the form edits.
@@ -102,6 +107,7 @@ class GymMember {
       emergencyContactPhone: json['emergency_contact_phone'] as String?,
       medicalNotes: json['medical_notes'] as String?,
       photoPath: json['photo_path'] as String?,
+      avatarUrl: (json['person'] as Map<String, dynamic>?)?['avatar_url'] as String?,
       joinedOn: BhutanTime.parseDate(json['joined_on'] as String),
       createdAt: DateTime.parse(json['created_at'] as String),
     );

@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,9 +14,9 @@ import '../widgets/motion.dart';
 /// the foot (signing in), or a welcome with a short list of them (joining).
 enum AuthSide { signIn, join }
 
-/// The frame of the sign-in, sign-up and code pages: a sports
-/// photo across the window with the logo and what Health Pro offers on it,
-/// and the form on a white card at the right. On a phone the photo is a
+/// The frame of the sign-in, sign-up and code pages: a navy panel on the
+/// left with the logo, a headline and what Health Pro offers, fading into
+/// the Bhutan photo on the right, and the form on a white card over it. On a phone the photo is a
 /// banner and the form a sheet under it. Back at the top left, Ask AI at the
 /// top right.
 class AuthLayout extends StatelessWidget {
@@ -44,6 +43,9 @@ class AuthLayout extends StatelessWidget {
   /// another over it to change it.
   static const photo = 'assets/auth/background.jpg';
 
+  /// The photo's width over its height (1672 x 941).
+  static const photoAspect = 1672 / 941;
+
   /// The photo fills the window from this width; under it, it's a banner.
   static const wideFrom = 900.0;
 
@@ -62,7 +64,7 @@ class AuthLayout extends StatelessWidget {
       // The photo is dark at the top in both layouts.
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
-        backgroundColor: wide ? BrandColors.night : context.colors.surface,
+        backgroundColor: wide ? _navy(context) : context.colors.surface,
         body: _AuthInputs(child: wide ? _wide(context, backButton) : _narrow(context, backButton)),
       ),
     );
@@ -116,11 +118,7 @@ class AuthLayout extends StatelessWidget {
       children: [
         // The same photo on every sign-in page: it stays put as they move
         // between them, and only the card changes.
-        const Hero(tag: _Photo.heroTag, child: _Photo()),
-        _Wash(side: side),
-        // A warm light drifting over the card's side; the wave drawn in.
-        const Positioned(right: 80, top: -140, child: _Glow(size: 460)),
-        const _Wave(),
+        _WidePhoto(navy: _navy(context)),
         SafeArea(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -139,8 +137,6 @@ class AuthLayout extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      const FadeSlideIn(child: _Motto()),
-                      const SizedBox(height: 18),
                       FadeSlideIn(
                         delay: const Duration(milliseconds: 80),
                         child: Container(
@@ -148,8 +144,9 @@ class AuthLayout extends StatelessWidget {
                           clipBehavior: Clip.antiAlias,
                           decoration: BoxDecoration(
                             color: context.colors.surface,
-                            borderRadius: BorderRadius.circular(28),
-                            border: dark ? Border.all(color: context.brand.glassBorder) : null,
+                            // The app's standard card edge.
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: context.brand.glassBorder),
                             boxShadow: dark
                                 ? const [BoxShadow(color: Color(0x47000000), blurRadius: 50, offset: Offset(0, 24))]
                                 : const [BoxShadow(color: Color(0x40050B1C), blurRadius: 44, offset: Offset(0, 20))],
@@ -202,30 +199,90 @@ class AuthLayout extends StatelessWidget {
 
   Widget _narrow(BuildContext context, Widget? backButton) {
     final insets = MediaQuery.paddingOf(context);
+    final navy = _navy(context);
+    final join = side == AuthSide.join;
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            height: insets.top + 250,
+          // The photo along the top fading down into the navy, the headline
+          // on the navy under it, as on a computer.
+          ColoredBox(
+            color: navy,
             child: Stack(
-              fit: StackFit.expand,
               children: [
-                const Hero(tag: _Photo.heroTag, child: _Photo()),
-                const _Wash(side: AuthSide.signIn, banner: true),
-                const Positioned(right: -70, top: -90, child: _Glow(size: 280)),
-                const _Wave(banner: true),
-                // The logo popping in, catching the light.
-                Padding(
-                  padding: EdgeInsets.fromLTRB(16, insets.top + 8, 16, 80),
-                  child: const Center(
-                    child: PopIn(
-                      child: _Sheen(delay: Duration(milliseconds: 700), child: HealthProLogo(height: 112, onDark: true)),
-                    ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: insets.top + 190,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // The rainbow's top just behind the buttons, over the dzong.
+                      const Hero(
+                        tag: _Photo.heroTag,
+                        child: ClipRect(child: _Drift(child: _Sky(rainbow: _Rainbow(center: Offset(0.5, 1.25), radius: 0.6)))),
+                      ),
+                      // A shade at the top for the buttons, clear over the dzong.
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [navy.withValues(alpha: 0.5), navy.withValues(alpha: 0), navy.withValues(alpha: 0), navy],
+                            stops: const [0, 0.3, 0.55, 0.95],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                if (backButton != null) Positioned(top: insets.top + 8, left: 12, child: backButton),
-                Positioned(top: insets.top + 8, right: 12, child: const _AskAiButton()),
+                Padding(
+                  // Room at the foot for the sheet rising over it.
+                  padding: EdgeInsets.fromLTRB(20, insets.top + 8, 12, 54),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          if (backButton != null) ...[backButton, const SizedBox(width: 10)],
+                          // Catching the light once it has arrived.
+                          const Expanded(
+                            child: FadeSlideIn(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: _Sheen(
+                                    delay: Duration(milliseconds: 700),
+                                    child: HealthProLogo(height: 52, onDark: true),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          const _AskAiButton(),
+                        ],
+                      ),
+                      // A short strip of photo: the form comes first.
+                      const SizedBox(height: 56),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: _Pitch(
+                          eyebrow: 'Gyms across Bhutan',
+                          lines: join ? ('Join', 'Health Pro.') : ('Your Health.', 'Our Priority.'),
+                          body: join
+                              ? 'Be part of our fitness community'
+                              : 'Find a gym, join in minutes and check in with your phone.',
+                          size: 36,
+                          compact: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -238,7 +295,7 @@ class AuthLayout extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: context.colors.surface,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                 ),
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(20, 30, 20, insets.bottom + 4),
@@ -258,6 +315,238 @@ class AuthLayout extends StatelessWidget {
   }
 }
 
+/// The photo's slow breath: a gentle push in towards the dzong over 15
+/// seconds and back again, calm enough to sit behind a form; still when
+/// they ask for less motion. Where it is in the swing comes from the clock,
+/// so moving between the sign-in pages doesn't jump it.
+class _Drift extends StatefulWidget {
+  final Widget child;
+
+  const _Drift({required this.child});
+
+  @override
+  State<_Drift> createState() => _DriftState();
+}
+
+class _DriftState extends State<_Drift> with SingleTickerProviderStateMixin {
+  static const _period = Duration(seconds: 30);
+
+  late final AnimationController _swing = AnimationController(vsync: this, duration: _period);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (reduceMotion(context)) {
+      _swing.value = 0;
+    } else if (!_swing.isAnimating) {
+      _swing.value = DateTime.now().millisecondsSinceEpoch % _period.inMilliseconds / _period.inMilliseconds;
+      _swing.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _swing.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _swing,
+      child: RepaintBoundary(child: widget.child),
+      builder: (context, child) {
+        final t = _swing.value;
+        final closer = Motion.easeInOut.transform(t < 0.5 ? t * 2 : 2 - t * 2);
+        // The dzong, on the photo's left.
+        return Transform.scale(scale: 1 + 0.08 * closer, alignment: const Alignment(-0.5, 0.05), child: child);
+      },
+    );
+  }
+}
+
+/// The photo with a rainbow in its sky.
+class _Sky extends StatelessWidget {
+  final _Rainbow rainbow;
+
+  const _Sky({required this.rainbow});
+
+  @override
+  Widget build(BuildContext context) => Stack(fit: StackFit.expand, children: [const _Photo(), rainbow]);
+}
+
+/// A soft rainbow arching over the photo: drawn in from its left foot the
+/// first time a sign-in page opens, then a light running along it every
+/// few seconds as it glows a little brighter and back; still when they ask
+/// for less motion. [center] is a share of the box's width and height,
+/// [radius] a share of its width; its feet fade into the hills.
+class _Rainbow extends StatefulWidget {
+  final Offset center;
+  final double radius;
+
+  const _Rainbow({required this.center, required this.radius});
+
+  @override
+  State<_Rainbow> createState() => _RainbowState();
+}
+
+class _RainbowState extends State<_Rainbow> with TickerProviderStateMixin {
+  static const _period = Duration(seconds: 9);
+
+  /// Drawn in once: moving between the sign-in pages doesn't draw it again.
+  static bool _drawn = false;
+
+  late final AnimationController _draw =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 2400), value: _drawn ? 1 : 0);
+  late final AnimationController _cycle = AnimationController(vsync: this, duration: _period);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (reduceMotion(context)) {
+      _draw.value = 1;
+      _cycle.value = 0;
+    } else {
+      if (!_drawn) {
+        _drawn = true;
+        _draw.forward();
+      }
+      if (!_cycle.isAnimating) {
+        // From the clock, so the light carries on where it was on the last page.
+        _cycle.value = DateTime.now().millisecondsSinceEpoch % _period.inMilliseconds / _period.inMilliseconds;
+        _cycle.repeat();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _draw.dispose();
+    _cycle.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final still = reduceMotion(context);
+    return IgnorePointer(
+      child: RepaintBoundary(
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_draw, _cycle]),
+          builder: (context, _) {
+            final t = _cycle.value;
+            return CustomPaint(
+              painter: _RainbowPainter(
+                center: widget.center,
+                radius: widget.radius,
+                reveal: Motion.easeInOut.transform(_draw.value),
+                // The light runs along it in the first part of each cycle, then rests.
+                glint: still || t > 0.4 ? null : t / 0.4,
+                glow: still ? 1 : 0.92 + 0.08 * math.sin(t * 2 * math.pi),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _RainbowPainter extends CustomPainter {
+  final Offset center;
+  final double radius;
+  final double reveal;
+  final double? glint;
+  final double glow;
+
+  const _RainbowPainter({
+    required this.center,
+    required this.radius,
+    required this.reveal,
+    required this.glint,
+    required this.glow,
+  });
+
+  /// Outside in, as in the sky.
+  static const _colors = [
+    Color(0xFFFF4D5E),
+    Color(0xFFFF9A3C),
+    Color(0xFFFFE05C),
+    Color(0xFF5EE087),
+    Color(0xFF45B8F5),
+    Color(0xFF6C7CFF),
+    Color(0xFFB57BFF),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (reveal <= 0) return;
+    final c = Offset(center.dx * size.width, center.dy * size.height);
+    final r = radius * size.width;
+    final circle = Rect.fromCircle(center: c, radius: r);
+    final bounds = Offset.zero & size;
+    canvas.saveLayer(bounds, Paint()..color = Color.fromRGBO(0, 0, 0, 0.88 * glow));
+
+    // Drawn from its left foot, over the top, to its right one.
+    canvas.clipPath(Path()
+      ..moveTo(c.dx, c.dy)
+      ..arcTo(Rect.fromCircle(center: c, radius: r * 1.1), math.pi, math.pi * reveal, false)
+      ..close());
+
+    // The band: crisp-edged, violet inside to red outside.
+    const band = 0.1;
+    final stops = <double>[1 - band];
+    for (var i = 0; i < _colors.length; i++) {
+      stops.add(1 - band + band * (0.04 + 0.92 * i / (_colors.length - 1)));
+    }
+    stops.add(1);
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [const Color(0x00B57BFF), ..._colors.reversed, const Color(0x00FF4D5E)],
+          stops: stops,
+        ).createShader(circle),
+    );
+
+    // A light running along it.
+    final at = glint;
+    if (at != null) {
+      final angle = math.pi + math.pi * at;
+      canvas.drawCircle(
+        c,
+        r,
+        Paint()
+          ..blendMode = BlendMode.srcATop
+          ..shader = SweepGradient(
+            colors: const [Color(0x00FFFFFF), Color(0xB3FFFFFF), Color(0x00FFFFFF)],
+            stops: const [0, 0.03, 0.06],
+            transform: GradientRotation(angle - 0.03 * 2 * math.pi),
+          ).createShader(circle),
+      );
+    }
+
+    // Its feet fading into the hills.
+    canvas.drawRect(
+      bounds,
+      Paint()
+        ..blendMode = BlendMode.dstIn
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: const [Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0x00FFFFFF)],
+          stops: [0, ((c.dy - r * 0.55) / size.height).clamp(0.0, 1.0), ((c.dy - r * 0.1) / size.height).clamp(0.0, 1.0)],
+        ).createShader(bounds),
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_RainbowPainter old) =>
+      old.center != center || old.radius != radius || old.reveal != reveal || old.glint != glint || old.glow != glow;
+}
+
 /// The photo, cropped to fill; navy if it can't be read. The first time,
 /// it fades up from the navy and settles from a slight zoom: once, then
 /// still.
@@ -273,7 +562,8 @@ class _Photo extends StatelessWidget {
       AuthLayout.photo,
       package: HealthProLogo.package,
       fit: BoxFit.cover,
-      alignment: const Alignment(-0.2, -0.6),
+      // Keeping the dzong (the photo's left) when the window crops it.
+      alignment: const Alignment(-0.6, -0.6),
       excludeFromSemantics: true,
       gaplessPlayback: true,
       frameBuilder: (context, child, frame, synchronous) {
@@ -305,166 +595,71 @@ class _Photo extends StatelessWidget {
   }
 }
 
-/// Navy over the photo where words sit on it, so they read on any photo.
-class _Wash extends StatelessWidget {
-  final AuthSide side;
-  final bool banner;
+/// The navy of the panel on a computer: royal navy in light, the night in dark.
+Color _navy(BuildContext context) => context.brand.pick(const Color(0xFF0C2152), BrandColors.night);
 
-  const _Wash({required this.side, this.banner = false});
+/// On a computer: the photo on the right, its dzong just clear of the card,
+/// with the navy panel on the left fading into it, and a light shade along
+/// the top for Ask AI on the bright sky.
+class _WidePhoto extends StatelessWidget {
+  final Color navy;
 
-  static Color _night(double alpha) => BrandColors.night.withValues(alpha: alpha);
-
-  @override
-  Widget build(BuildContext context) {
-    final LinearGradient gradient;
-    if (banner) {
-      gradient = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [_night(0.62), _night(0.30), _night(0.55)],
-        stops: const [0, 0.55, 1],
-      );
-    } else if (side == AuthSide.join) {
-      // The welcome reads down the left.
-      gradient = LinearGradient(
-        colors: [_night(0.90), _night(0.62), _night(0.28), _night(0.45)],
-        stops: const [0, 0.35, 0.65, 1],
-      );
-    } else {
-      // The logo at the top left; the card's side a little darker.
-      gradient = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [_night(0.70), _night(0.18), _night(0.50)],
-        stops: const [0, 0.48, 1],
-      );
-    }
-    return DecoratedBox(decoration: BoxDecoration(gradient: gradient));
-  }
-}
-
-/// The orange wave, drawn in from the left as the page opens, then
-/// swaying a few times before it rests.
-class _Wave extends StatefulWidget {
-  final bool banner;
-
-  const _Wave({this.banner = false});
-
-  @override
-  State<_Wave> createState() => _WaveState();
-}
-
-class _WaveState extends State<_Wave> with SingleTickerProviderStateMixin {
-  static const _sways = 3;
-  static const _draw = Duration(milliseconds: 1100);
-  static const _sway = Duration(milliseconds: 2400);
-  // Made at once, so a page left before it moved can still put it away.
-  late final AnimationController _c;
-
-  @override
-  void initState() {
-    super.initState();
-    _c = AnimationController(vsync: this, duration: _draw + _sway * _sways);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (reduceMotion(context)) {
-      _c.value = 1;
-    } else if (!_c.isAnimating && !_c.isCompleted) {
-      _c.forward();
-    }
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
+  const _WidePhoto({required this.navy});
 
   @override
   Widget build(BuildContext context) {
-    final total = (_draw + _sway * _sways).inMilliseconds;
-    final drawn = _draw.inMilliseconds / total;
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (context, _) {
-        final t = _c.value;
-        final reveal = Motion.ease.transform((t / drawn).clamp(0.0, 1.0));
-        // Swaying after it's drawn, less and less, to rest where it began.
-        final after = ((t - drawn) / (1 - drawn)).clamp(0.0, 1.0);
-        final sway = after == 0 || after == 1 ? 0.0 : math.sin(after * _sways * 2 * math.pi) * (1 - after);
-        return CustomPaint(painter: _WavePainter.of(context, banner: widget.banner, reveal: reveal, sway: sway));
+    return LayoutBuilder(
+      builder: (context, box) {
+        final w = box.maxWidth, h = box.maxHeight;
+        final cardLeft = w - AuthLayout.cardWidth - 48;
+        // As tall as the window, and always reaching past the card.
+        final photoWidth = math.max(h * AuthLayout.photoAspect, 820.0);
+        final photoHeight = photoWidth / AuthLayout.photoAspect;
+        // The dzong ends about 37% of the way across the photo.
+        final photoLeft = cardLeft - 16 - 0.37 * photoWidth;
+        // Solid navy over the photo's left edge, clear just into the dzong.
+        final solid = (photoLeft / w).clamp(0.18, 0.6);
+        final clear = math.min(0.95, solid + 0.18 * photoWidth / w);
+        return Stack(
+          children: [
+            Positioned(
+              left: photoLeft,
+              top: (h - photoHeight) / 2,
+              width: photoWidth,
+              height: photoHeight,
+              // The rainbow over the dzong, its top just left of the card.
+              child: const Hero(
+                tag: _Photo.heroTag,
+                child: ClipRect(child: _Drift(child: _Sky(rainbow: _Rainbow(center: Offset(0.27, 0.66), radius: 0.29)))),
+              ),
+            ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [navy, navy, navy.withValues(alpha: 0)], stops: [0, solid, clear]),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              height: h * 0.3,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [navy.withValues(alpha: 0.35), navy.withValues(alpha: 0)],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
       },
     );
   }
-}
-
-/// The orange wave over a navy foot, sweeping from the left down to the
-/// right, as on the logo.
-class _WavePainter extends CustomPainter {
-  final bool banner;
-
-  /// The brand's orange, or the colour they picked (Brand.highlight).
-  final Color color;
-
-  /// The lighter middle of the wave.
-  final Color soft;
-
-  /// How much of it is drawn, from the left (0 to 1).
-  final double reveal;
-
-  /// How far its curve leans from rest (-1 to 1).
-  final double sway;
-
-  const _WavePainter({
-    this.banner = false,
-    this.color = BrandColors.orange,
-    this.soft = const Color(0xFFFF8A3D),
-    this.reveal = 1,
-    this.sway = 0,
-  });
-
-  _WavePainter.of(BuildContext context, {bool banner = false, double reveal = 1, double sway = 0})
-      : this(
-            banner: banner,
-            color: context.brand.highlight,
-            soft: context.brand.themedShade(const Color(0xFFFF8A3D)),
-            reveal: reveal,
-            sway: sway);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    if (reveal <= 0) return;
-    if (reveal < 1) canvas.clipRect(Rect.fromLTWH(0, 0, w * reveal, h));
-    // Where the wave meets the left and the right edge.
-    final left = h * (banner ? 0.70 : 0.80);
-    final right = h * (banner ? 0.86 : 0.90);
-    final lift = h * (banner ? 0.10 : 0.07) * (1 + 0.35 * sway);
-    Path wave(double dy) => Path()
-      ..moveTo(0, left + dy)
-      ..cubicTo(w * 0.32, left - lift + dy, w * 0.60, right + lift * 0.4 + dy, w, right - lift * 0.5 + dy)
-      ..lineTo(w, h)
-      ..lineTo(0, h)
-      ..close();
-
-    canvas.drawPath(
-      wave(0),
-      Paint()
-        ..shader = LinearGradient(
-          colors: [color, soft, color.withValues(alpha: 0.35)],
-          stops: const [0, 0.5, 1],
-        ).createShader(Offset.zero & size),
-    );
-    canvas.drawPath(wave(banner ? 9 : 16), Paint()..color = BrandColors.night.withValues(alpha: 0.94));
-  }
-
-  @override
-  bool shouldRepaint(_WavePainter old) =>
-      old.banner != banner || old.color != color || old.soft != soft || old.reveal != reveal || old.sway != sway;
 }
 
 /// A light sweeping across [child] a couple of times, [delay] after it
@@ -539,13 +734,12 @@ class _SheenSlide extends GradientTransform {
       Matrix4.translationValues(bounds.width * (t * 2.4 - 1.2), 0, 0);
 }
 
-/// [child] growing out from one end ([alignment]), [delay] after it shows.
+/// [child] growing out from its left end, [delay] after it shows.
 class _GrowIn extends StatelessWidget {
   final Widget child;
   final Duration delay;
-  final Alignment alignment;
 
-  const _GrowIn({required this.child, this.delay = Duration.zero, this.alignment = Alignment.centerLeft});
+  const _GrowIn({required this.child, this.delay = Duration.zero});
 
   @override
   Widget build(BuildContext context) {
@@ -557,79 +751,63 @@ class _GrowIn extends StatelessWidget {
       duration: total,
       builder: (context, t, child) {
         final local = t <= start ? 0.0 : Motion.ease.transform((t - start) / (1 - start));
-        return Transform(alignment: alignment, transform: Matrix4.diagonal3Values(local, 1, 1), child: child);
+        return Transform(
+            alignment: Alignment.centerLeft, transform: Matrix4.diagonal3Values(local, 1, 1), child: child);
       },
       child: child,
     );
   }
 }
 
-/// A soft round light of the brand's orange, drifting gently a few times.
-class _Glow extends StatelessWidget {
-  final double size;
-
-  const _Glow({required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = context.brand.highlight;
-    return IgnorePointer(
-      child: GentleFloat(
-        distance: 18,
-        cycles: 3,
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(colors: [color.withValues(alpha: 0.28), color.withValues(alpha: 0)]),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The photo's side on a computer: the logo, and the perks.
+/// The navy side on a computer: the logo, a headline, and what Health Pro
+/// gives, numbered along the foot.
 class _Showcase extends StatelessWidget {
   final AuthSide side;
   final Widget? backButton;
 
   const _Showcase({required this.side, required this.backButton});
 
+  static const _signIn = ['Find a gym', 'Membership management', 'QR check-in', 'Analytics & reports'];
+  static const _join = ['Find gyms across Bhutan', 'Your membership card on your phone', 'One account, on the web and in the app'];
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, box) {
         // A short or narrow window keeps just the logo.
-        final room = box.maxHeight >= 560 && box.maxWidth >= 340;
+        final room = box.maxHeight >= 600 && box.maxWidth >= 340;
+        final join = side == AuthSide.join;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 if (backButton != null) ...[backButton!, const SizedBox(width: 14)],
-                // Smaller when the photo's side is narrow.
+                // Smaller when the navy side is narrow.
                 // Catching the light once it has arrived.
                 const Flexible(
                   child: FadeSlideIn(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
-                      child: _Sheen(delay: Duration(milliseconds: 700), child: HealthProLogo(height: 118, onDark: true)),
+                      child: _Sheen(delay: Duration(milliseconds: 700), child: HealthProLogo(height: 96, onDark: true)),
                     ),
                   ),
                 ),
               ],
             ),
-            if (room && side == AuthSide.join) ...[
+            if (room) ...[
+              const Spacer(flex: 2),
+              _Pitch(
+                eyebrow: 'Gyms across Bhutan',
+                lines: join ? ('Join', 'Health Pro.') : ('Your Health.', 'Our Priority.'),
+                body: join ? 'Be part of our fitness community' : 'Find a gym, join in minutes and check in with your phone.',
+                size: (box.maxWidth * 0.062).clamp(36.0, 64.0),
+              ),
               const Spacer(flex: 3),
-              const _JoinPitch(),
-              const Spacer(flex: 4),
-            ] else ...[
+              _Steps(join ? _join : _signIn, wide: box.maxWidth >= 520),
+            ] else
               const Spacer(),
-              if (room) _PerkBar(wide: box.maxWidth >= 500),
-            ],
           ],
         );
       },
@@ -637,217 +815,153 @@ class _Showcase extends StatelessWidget {
   }
 }
 
-typedef _Perk = (IconData icon, String label);
+/// The headline down the navy side: a small spaced-out line, two big ones
+/// (the second in the brand's orange), and a sentence under them.
+class _Pitch extends StatelessWidget {
+  final String eyebrow;
+  final (String, String) lines;
+  final String body;
+  final double size;
 
-/// Signing in: what Health Pro does, along the navy foot.
-class _PerkBar extends StatelessWidget {
-  final bool wide;
+  /// Smaller words and gaps, on a phone.
+  final bool compact;
 
-  const _PerkBar({required this.wide});
-
-  static const perks = <_Perk>[
-    (Icons.travel_explore_rounded, 'Find\na gym'),
-    (Icons.groups_rounded, 'Membership\nmanagement'),
-    (Icons.qr_code_scanner_rounded, 'QR\ncheck-in'),
-    (Icons.insights_rounded, 'Analytics\n& reports'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    // Each popping in after the bar, one after another.
-    final items = <Widget>[
-      for (final (i, (icon, label)) in perks.indexed)
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            PopIn(
-              delay: Duration(milliseconds: 420 + 90 * i),
-              child: Icon(icon, color: Colors.white, size: 26),
-            ),
-            const SizedBox(height: 8),
-            FadeSlideIn(
-              delay: Duration(milliseconds: 480 + 90 * i),
-              offset: 8,
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 12.5, height: 1.3, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
-        ),
-    ];
-    // One row of four, or two of two where the photo's side is narrow.
-    Widget row(List<Widget> cells) => IntrinsicHeight(
-          child: Row(
-            children: [
-              for (final (i, cell) in cells.indexed) ...[
-                if (i > 0) VerticalDivider(width: 1, thickness: 1, color: Colors.white.withValues(alpha: 0.18)),
-                Expanded(child: cell),
-              ],
-            ],
-          ),
-        );
-    return FadeSlideIn(
-      delay: const Duration(milliseconds: 160),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 600),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-            decoration: BoxDecoration(
-              color: BrandColors.night.withValues(alpha: 0.45),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-            ),
-            child: wide
-                ? row(items)
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [row(items.sublist(0, 2)), const SizedBox(height: 16), row(items.sublist(2))],
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Joining: a welcome, and what an account gives.
-class _JoinPitch extends StatelessWidget {
-  const _JoinPitch();
-
-  static const perks = <_Perk>[
-    (Icons.travel_explore_rounded, 'Find gyms across Bhutan'),
-    (Icons.qr_code_2_rounded, 'Your membership card on your phone'),
-    (Icons.devices_rounded, 'One account, on the web and in the app'),
-  ];
+  const _Pitch({
+    required this.eyebrow,
+    required this.lines,
+    required this.body,
+    required this.size,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    const headline = TextStyle(
-      fontSize: 54,
-      height: 1.02,
-      letterSpacing: -1,
-      fontWeight: FontWeight.w800,
-      color: Colors.white,
-      shadows: [Shadow(color: Color(0x66000000), blurRadius: 18, offset: Offset(0, 4))],
-    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: staggered([
-        _Slanted(
-          child: Text.rich(
-            TextSpan(
-              children: [
-                const TextSpan(text: 'Join\nHealth '),
-                TextSpan(text: 'Pro', style: TextStyle(color: context.brand.themedShade(const Color(0xFFFF8A3D)))),
-              ],
-            ),
-            style: headline,
+        Text(
+          eyebrow.toUpperCase(),
+          style: TextStyle(
+            color: const Color(0xFFA5B4E0),
+            fontSize: compact ? 12 : 14,
+            letterSpacing: compact ? 3 : 3.6,
+            fontWeight: FontWeight.w700,
           ),
         ),
         Padding(
-          padding: const EdgeInsets.only(top: 14, bottom: 30),
-          child: Text(
-            'Be part of our sports community',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.92), fontSize: 20, fontWeight: FontWeight.w500),
-          ),
-        ),
-        for (final (i, (icon, label)) in perks.indexed)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+          padding: EdgeInsets.only(top: compact ? 12 : 18),
+          child: Text.rich(
+            TextSpan(
               children: [
-                // Popping in after its line arrives.
-                PopIn(
-                  delay: Duration(milliseconds: 260 + 90 * i),
-                  child: Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [context.brand.themedShade(const Color(0xFFFF8A3D)), context.brand.highlight],
-                      ),
-                      boxShadow: [BoxShadow(color: context.brand.highlight.withValues(alpha: 0.4), blurRadius: 16)],
-                    ),
-                    child: Icon(icon, color: Colors.white, size: 23),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Flexible(
-                  child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
-                ),
+                TextSpan(text: '${lines.$1}\n'),
+                TextSpan(text: lines.$2, style: TextStyle(color: context.brand.highlight)),
               ],
             ),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: size,
+              height: 1.04,
+              letterSpacing: -0.035 * size,
+              fontWeight: FontWeight.w800,
+            ),
           ),
+        ),
+        Padding(
+          padding: EdgeInsets.only(top: compact ? 12 : 22),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Text(
+              body,
+              style: TextStyle(
+                color: const Color(0xFFC9D3EA),
+                fontSize: compact ? 15.5 : 19,
+                height: 1.45,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
       ]),
     );
   }
 }
 
-/// 'Stronger Together' above the card, underlined with an orange stroke.
-class _Motto extends StatelessWidget {
-  const _Motto();
+/// What Health Pro gives, along the foot: each under a thin rule, its number
+/// in the brand's orange over its words. One row, or rows of two where the
+/// navy side is narrow.
+class _Steps extends StatelessWidget {
+  final List<String> labels;
+  final bool wide;
+
+  const _Steps(this.labels, {required this.wide});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          const _Slanted(
-            child: Text(
-              'Stronger Together',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 30,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.4,
-                shadows: [Shadow(color: Color(0x80000000), blurRadius: 16, offset: Offset(0, 3))],
+    // Each rule drawn in, then its words, one after another.
+    final items = <Widget>[
+      for (final (i, label) in labels.indexed)
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _GrowIn(
+              delay: Duration(milliseconds: 420 + 90 * i),
+              child: Container(height: 2, color: const Color(0xFF2A4790)),
+            ),
+            const SizedBox(height: 16),
+            FadeSlideIn(
+              delay: Duration(milliseconds: 480 + 90 * i),
+              offset: 8,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${i + 1}'.padLeft(2, '0'),
+                    style: TextStyle(color: context.brand.highlight, fontSize: 15, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      height: 1.3,
+                      fontWeight: FontWeight.w700,
+                      shadows: [Shadow(color: Color(0x66000000), blurRadius: 10)],
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-          const SizedBox(height: 6),
-          // The stroke drawn in from its bright end, after the words.
-          Transform.rotate(
-            angle: -0.04,
-            child: _GrowIn(
-              delay: const Duration(milliseconds: 450),
-              alignment: Alignment.centerRight,
-              child: Container(
-                width: 150,
-                height: 4,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(4),
-                  gradient: LinearGradient(
-                      colors: [context.brand.highlight.withValues(alpha: 0), context.brand.highlight]),
-                ),
-              ),
+          ],
+        ),
+    ];
+    Widget row(List<Widget> cells) => Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final (i, cell) in cells.indexed) ...[
+              if (i > 0) const SizedBox(width: 24),
+              Expanded(child: cell),
+            ],
+          ],
+        );
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: 146.0 * labels.length + 24 * (labels.length - 1)),
+      child: wide
+          ? row(items)
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < items.length; i += 2) ...[
+                  if (i > 0) const SizedBox(height: 22),
+                  row([items[i], if (i + 1 < items.length) items[i + 1] else const SizedBox()]),
+                ],
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
-}
-
-/// Leaning forward, like the logo's lettering.
-class _Slanted extends StatelessWidget {
-  final Widget child;
-
-  const _Slanted({required this.child});
-
-  @override
-  Widget build(BuildContext context) =>
-      Transform(transform: Matrix4.skewX(-0.16), alignment: Alignment.bottomLeft, child: child);
 }
 
 /// Back, in a frosted circle on the photo.
@@ -954,7 +1068,8 @@ class _AuthInputs extends StatelessWidget {
 
 // ─── The card's parts ─────────────────────────────────────────────────────
 
-/// The page's main action: an orange pill, with a spinner while it works.
+/// The page's main action: an orange button with the app's standard
+/// corners, a spinner while it works.
 class AuthPrimaryButton extends StatelessWidget {
   final String label;
   final IconData? icon;
@@ -977,7 +1092,7 @@ class AuthPrimaryButton extends StatelessWidget {
           delay: const Duration(milliseconds: 1100),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(14),
               gradient: LinearGradient(colors: [context.brand.themedShade(const Color(0xFFFF8A3D)), accent]),
               boxShadow: [
                 BoxShadow(
@@ -997,7 +1112,7 @@ class AuthPrimaryButton extends StatelessWidget {
                 disabledForegroundColor: Colors.white.withValues(alpha: 0.85),
                 shadowColor: Colors.transparent,
                 minimumSize: const Size.fromHeight(54),
-                shape: const StadiumBorder(),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 textStyle: const TextStyle(fontFamily: brandFont, fontWeight: FontWeight.w700, fontSize: 16.5),
               ),
               // The words give way to a spinner, and back, without a jump.

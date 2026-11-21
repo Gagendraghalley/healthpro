@@ -92,6 +92,14 @@ Future<ProviderContainer> pumpApp(WidgetTester tester, {String? userId, bool gym
   return container;
 }
 
+/// The sign-in pages' photo drifts for as long as it shows, so pumpAndSettle
+/// never settles on them: pump through the page change instead.
+Future<void> pumpOnSignIn(WidgetTester tester) async {
+  for (var i = 0; i < 20; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+}
+
 void main() {
   testWidgets('visitors land on the public Welcome page', (tester) async {
     final container = await pumpApp(tester);
@@ -110,7 +118,7 @@ void main() {
     final container = await pumpApp(tester);
     final router = container.read(appRouterProvider);
     router.go(GymRoutes.membersFor('g1'));
-    await tester.pumpAndSettle();
+    await pumpOnSignIn(tester);
     expect(router.routerDelegate.currentConfiguration.uri.path, CoreRoutes.signIn, reason: 'the sign-in page');
   });
 
@@ -119,7 +127,7 @@ void main() {
     final router = container.read(appRouterProvider);
     for (final page in [CoreRoutes.signIn, CoreRoutes.signUp]) {
       router.go(page);
-      await tester.pumpAndSettle();
+      await pumpOnSignIn(tester);
       await tester.tap(find.byTooltip('Back to home'));
       await tester.pumpAndSettle();
       expect(router.routerDelegate.currentConfiguration.uri.path, CoreRoutes.welcome, reason: page);
@@ -131,16 +139,16 @@ void main() {
     final router = container.read(appRouterProvider);
     for (final page in [GymRoutes.gyms, CoreRoutes.signIn, CoreRoutes.signUp]) {
       router.go(page);
-      await tester.pumpAndSettle();
+      await pumpOnSignIn(tester);
       expect(find.byType(FloatingActionButton), findsNothing, reason: page);
       if (page == GymRoutes.gyms) {
         expect(find.descendant(of: find.byType(GlassAppBar), matching: find.text('Ask AI')), findsOneWidget);
       }
       await tester.tap(find.byTooltip('Ask AI'));
-      await tester.pumpAndSettle();
+      await pumpOnSignIn(tester);
       expect(find.text('Health Pro assistant'), findsOneWidget, reason: page);
       await tester.tap(find.byTooltip('Close'));
-      await tester.pumpAndSettle();
+      await pumpOnSignIn(tester);
       expect(find.text('Health Pro assistant'), findsNothing, reason: page);
     }
   });

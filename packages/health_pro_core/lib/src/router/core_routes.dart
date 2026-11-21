@@ -1,3 +1,5 @@
+import '../widgets/open_from_link.dart';
+
 /// The core's pages. Modules add their own (HealthProModule.routes).
 abstract final class CoreRoutes {
   static const root = '/';
@@ -77,7 +79,8 @@ abstract final class CoreRoutes {
   static String registerVenueFor(String type) => '/register-venue/$type';
   static String venueManageFor(String id) => '/manage/$id';
   static String editVenueFor(String id) => '/manage/$id/edit';
-  static String venueStaffFor(String id) => '/manage/$id/staff';
+  /// With [open], that person (by user id) opens.
+  static String venueStaffFor(String id, {String? open}) => withOpen('/manage/$id/staff', open);
   static String venueRolesFor(String id) => '/manage/$id/roles';
   static String venueRoleNewFor(String id) => '/manage/$id/roles/new';
   static String venueRoleFor(String id, String roleId) => '/manage/$id/roles/$roleId';

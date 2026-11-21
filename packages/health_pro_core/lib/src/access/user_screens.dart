@@ -16,6 +16,7 @@ import '../widgets/common.dart';
 import '../widgets/data_grid.dart';
 import '../widgets/feedback.dart';
 import '../widgets/form_fields.dart';
+import '../widgets/person_avatar.dart';
 import '../widgets/responsive.dart';
 import '../widgets/searchable_dropdown.dart';
 
@@ -352,7 +353,7 @@ class _UserCell extends StatelessWidget {
     ];
     return Row(
       children: [
-        _Initials(name: user.displayName, dim: !user.isActive),
+        _Initials(name: user.displayName, photoUrl: user.avatarUrl, dim: !user.isActive),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -460,22 +461,19 @@ class _Plain extends StatelessWidget {
   }
 }
 
+/// Their profile photo, or their initials; greyed when they're turned off.
 class _Initials extends StatelessWidget {
   final String name;
+  final String? photoUrl;
   final bool dim;
 
-  const _Initials({required this.name, this.dim = false});
+  const _Initials({required this.name, this.photoUrl, this.dim = false});
 
   @override
   Widget build(BuildContext context) {
-    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-    final initials = parts.isEmpty ? '?' : (parts.first[0] + (parts.length > 1 ? parts.last[0] : '')).toUpperCase();
-    final color = dim ? context.brand.muted : context.colors.primary;
-    return CircleAvatar(
-      radius: 20,
-      backgroundColor: color.withValues(alpha: 0.12),
-      child: Text(initials, style: TextStyle(color: color, fontWeight: FontWeight.w800)),
-    );
+    final avatar =
+        PersonAvatar(name: name, photoUrl: photoUrl, color: dim ? context.brand.muted : context.colors.primary);
+    return dim && photoUrl != null ? Opacity(opacity: 0.5, child: avatar) : avatar;
   }
 }
 
@@ -549,7 +547,7 @@ class _UserHeader extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Initials(name: user.displayName, dim: !user.isActive),
+          _Initials(name: user.displayName, photoUrl: user.avatarUrl, dim: !user.isActive),
           const SizedBox(width: 14),
           Expanded(
             child: Column(

@@ -94,9 +94,10 @@ select t.fails(format($$select public.gym_register_member(%L, '{"full_name":"Sol
                       :'gym', :'plan'), 'not sell them a package');
 select t.fails(format($$select public.gym_renew_member(%L, %L, 1, 1500, 'cash')$$, :'sonam', :'plan'), 'not sell them a package');
 
+-- The trainer has Classes, so registers newcomers (coaching_test.sql, 20261121000003); someone's QR code stays with Register.
 select t.as_user('00000000-0000-0000-0000-000000000303');
-select t.fails(format($$select public.gym_register_member(%L, '{"full_name":"By Trainer","phone":"17000013"}')$$, :'gym'),
-               'register members');
+select t.fails(format($$select public.gym_register_member(%L, '{"full_name":"By Trainer","phone":"17000013"}', person_qr => 'qr')$$,
+                      :'gym'), 'register members');
 select t.eq((select count(*) from public.gym_members where venue_id = :'gym')::int, 3, 'the trainer sees the register');
 select t.eq((select medical_notes from public.gym_members where id = :'karma'), 'Asthma: keeps an inhaler',
             '...medical notes included');

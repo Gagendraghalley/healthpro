@@ -208,26 +208,8 @@ class _ClaimsTable extends StatelessWidget {
   const _ClaimsTable(
       {required this.claims, required this.venueId, required this.canConfirm});
 
-  void _open(BuildContext context, PaymentClaim c) {
-    if (!c.isPending) {
-      context.go(GymRoutes.memberFor(venueId, c.gymMemberId));
-      return;
-    }
-    showRowDetails(
-      context,
-      title: 'Online payment',
-      // Watched, so Confirm or Not found shows straight away.
-      builder: (context) => Consumer(builder: (context, ref, _) {
-        final now = ref
-            .watch(gymPaymentClaimsProvider(venueId))
-            .valueOrNull
-            ?.where((x) => x.id == c.id)
-            .firstOrNull;
-        return PaymentClaimCard(
-            claim: now ?? c, canConfirm: canConfirm, framed: false);
-      }),
-    );
-  }
+  void _open(BuildContext context, PaymentClaim c) =>
+      _openClaim(context, c, venueId: venueId, canConfirm: canConfirm);
 
   @override
   Widget build(BuildContext context) {
@@ -342,13 +324,40 @@ class _ClaimsTable extends StatelessWidget {
   }
 }
 
+/// Opens a waiting payment (to confirm it, or say it wasn't found), or the
+/// member an answered one is for.
+void _openClaim(BuildContext context, PaymentClaim c,
+    {required String venueId, required bool canConfirm}) {
+  if (!c.isPending) {
+    context.go(GymRoutes.memberFor(venueId, c.gymMemberId));
+    return;
+  }
+  showRowDetails(
+    context,
+    title: 'Online payment',
+    // Watched, so Confirm or Not found shows straight away.
+    builder: (context) => Consumer(builder: (context, ref, _) {
+      final now = ref
+          .watch(gymPaymentClaimsProvider(venueId))
+          .valueOrNull
+          ?.where((x) => x.id == c.id)
+          .firstOrNull;
+      return PaymentClaimCard(
+          claim: now ?? c, canConfirm: canConfirm, framed: false);
+    }),
+  );
+}
+
 /// Payments to confirm: members who paid online into the gym's bank account
 /// and gave the journal number. The desk checks each with the bank, then
 /// confirms it (their package starts) or says it couldn't find it.
 class PaymentsToConfirmScreen extends ConsumerWidget {
   final String venueId;
 
-  const PaymentsToConfirmScreen({super.key, required this.venueId});
+  /// The payment to open (a link's `?open=`).
+  final String? openId;
+
+  const PaymentsToConfirmScreen({super.key, required this.venueId, this.openId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -359,7 +368,13 @@ class PaymentsToConfirmScreen extends ConsumerWidget {
       builder: (context, access) {
         final claims = ref.watch(gymPaymentClaimsProvider(venueId));
         final settings = ref.watch(gymSettingsProvider(venueId)).valueOrNull;
-        return AppPage(
+        return OpenFromLink<PaymentClaim>(
+          id: openId,
+          items: claims.valueOrNull,
+          idOf: (c) => c.id,
+          open: (c) => _openClaim(context, c,
+              venueId: venueId, canConfirm: access.can(GymPermission.payments)),
+          child: AppPage(
           title: 'Payments to confirm',
           body: AsyncValueView<List<PaymentClaim>>(
             value: claims,
@@ -427,6 +442,7 @@ class PaymentsToConfirmScreen extends ConsumerWidget {
                 ),
               );
             },
+          ),
           ),
         );
       },

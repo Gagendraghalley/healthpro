@@ -43,7 +43,10 @@ Color _statusColor(BuildContext context, EnquiryStatus s) => switch (s) {
 class EnquiriesScreen extends ConsumerStatefulWidget {
   final String venueId;
 
-  const EnquiriesScreen({super.key, required this.venueId});
+  /// The enquiry to open (a link's `?open=`).
+  final String? openId;
+
+  const EnquiriesScreen({super.key, required this.venueId, this.openId});
 
   @override
   ConsumerState<EnquiriesScreen> createState() => _EnquiriesScreenState();
@@ -84,7 +87,12 @@ class _EnquiriesScreenState extends ConsumerState<EnquiriesScreen> {
       title: 'Enquiries & trials',
       permission: GymPermission.register,
       builder: (context, access) {
-        return AppPage(
+        return OpenFromLink<GymEnquiry>(
+          id: widget.openId,
+          items: ref.watch(gymEnquiriesProvider(id)).valueOrNull,
+          idOf: (e) => e.id,
+          open: _edit,
+          child: AppPage(
           title: 'Enquiries & trials',
           body: AsyncValueView<List<GymEnquiry>>(
             value: ref.watch(gymEnquiriesProvider(id)),
@@ -173,6 +181,7 @@ class _EnquiriesScreenState extends ConsumerState<EnquiriesScreen> {
                 ),
               );
             },
+          ),
           ),
         );
       },

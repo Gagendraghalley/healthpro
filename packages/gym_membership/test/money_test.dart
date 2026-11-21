@@ -157,6 +157,18 @@ void main() {
       expect(find.text('- Nu. 450'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('a link to one offer (the search) opens it', (tester) async {
+      await show(tester, const OffersScreen(venueId: 'g1', openId: 'o2'), with_: [
+        ...overrides(),
+        gymOffersProvider.overrideWith((ref, id) async => const [student, couple]),
+        gymSubscriptionsProvider.overrideWith((ref, id) async => const []),
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: find.byType(Dialog), matching: find.text('Couple')), findsWidgets, reason: 'its title and name');
+      expect(find.descendant(of: find.byType(Dialog), matching: find.text('Student')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('expenses and profit', () {

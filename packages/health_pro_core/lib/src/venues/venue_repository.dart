@@ -154,7 +154,7 @@ class VenueRepository {
   Future<List<VenueStaffMember>> staff(String venueId) async {
     final rows = await _client
         .from('venue_staff')
-        .select('venue_id, user_id, role, profile:profiles!venue_staff_user_id_fkey(full_name, email, phone), '
+        .select('venue_id, user_id, role, profile:profiles!venue_staff_user_id_fkey(full_name, email, phone, avatar_url), '
             'role_info:roles!venue_staff_role_fkey(name)')
         .eq('venue_id', venueId);
     return rows.map(VenueStaffMember.fromJson).toList()..sort(compareStaff);

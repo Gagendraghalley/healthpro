@@ -80,6 +80,9 @@ class ManagedUser {
   final String memberCode;
   final DateTime? createdAt;
   final Set<String> platformRoleIds;
+
+  /// Their profile photo's public address; null shows their initials.
+  final String? avatarUrl;
   final List<UserVenueRole> venueRoles;
 
   const ManagedUser({
@@ -93,6 +96,7 @@ class ManagedUser {
     this.email,
     this.phone,
     this.createdAt,
+    this.avatarUrl,
   });
 
   String get displayName => fullName.trim().isEmpty ? (email ?? 'Health Pro member') : fullName.trim();
@@ -108,6 +112,7 @@ class ManagedUser {
         isActive: json['is_active'] as bool? ?? true,
         memberCode: json['member_code'] as String? ?? '',
         createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
+        avatarUrl: json['avatar_url'] as String?,
         platformRoleIds: {
           for (final r in (json['user_roles'] as List? ?? const [])) (r as Map<String, dynamic>)['role_id'] as String,
         },
@@ -154,7 +159,7 @@ class AccessRepository {
   AccessRepository(this._client);
   final SupabaseClient _client;
 
-  static const _userColumns = 'id, full_name, email, phone, role, is_active, member_code, created_at, '
+  static const _userColumns = 'id, full_name, email, phone, role, is_active, member_code, created_at, avatar_url, '
       'user_roles!user_roles_user_id_fkey(role_id), '
       'venue_staff!venue_staff_user_id_fkey(role, venue:venues(id, name, organisation_id))';
 

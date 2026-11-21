@@ -265,6 +265,9 @@ class VenueStaffMember {
   final String? email;
   final String? phone;
 
+  /// Their profile photo's public address; null shows their initials.
+  final String? avatarUrl;
+
   VenueStaffMember({
     required this.venueId,
     required this.userId,
@@ -273,6 +276,7 @@ class VenueStaffMember {
     String? roleName,
     this.email,
     this.phone,
+    this.avatarUrl,
   }) : roleName = roleName ?? VenueRole.label(role);
 
   factory VenueStaffMember.fromJson(Map<String, dynamic> json) {
@@ -286,6 +290,7 @@ class VenueStaffMember {
       name: name.isEmpty ? (profile?['email'] as String? ?? 'Health Pro member') : name,
       email: profile?['email'] as String?,
       phone: profile?['phone'] as String?,
+      avatarUrl: profile?['avatar_url'] as String?,
     );
   }
 }

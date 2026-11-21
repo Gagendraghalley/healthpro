@@ -407,6 +407,24 @@ class ClassRegistrant {
   }
 }
 
+/// A member of the gym to book into a class: the picker's line
+/// (gym_class_member_choices, for who has Classes).
+class ClassMemberChoice {
+  final String id;
+  final String fullName;
+  final String code;
+  final String phone;
+
+  const ClassMemberChoice({required this.id, required this.fullName, required this.code, required this.phone});
+
+  factory ClassMemberChoice.fromJson(Map<String, dynamic> json) => ClassMemberChoice(
+        id: json['id'] as String,
+        fullName: json['full_name'] as String? ?? 'Member',
+        code: json['code'] as String? ?? '',
+        phone: json['phone'] as String? ?? '',
+      );
+}
+
 // ─── Reading and saving ─────────────────────────────────────────────────────
 
 final gymClassRepositoryProvider = Provider<GymClassRepository>((ref) => GymClassRepository(ref.watch(supabaseProvider)));
@@ -429,6 +447,11 @@ final gymClassBookingsProvider = FutureProvider.autoDispose.family<List<ClassBoo
 /// Who has registered for a gym's classes to date (the desk).
 final gymClassRegistrationsProvider = FutureProvider.autoDispose.family<ClassRegistrations, String>(
   (ref, venueId) => ref.watch(gymClassRepositoryProvider).registrations(venueId),
+);
+
+/// The gym's members, to book one into a class (the desk).
+final gymClassMemberChoicesProvider = FutureProvider.autoDispose.family<List<ClassMemberChoice>, String>(
+  (ref, venueId) => ref.watch(gymClassRepositoryProvider).memberChoices(venueId),
 );
 
 /// The signed-in person's places from today, at every gym (My dashboard).
@@ -473,6 +496,11 @@ class GymClassRepository {
   Future<ClassRegistrations> registrations(String venueId) async {
     final json = await _client.rpc('gym_class_registrations', params: {'venue_id': venueId});
     return json == null ? const ClassRegistrations() : ClassRegistrations.fromJson(Map<String, dynamic>.from(json as Map));
+  }
+
+  Future<List<ClassMemberChoice>> memberChoices(String venueId) async {
+    final rows = await _client.rpc('gym_class_member_choices', params: {'venue_id': venueId}) as List? ?? const [];
+    return [for (final r in rows) ClassMemberChoice.fromJson(Map<String, dynamic>.from(r as Map))];
   }
 
   Future<List<MyClassBooking>> mine() async {

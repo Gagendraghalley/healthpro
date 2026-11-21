@@ -285,7 +285,7 @@ class GymRepository {
   static const _memberFields = 'full_name, phone, member_code';
   static const _registeredFields = 'full_name, phone, code';
   static const _gymMemberColumns =
-      '*, village:villages(name), gewog:gewogs(name), dzongkhag:dzongkhags(name), person:people(qr_token)';
+      '*, village:villages(name), gewog:gewogs(name), dzongkhag:dzongkhags(name), person:people(qr_token, avatar_url)';
 
   /// Members' photos: private, in a folder per gym.
   static const photoBucket = 'gym-member-photos';
