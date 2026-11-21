@@ -38,6 +38,10 @@
 #                        Functions can't reach them). SMTP_FROM: who it's
 #                        from ('Health Pro <hello@...>'; SMTP_USER by
 #                        default). SITE_URL: the website, for links in them.
+# GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET: Sign in with Google (README). The
+#                        auth settings step needs them, every time: without
+#                        them it's skipped, since pushing supabase/config.toml
+#                        then would leave Google sign-in broken or off.
 # No secret is saved in the project.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -117,8 +121,16 @@ curl -fsS -X POST "https://$PROJECT_REF.supabase.co/functions/v1/send-email" \
   -H 'Content-Type: application/json' -d '{"setup":true}' && echo ||
   echo "   (send-email didn't answer; run this script again later)"
 
-echo "== Auth settings (email codes)"
-sb config push --yes
+if [[ -n "${GOOGLE_CLIENT_ID:-}" && -n "${GOOGLE_CLIENT_SECRET:-}" ]]; then
+  echo "== Auth settings (email codes, Sign in with Google)"
+  # supabase/config.toml reads them by these names.
+  export SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID"
+  export SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET="$GOOGLE_CLIENT_SECRET"
+  sb config push --yes
+else
+  echo "== Auth settings: skipped. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (README: Sign in with Google);"
+  echo "   the project keeps the auth settings it has."
+fi
 
 env_file=apps/health_pro_app/env.json
 if [[ ! -f "$env_file" ]]; then

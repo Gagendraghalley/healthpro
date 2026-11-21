@@ -1,10 +1,40 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../config/env.dart';
 import '../push/push_notifications.dart';
+import '../router/core_routes.dart';
 import '../supabase/supabase_provider.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) => AuthRepository(ref.watch(supabaseProvider)));
+
+/// Whether 'Continue with Google' shows: on the website, once Google is
+/// switched on for the project (supabase/config.toml, README: Sign in with
+/// Google). Until then the button stays hidden rather than leading to
+/// Supabase's error page. Not in the apps yet.
+final googleSignInProvider = FutureProvider<bool>((ref) async {
+  if (!kIsWeb) return false;
+  try {
+    final res = await http
+        .get(Uri.parse('${Env.supabaseUrl}/auth/v1/settings'), headers: {'apikey': Env.supabaseAnonKey})
+        .timeout(const Duration(seconds: 8));
+    if (res.statusCode != 200) return false;
+    final external = (jsonDecode(res.body) as Map<String, dynamic>)['external'];
+    return external is Map && external['google'] == true;
+  } catch (_) {
+    return false;
+  }
+});
+
+/// The web address of [page] ('/sign-in?next=...') on the site at [base]:
+/// after the '#', where its pages are. Coming back from Google, Supabase puts
+/// '?code=' before the '#', and Supabase.initialize signs them in with it
+/// before the app opens the page.
+String webReturnUrl(Uri base, String page) => '${base.origin}${base.path.isEmpty ? '/' : base.path}#$page';
 
 /// Every sign-in, sign-out and token refresh.
 final authChangesProvider = StreamProvider<void>((ref) => ref.watch(authRepositoryProvider).changes);
@@ -63,6 +93,20 @@ class AuthRepository {
   /// Signs in with the emailed code.
   Future<void> verifyCode({required String email, required String code}) =>
       _auth.verifyOTP(email: email.trim().toLowerCase(), token: code.trim(), type: OtpType.email);
+
+  /// Website only: off to Google in this tab and back to the sign-in page,
+  /// which sends them on to [next]. A Gmail that already has an account
+  /// signs in to that same account (Supabase links them by the email); a
+  /// new one gets an account and profile with Google's name for them
+  /// (handle_new_user). No sign-in code until they choose one (Forgot code?).
+  Future<void> signInWithGoogle({String? next}) async {
+    await _auth.signInWithOAuth(
+      OAuthProvider.google,
+      redirectTo: webReturnUrl(Uri.base, next == null ? CoreRoutes.signIn : CoreRoutes.signInFor(next)),
+      // Shared computers (a gym's front desk): always ask which Google account.
+      queryParams: const {'prompt': 'select_account'},
+    );
+  }
 
   /// Sets the signed-in person's 6-digit sign-in code.
   Future<void> setSignInCode(String code) =>

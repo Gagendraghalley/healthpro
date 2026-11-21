@@ -1549,10 +1549,14 @@ class _CodeFormatter extends TextInputFormatter {
 /// Another way through: a white button with a soft border.
 class AuthSecondaryButton extends StatelessWidget {
   final String label;
-  final IconData icon;
+  final IconData? icon;
+
+  /// In place of [icon]: a picture of its own (Google's 'G').
+  final Widget? leading;
   final VoidCallback? onPressed;
 
-  const AuthSecondaryButton({super.key, required this.label, required this.icon, required this.onPressed});
+  const AuthSecondaryButton({super.key, required this.label, this.icon, this.leading, required this.onPressed})
+      : assert(icon != null || leading != null);
 
   @override
   Widget build(BuildContext context) {
@@ -1569,7 +1573,7 @@ class AuthSecondaryButton extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           textStyle: const TextStyle(fontFamily: brandFont, fontWeight: FontWeight.w600, fontSize: 15),
         ),
-        icon: Icon(icon, size: 21, color: brand.accent),
+        icon: leading ?? Icon(icon, size: 21, color: brand.accent),
         label: Text(label),
       ),
     );

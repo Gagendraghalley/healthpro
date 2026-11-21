@@ -26,6 +26,7 @@ dependencies:
   geolocator: ^14.0.2 # gyms near me, and pinning a venue where you stand
   video_player: ^2.10.0 # plays a venue's promotional video (its own short clip)
   archive: ^4.0.0 # zips the Excel files that staff export (Spreadsheet)
+  http: ^1.2.0 # asks Supabase Auth whether Google sign-in is on (googleSignInProvider)
 
 dev_dependencies:
   flutter_test:

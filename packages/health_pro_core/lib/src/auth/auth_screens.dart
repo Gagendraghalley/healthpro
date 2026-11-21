@@ -168,6 +168,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     });
   }
 
+  Future<void> _google() => _run(() => ref.read(authRepositoryProvider).signInWithGoogle(next: widget.next));
+
   Future<void> _run(Future<void> Function() action) async {
     setState(() {
       _busy = true;
@@ -184,6 +186,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final google = ref.watch(googleSignInProvider).valueOrNull ?? false;
     return AuthLayout(
       side: AuthSide.signIn,
       title: 'Welcome Back!',
@@ -240,6 +243,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         const SizedBox(height: 22),
         const AuthDivider(text: 'or continue with'),
         const SizedBox(height: 18),
+        if (google) ...[
+          _GoogleButton(label: 'Continue with Google', onPressed: _busy ? null : _google),
+          const SizedBox(height: 12),
+        ],
         AuthSecondaryButton(
           label: 'Email me a code instead',
           icon: Icons.mark_email_read_outlined,
@@ -300,8 +307,24 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     }
   }
 
+  /// No form: Google gives their name and email.
+  Future<void> _google() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(authRepositoryProvider).signInWithGoogle(next: widget.next);
+    } catch (e) {
+      if (mounted) setState(() => _error = friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final google = ref.watch(googleSignInProvider).valueOrNull ?? false;
     return AuthLayout(
       side: AuthSide.join,
       title: 'Create Your Account',
@@ -357,6 +380,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         if (_error != null) ...[const SizedBox(height: 14), AuthError(_error!)],
         const SizedBox(height: 22),
         AuthPrimaryButton(label: 'Register account', icon: Icons.person_add_alt_1_rounded, busy: _busy, onPressed: _submit),
+        if (google) ...[
+          const SizedBox(height: 20),
+          const AuthDivider(),
+          const SizedBox(height: 16),
+          _GoogleButton(label: 'Sign up with Google', onPressed: _busy ? null : _google),
+          const SizedBox(height: 4),
+        ],
         const SizedBox(height: 8),
         const LegalLinks(lead: 'By registering, you agree to the'),
         const SizedBox(height: 6),
@@ -369,6 +399,21 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       ],
     );
   }
+}
+
+/// Google's own 'G' (as its sign-in branding asks) on the soft-bordered button.
+class _GoogleButton extends StatelessWidget {
+  final String label;
+  final VoidCallback? onPressed;
+
+  const _GoogleButton({required this.label, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) => AuthSecondaryButton(
+        label: label,
+        leading: Image.asset('assets/auth/google_g.png', package: HealthProLogo.package, width: 20, height: 20),
+        onPressed: onPressed,
+      );
 }
 
 class VerifyCodeScreen extends ConsumerStatefulWidget {

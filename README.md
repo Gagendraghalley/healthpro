@@ -82,6 +82,23 @@ SUPABASE_ACCESS_TOKEN=sbp_... scripts/check_email.sh someone@example.com # and s
 
 The address needs an account already (nothing is made). Send it to an account outside the Supabase team, then look in that inbox and its spam folder: a code that arrives there is the real test.
 
+### Sign in with Google
+
+The website's sign-in and sign-up pages show **Continue with Google** once Google is on for the project (the button stays hidden until then; not in the apps yet). It's the same account as email + code: a Gmail that already has an account signs in to it, and a new one gets an account and profile with Google's name (no phone; they can add it). Google users have no 6-digit code until they choose one with "Forgot code?".
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → **OAuth consent screen**: External, app name Health Pro, the logo, support email, and the privacy policy and terms pages of the website. Scopes: only `email`, `profile`, `openid`.
+2. **Credentials** → Create credentials → OAuth client ID → **Web application**.
+   - Authorized JavaScript origins: `https://sporthubs.pages.dev` (and `http://localhost:3000` to try it locally).
+   - Authorized redirect URIs: `https://iagqntjaywpdxvoxgfhl.supabase.co/auth/v1/callback`
+3. Deploy with the client ID and secret (every deploy needs them, or the auth settings step is skipped):
+
+```sh
+SUPABASE_ACCESS_TOKEN=sbp_... SUPABASE_DB_PASSWORD=... \
+GOOGLE_CLIENT_ID=....apps.googleusercontent.com GOOGLE_CLIENT_SECRET=GOCSPX-... scripts/deploy_supabase.sh
+```
+
+Coming back from Google lands on `/#/sign-in?next=...`, which sends them on; `additional_redirect_urls` in `supabase/config.toml` allows that address (the `/**` entries).
+
 ### Backups
 
 On Supabase's free plan you can't download or restore a backup yourself; Pro keeps 7 days of daily ones (Database → Backups). Either way, keep a copy of your own somewhere else, at least weekly and before every migration:
