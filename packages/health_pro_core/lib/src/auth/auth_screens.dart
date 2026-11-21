@@ -8,6 +8,7 @@ import '../assistant/assistant_chat.dart';
 import '../legal/legal_pages.dart';
 import '../module/module_providers.dart';
 import '../module/health_pro_module.dart';
+import '../profiles/profile_repository.dart';
 import '../router/core_routes.dart';
 import '../theme/brand.dart';
 import '../utils/friendly_error.dart';
@@ -20,6 +21,7 @@ import '../widgets/splash.dart';
 import 'auth_layout.dart';
 import 'install_app_button.dart';
 import 'auth_repository.dart';
+import 'sign_in_return.dart';
 
 /// Why a code was emailed, which decides where entering it leads.
 enum CodePurpose { signUp, signIn, resetCode }
@@ -130,6 +132,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   void initState() {
     super.initState();
     _code.addListener(_codeChanged);
+    // Back from Google unfinished (turned off, cancelled): say why.
+    _error = SignInReturn.take();
   }
 
   void _codeChanged() {
@@ -794,6 +798,85 @@ class _SetCodeScreenState extends ConsumerState<SetCodeScreen> {
             onPressed: _busy ? null : () => context.go(widget.next ?? CoreRoutes.home),
             style: TextButton.styleFrom(foregroundColor: context.brand.muted),
             child: const Text('Skip for now (sign in with emailed codes)'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Once, right after signing up with Google, which doesn't share a phone
+/// number: the one thing the sign-up form asks that Google didn't give.
+/// Optional there, so it can be skipped here too; either way it isn't asked
+/// again (AuthRepository.mustAddPhone), and they can add it on Account later.
+class AddPhoneScreen extends ConsumerStatefulWidget {
+  final String? next;
+
+  const AddPhoneScreen({super.key, this.next});
+
+  @override
+  ConsumerState<AddPhoneScreen> createState() => _AddPhoneScreenState();
+}
+
+class _AddPhoneScreenState extends ConsumerState<AddPhoneScreen> {
+  final _form = GlobalKey<FormState>();
+  final _phone = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _phone.dispose();
+    super.dispose();
+  }
+
+  Future<void> _finish({required bool skip}) async {
+    if (!skip && !_form.currentState!.validate()) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final auth = ref.read(authRepositoryProvider);
+      if (!skip) await ref.read(profileRepositoryProvider).updatePhone(auth.userId!, Validators.normalizePhone(_phone.text)!);
+      await auth.markPhoneAsked();
+      ref.invalidate(myProfileProvider);
+      if (mounted) context.go(widget.next ?? CoreRoutes.home);
+    } catch (e) {
+      if (mounted) setState(() => _error = friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AuthLayout(
+      side: AuthSide.join,
+      title: 'Add Your Phone Number',
+      subtitle: "Google doesn't share it. It lets your gym reach you about your membership.",
+      children: [
+        Form(
+          key: _form,
+          child: TextFormField(
+            controller: _phone,
+            autofocus: true,
+            keyboardType: TextInputType.phone,
+            autofillHints: const [AutofillHints.telephoneNumber],
+            onFieldSubmitted: (_) => _finish(skip: false),
+            decoration: const InputDecoration(labelText: 'Phone number', prefixIcon: Icon(Icons.phone_outlined)),
+            validator: (v) => Validators.phone(v, required: true),
+          ),
+        ),
+        if (_error != null) ...[const SizedBox(height: 14), AuthError(_error!)],
+        const SizedBox(height: 22),
+        AuthPrimaryButton(label: 'Save phone', icon: Icons.check_rounded, busy: _busy, onPressed: () => _finish(skip: false)),
+        const SizedBox(height: 10),
+        Center(
+          child: TextButton(
+            onPressed: _busy ? null : () => _finish(skip: true),
+            style: TextButton.styleFrom(foregroundColor: context.brand.muted),
+            child: const Text('Skip for now (add it on Account later)'),
           ),
         ),
       ],

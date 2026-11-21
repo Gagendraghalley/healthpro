@@ -84,7 +84,7 @@ The address needs an account already (nothing is made). Send it to an account ou
 
 ### Sign in with Google
 
-The website's sign-in and sign-up pages show **Continue with Google** once Google is on for the project (the button stays hidden until then; not in the apps yet). It's the same account as email + code: a Gmail that already has an account signs in to it, and a new one gets an account and profile with Google's name (no phone; they can add it). Google users have no 6-digit code until they choose one with "Forgot code?".
+The website's sign-in and sign-up pages show **Continue with Google** once Google is on for the project (the button stays hidden until then; not in the apps yet). It's the same account as email + code: a Gmail that already has an account signs in to it, and a new one gets an account and profile with Google's name. Google doesn't share a phone number, so a Google sign-up is asked for it once (Add your phone, `/add-phone`; skippable, remembered as `phone_asked` in the account's metadata). Google users have no 6-digit code until they choose one with "Forgot code?".
 
 1. [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → **OAuth consent screen**: External, app name Health Pro, the logo, support email, and the privacy policy and terms pages of the website. Scopes: only `email`, `profile`, `openid`.
 2. **Credentials** → Create credentials → OAuth client ID → **Web application**.

@@ -7,6 +7,8 @@ import 'core_routes.dart';
 ///   [enabledModuleKeys]; null while app_modules is still loading).
 /// - Someone still on the code their account was made with
 ///   ([mustChooseCode]) chooses their own before anything else opens.
+/// - Someone just signed up with Google ([mustAddPhone]) is asked for their
+///   phone once, then goes on to the page they were opening (?next=).
 /// - Sign-in pages send signed-in users on (to ?next= when it's one of ours).
 /// - Everything not in [publicPatterns] needs an account: visitors sign in
 ///   first and come back. Except right after signing out ([justSignedOut]):
@@ -23,9 +25,14 @@ String? guardRoute({
   String? moduleKey,
   Set<String>? enabledModuleKeys,
   bool mustChooseCode = false,
+  bool mustAddPhone = false,
   bool justSignedOut = false,
 }) {
   if (signedIn && mustChooseCode) return uri.path == CoreRoutes.setCode ? null : CoreRoutes.setCode;
+  if (signedIn && mustAddPhone && uri.path != CoreRoutes.addPhone) {
+    final arriving = uri.path == CoreRoutes.root || uri.path.isEmpty || CoreRoutes.signedOutOnly.contains(pattern);
+    return CoreRoutes.addPhoneFor(arriving ? safeNext(uri.queryParameters['next']) ?? CoreRoutes.home : uri.toString());
+  }
   final start = signedIn ? CoreRoutes.home : CoreRoutes.welcome;
   if (uri.path == CoreRoutes.root || uri.path.isEmpty) return start;
   if (moduleKey != null && enabledModuleKeys != null && !enabledModuleKeys.contains(moduleKey)) return start;

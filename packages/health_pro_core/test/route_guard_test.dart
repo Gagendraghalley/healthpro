@@ -24,6 +24,25 @@ void main() {
     expect(forced(CoreRoutes.setCode), isNull);
   });
 
+  test('a Google sign-up is asked for a phone once, then goes on where it was going', () {
+    String? asked(String location, {String? pattern, bool mustChooseCode = false}) => guardRoute(
+        uri: Uri.parse(location),
+        pattern: pattern ?? Uri.parse(location).path,
+        signedIn: true,
+        publicPatterns: public,
+        mustChooseCode: mustChooseCode,
+        mustAddPhone: true);
+    // Back from Google on the sign-in page.
+    expect(asked(CoreRoutes.signInFor('/gyms/1')), '/add-phone?next=%2Fgyms%2F1');
+    expect(asked(CoreRoutes.signIn), CoreRoutes.addPhone);
+    expect(asked('/'), CoreRoutes.addPhone);
+    // Opening a page directly keeps that page.
+    expect(asked('/gyms/1', pattern: '/gyms/:id'), '/add-phone?next=%2Fgyms%2F1');
+    expect(asked('/add-phone?next=%2Fgyms%2F1'), isNull);
+    // The starting code still comes first.
+    expect(asked(CoreRoutes.home, mustChooseCode: true), CoreRoutes.setCode);
+  });
+
   test('/ goes home when signed in, to Welcome otherwise', () {
     expect(guard('/', signedIn: true), CoreRoutes.home);
     expect(guard('/'), CoreRoutes.welcome);

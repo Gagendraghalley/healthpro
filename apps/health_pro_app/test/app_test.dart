@@ -20,6 +20,9 @@ class FakeAuth extends Fake implements AuthRepository {
   bool get mustChooseCode => false;
 
   @override
+  bool get mustAddPhone => false;
+
+  @override
   Stream<void> get changes => const Stream.empty();
 }
 

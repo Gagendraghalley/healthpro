@@ -24,6 +24,10 @@ String friendlyError(Object error) {
     }
     if (m.contains('rate limit') || error.statusCode == '429') return 'Too many tries. Wait a minute and try again.';
     if (m.contains('signups not allowed') || m.contains('user not found')) return 'No account uses that email.';
+    // Turned off by an admin (admin-users bans the login).
+    if (m.contains('banned') || error.code == 'user_banned') {
+      return 'This account is turned off. Ask your gym or the Health Pro team to turn it on again.';
+    }
     return error.message;
   }
   if (error is StorageException) return 'The photo could not be uploaded. Please try again.';

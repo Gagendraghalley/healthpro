@@ -12,6 +12,7 @@ import '../admin/app_errors_screen.dart';
 import '../masters/master_screens.dart';
 import '../auth/auth_repository.dart';
 import '../auth/auth_screens.dart';
+import '../auth/sign_in_return.dart';
 import '../errors/error_reporter.dart';
 import '../legal/legal_pages.dart';
 import '../module/module_providers.dart';
@@ -52,11 +53,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   // has just seen them sign out.
   var wasSignedIn = auth.isLoggedIn;
 
+  // Supabase.initialize has already read a sign-in's result; one that failed
+  // (an account that's turned off, Google cancelled, an old email link) stays
+  // in the address ('?error=...', '#error=...'). The sign-in page says why
+  // (SignInReturn); with no page after the '#', the app starts there.
+  final startedWithoutPage = kIsWeb && hasNonPageFragment(Uri.base);
+  SignInReturn.capture();
+
   final router = GoRouter(
-    initialLocation: CoreRoutes.root,
-    // Supabase.initialize has already read an email link's result; one that
-    // failed stays in the address ('#error=...'). Start at '/' then.
-    overridePlatformDefaultLocation: kIsWeb && hasNonPageFragment(Uri.base),
+    initialLocation: SignInReturn.hasError ? CoreRoutes.signIn : CoreRoutes.root,
+    overridePlatformDefaultLocation: startedWithoutPage,
     refreshListenable: refresh,
     redirect: (context, state) {
       String? moduleKey;
@@ -74,6 +80,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         moduleKey: moduleKey,
         enabledModuleKeys: refresh.enabledKeys,
         mustChooseCode: auth.mustChooseCode,
+        mustAddPhone: auth.mustAddPhone,
         justSignedOut: justSignedOut,
       );
     },
@@ -88,6 +95,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: CoreRoutes.setCode,
         builder: (_, s) => SetCodeScreen(next: safeNext(s.uri.queryParameters['next'])),
       ),
+      GoRoute(path: CoreRoutes.addPhone, builder: (_, s) => AddPhoneScreen(next: safeNext(s.uri.queryParameters['next']))),
       GoRoute(path: CoreRoutes.privacy, builder: (_, __) => const PrivacyPolicyScreen()),
       GoRoute(path: CoreRoutes.terms, builder: (_, __) => const TermsScreen()),
       // Signed in, in the platform's frame: its menu of services stays while

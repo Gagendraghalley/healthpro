@@ -11,6 +11,9 @@ abstract final class CoreRoutes {
   static const verify = '/verify';
   static const setCode = '/set-code';
 
+  /// Once, after signing up with Google (which doesn't share a phone number).
+  static const addPhone = '/add-phone';
+
   /// How Health Pro looks after people's data, and the rules for using it:
   /// open to everyone, signed in or not (the app stores link to them).
   static const privacy = '/privacy';
@@ -86,6 +89,7 @@ abstract final class CoreRoutes {
   static String venueRoleFor(String id, String roleId) => '/manage/$id/roles/$roleId';
 
   static String signInFor(String next) => '$signIn?next=${Uri.encodeComponent(next)}';
+  static String addPhoneFor(String next) => next == home ? addPhone : '$addPhone?next=${Uri.encodeComponent(next)}';
   static String signUpFor(String? next) => next == null ? signUp : '$signUp?next=${Uri.encodeComponent(next)}';
 
   /// Pages visitors can open without an account.

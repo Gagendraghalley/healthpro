@@ -36,6 +36,10 @@ class ProfileRepository {
         'avatar_url': avatarUrl,
       }).eq('id', userId);
 
+  /// Just their phone (AddPhoneScreen, after signing up with Google).
+  Future<void> updatePhone(String userId, String phone) =>
+      _client.from('profiles').update({'phone': phone}).eq('id', userId);
+
   /// Where profile photos are kept: public, a folder per account that only
   /// its owner changes.
   static const photoBucket = 'profile-photos';

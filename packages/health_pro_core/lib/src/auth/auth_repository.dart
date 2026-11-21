@@ -69,7 +69,23 @@ class AuthRepository {
   /// chosen their own (guardRoute).
   bool get mustChooseCode => _auth.currentUser?.userMetadata?['must_choose_code'] == true;
 
-  Stream<void> get changes => _auth.onAuthStateChange.map((_) {});
+  /// Signed up with Google, which doesn't share a phone number, and not yet
+  /// asked for one: asked once, before anything else opens (guardRoute,
+  /// AddPhoneScreen). Accounts that began with email + code, Google added
+  /// later or not, gave theirs at sign-up.
+  bool get mustAddPhone {
+    final user = _auth.currentUser;
+    return user != null && user.appMetadata['provider'] == 'google' && user.userMetadata?['phone_asked'] != true;
+  }
+
+  /// They've been asked for their phone (saved or skipped): not again.
+  Future<void> markPhoneAsked() => _auth.updateUser(UserAttributes(data: {'phone_asked': true}));
+
+  /// A tick for each change; whether someone is signed in is read from the
+  /// session. Supabase also sends a sign-in that came back unfinished (Google
+  /// with an account that's turned off, or cancelled) as an error here: the
+  /// sign-in page says why (SignInReturn), so it isn't an app error.
+  Stream<void> get changes => _auth.onAuthStateChange.map((_) {}).handleError((Object _) {});
 
   /// Signs in with the email and the 6-digit code they chose. Supabase Auth
   /// keeps it as the account's password (6 is the shortest it takes:
