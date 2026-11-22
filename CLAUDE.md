@@ -72,7 +72,8 @@ tests/functions/        Deno tests for the Edge Functions
 - Membership expiry is the same date N months later. Keep `packageEnd`/`renewalStart` (Dart) in step with
   `gym_add_membership`/`gym_renew_member` (SQL).
 - Kept as "sportshub" on purpose, never rename: the `sportshub:` QR prefixes (member_qr.dart; cards are printed),
-  the Cloudflare project `sporthubs`, Supabase `project_id`, `@sportshub.bt` test emails.
+  Supabase `project_id`, `@sportshub.bt` test emails. The website is the Cloudflare Pages project `myhealthpro`
+  (https://myhealthpro.pages.dev).
 - User-facing name is "Health Pro". Ground booking was removed: don't mention grounds or tournaments.
 - The menu is service-driven: gym pages go in `gym_navigation.dart`, never straight into the core sidebar.
   Gate pages and actions with `access.can(...)`.

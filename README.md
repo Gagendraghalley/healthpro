@@ -88,7 +88,7 @@ The sign-in and sign-up pages, on the website and in the Android and iOS apps, s
 
 1. [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → **OAuth consent screen**: External, app name Health Pro, the logo, support email, and the privacy policy and terms pages of the website. Scopes: only `email`, `profile`, `openid`.
 2. **Credentials** → Create credentials → OAuth client ID → **Web application**.
-   - Authorized JavaScript origins: `https://sporthubs.pages.dev` (and `http://localhost:3000` to try it locally).
+   - Authorized JavaScript origins: `https://myhealthpro.pages.dev` (and `http://localhost:3000` to try it locally).
    - Authorized redirect URIs: `https://iagqntjaywpdxvoxgfhl.supabase.co/auth/v1/callback`
 3. Deploy with the client ID and secret (every deploy needs them, or the auth settings step is skipped):
 
@@ -367,7 +367,7 @@ Migrations `20261119000001_class_emails.sql` and `20261119000002_class_change_no
 
 ```sh
 SMTP_HOST=smtp.gmail.com SMTP_USER=you@gmail.com SMTP_PASS=your-app-password \
-SMTP_FROM='Health Pro <you@gmail.com>' SITE_URL=https://sporthubs.pages.dev \
+SMTP_FROM='Health Pro <you@gmail.com>' SITE_URL=https://myhealthpro.pages.dev \
 SUPABASE_ACCESS_TOKEN=sbp_... SUPABASE_DB_PASSWORD=... scripts/deploy_supabase.sh
 ```
 
@@ -431,7 +431,7 @@ Without them, both chats still work: the suggestions answer, and typed questions
 
 ## Website on Cloudflare
 
-The website is a Cloudflare Pages project named `sporthubs` that serves the Flutter web build as static files: https://sporthubs.pages.dev. Every push to `main` builds and publishes it; other branches get a preview address of their own.
+The website is a Cloudflare Pages project named `sporthubs` that serves the Flutter web build as static files: https://myhealthpro.pages.dev. Every push to `main` builds and publishes it; other branches get a preview address of their own.
 
 It was set up once in Cloudflare: Workers & Pages → Create application → "Continue to Pages" (the link at the bottom) → Import an existing Git repository → `sporthubs`, with:
 

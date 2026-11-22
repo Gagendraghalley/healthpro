@@ -11,7 +11,7 @@
 // failed is tried again with the next ones.
 //
 // Secrets: SMTP_HOST, SMTP_USER, SMTP_PASS, and SMTP_PORT, SMTP_FROM (see
-// _shared/smtp.ts); SITE_URL, the website for links (sporthubs.pages.dev
+// _shared/smtp.ts); SITE_URL, the website for links (myhealthpro.pages.dev
 // by default). Without SMTP, setup tells the database, and nothing is queued.
 // Deploy: supabase functions deploy send-email (verify_jwt off: the database
 // calls it).
@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
 
   if (!smtp) return json({ error: 'Email is not set up', code: 'not_set_up' }, 503);
   if (body.send !== true) return json({ error: 'Send {"send": true}' }, 400);
-  const site = (Deno.env.get('SITE_URL') || 'https://sporthubs.pages.dev').replace(/\/+$/, '');
+  const site = (Deno.env.get('SITE_URL') || 'https://myhealthpro.pages.dev').replace(/\/+$/, '');
 
   let sent = 0;
   let failed = 0;

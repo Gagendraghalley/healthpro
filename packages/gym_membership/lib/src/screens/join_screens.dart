@@ -341,7 +341,7 @@ class _StatusChip extends StatelessWidget {
 /// The website's own address in a browser.
 String gymJoinLink(String venueId) {
   final base = Uri.base;
-  final origin = base.hasScheme && base.scheme.startsWith('http') ? '${base.origin}${base.path}' : 'https://sporthubs.pages.dev/';
+  final origin = base.hasScheme && base.scheme.startsWith('http') ? '${base.origin}${base.path}' : 'https://myhealthpro.pages.dev/';
   return '$origin#${GymRoutes.gymJoinFor(venueId)}';
 }
 

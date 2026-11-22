@@ -92,7 +92,7 @@ if [[ -n "${VAPID_PUBLIC_KEY:-}" && -n "${VAPID_PRIVATE_KEY:-}" ]]; then
   secrets="$(mktemp)"
   trap 'rm -f "$secrets"' EXIT
   printf 'VAPID_PUBLIC_KEY=%s\nVAPID_PRIVATE_KEY=%s\nVAPID_SUBJECT=%s\n' \
-    "$VAPID_PUBLIC_KEY" "$VAPID_PRIVATE_KEY" "${VAPID_SUBJECT:-https://sporthubs.pages.dev}" > "$secrets"
+    "$VAPID_PUBLIC_KEY" "$VAPID_PRIVATE_KEY" "${VAPID_SUBJECT:-https://myhealthpro.pages.dev}" > "$secrets"
   sb secrets set --env-file "$secrets" --yes
   rm -f "$secrets"
 fi
@@ -108,7 +108,7 @@ if [[ -n "${SMTP_HOST:-}" && -n "${SMTP_USER:-}" && -n "${SMTP_PASS:-}" ]]; then
   trap 'rm -f "$secrets"' EXIT
   printf 'SMTP_HOST=%s\nSMTP_PORT=%s\nSMTP_USER=%s\nSMTP_PASS=%s\nSMTP_FROM="%s"\nSITE_URL=%s\n' \
     "$SMTP_HOST" "${SMTP_PORT:-465}" "$SMTP_USER" "$SMTP_PASS" "${SMTP_FROM:-Health Pro <$SMTP_USER>}" \
-    "${SITE_URL:-https://sporthubs.pages.dev}" > "$secrets"
+    "${SITE_URL:-https://myhealthpro.pages.dev}" > "$secrets"
   sb secrets set --env-file "$secrets" --yes
   rm -f "$secrets"
 else

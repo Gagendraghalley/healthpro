@@ -21,7 +21,7 @@ function has(text: string, ...parts: string[]) {
   for (const p of parts) if (!text.includes(p)) throw new Error(`no "${p}" in:\n${text}`);
 }
 
-const site = 'https://sporthubs.pages.dev';
+const site = 'https://myhealthpro.pages.dev';
 const spin: ClassDetails = {
   class: 'Spin',
   date: '2026-11-21',
@@ -50,8 +50,8 @@ Deno.test('booked: the class, day, time, trainer, gym, where it is and its phone
   same(e.subject, 'Booked: Spin on Sat 21 Nov at 9:00 AM');
   has(e.text, 'Hi Xo,', 'Your place in Spin at Coach Gym is booked.', 'Saturday, 21 November 2026', '9:00 AM to 9:45 AM (45 minutes)',
     'Trainer:', 'Tashi', 'Coach Gym', 'Norzin Lam, Thimphu https://www.google.com/maps/search/?api=1&query=27.4728,89.639',
-    '+975 17000701', 'View the gym: https://sporthubs.pages.dev/#/gyms/g1');
-  has(e.html, '>You&#39;re booked in<', 'Tashi', 'Norzin Lam, Thimphu', 'Open in Maps', 'href="https://sporthubs.pages.dev/#/gyms/g1"',
+    '+975 17000701', 'View the gym: https://myhealthpro.pages.dev/#/gyms/g1');
+  has(e.html, '>You&#39;re booked in<', 'Tashi', 'Norzin Lam, Thimphu', 'Open in Maps', 'href="https://myhealthpro.pages.dev/#/gyms/g1"',
     'href="tel:+97517000701"');
 });
 

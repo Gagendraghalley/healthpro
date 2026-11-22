@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the website and publishes it to the Cloudflare Pages project
-# 'sporthubs' (https://sporthubs.pages.dev), as a push to main would.
+# 'myhealthpro' (https://myhealthpro.pages.dev), as a push to main would.
 #
 #   CLOUDFLARE_API_TOKEN=... scripts/deploy_web.sh
 #
@@ -14,4 +14,4 @@ cd "$(dirname "$0")/.."
 [[ -f apps/health_pro_app/env.json ]] || { echo "apps/health_pro_app/env.json is missing (README, 'Run the app')." >&2; exit 1; }
 bash scripts/build_web.sh
 export npm_config_cache="${TMPDIR:-/tmp}/health-pro-npm-cache"
-npx -y wrangler@4 pages deploy apps/health_pro_app/build/web --project-name sporthubs --branch main --commit-dirty=true
+npx -y wrangler@4 pages deploy apps/health_pro_app/build/web --project-name myhealthpro --branch main --commit-dirty=true

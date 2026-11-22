@@ -92,14 +92,14 @@ Deno.test('VAPID: a JWT for the push service, signed with the key the app subscr
   const keys = await generateVapidKeys();
   same(b64urlDecode(keys.publicKey).length, 65, 'an uncompressed P-256 point');
   same(b64urlDecode(keys.privateKey).length, 32);
-  const vapid = { ...keys, subject: 'https://sporthubs.pages.dev' };
+  const vapid = { ...keys, subject: 'https://myhealthpro.pages.dev' };
   const header = await vapidAuthorization('https://fcm.googleapis.com/fcm/send/abc', vapid, Date.UTC(2026, 10, 15) );
   const m = header.match(/^vapid t=([^.]+)\.([^.]+)\.([^,]+), k=(.+)$/)!;
   same(m[4], keys.publicKey, 'k is the public key');
   const claims = JSON.parse(new TextDecoder().decode(b64urlDecode(m[2])));
   same(claims.aud, 'https://fcm.googleapis.com', 'for the push service only');
   same(claims.exp, Date.UTC(2026, 10, 15) / 1000 + 12 * 3600, 'valid 12 hours');
-  same(claims.sub, 'https://sporthubs.pages.dev');
+  same(claims.sub, 'https://myhealthpro.pages.dev');
   const pub = b64urlDecode(keys.publicKey);
   const verifier = await crypto.subtle.importKey(
     'jwk',

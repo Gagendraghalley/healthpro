@@ -27,7 +27,7 @@ export function vapidFromEnv(): Vapid | null {
   const publicKey = Deno.env.get('VAPID_PUBLIC_KEY');
   const privateKey = Deno.env.get('VAPID_PRIVATE_KEY');
   if (!publicKey || !privateKey) return null;
-  return { publicKey, privateKey, subject: Deno.env.get('VAPID_SUBJECT') || 'https://sporthubs.pages.dev' };
+  return { publicKey, privateKey, subject: Deno.env.get('VAPID_SUBJECT') || 'https://myhealthpro.pages.dev' };
 }
 
 const text = new TextEncoder();
