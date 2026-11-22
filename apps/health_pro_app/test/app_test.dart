@@ -23,6 +23,12 @@ class FakeAuth extends Fake implements AuthRepository {
   bool get mustAddPhone => false;
 
   @override
+  String? takeNextAfterGoogle() => null;
+
+  @override
+  Stream<String> get unfinishedSignIns => const Stream.empty();
+
+  @override
   Stream<void> get changes => const Stream.empty();
 }
 

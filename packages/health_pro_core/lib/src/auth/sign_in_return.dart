@@ -57,6 +57,15 @@ String? signInErrorIn(Uri uri) {
   return friendlyError(AuthException(description, code: params['error_code']));
 }
 
+/// What to tell them about a Google sign-in that came back unfinished to
+/// the apps: Supabase's [error] from the return link (getSessionFromUrl).
+String unfinishedSignInMessage(Object error) {
+  if (error is AuthException && error.message.startsWith('Error in URL with unspecified')) {
+    return error.code == 'access_denied' ? 'Signing in with Google was cancelled.' : "Signing in didn't finish. Please try again.";
+  }
+  return friendlyError(error);
+}
+
 /// [uri] without the sign-in error: on its own page, or the sign-in page
 /// when the error took the place of one after the '#'.
 String withoutSignInError(Uri uri) {

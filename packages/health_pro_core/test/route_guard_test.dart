@@ -43,6 +43,25 @@ void main() {
     expect(asked(CoreRoutes.home, mustChooseCode: true), CoreRoutes.setCode);
   });
 
+  test('back from Google in the apps, the page they left sends them where they were going', () {
+    String? back(String location, {String? waiting, bool mustAddPhone = false}) => guardRoute(
+        uri: Uri.parse(location),
+        pattern: Uri.parse(location).path,
+        signedIn: true,
+        publicPatterns: public,
+        mustAddPhone: mustAddPhone,
+        nextAfterSignIn: waiting);
+    // Joining as a trainer from Sign up (whose own ?next= was a gym).
+    expect(back(CoreRoutes.signUpFor('/gyms/7'), waiting: '/gyms/trainer/profile'), '/gyms/trainer/profile');
+    expect(back(CoreRoutes.signUpFor('/gyms/7'), waiting: '/gyms/trainer/profile', mustAddPhone: true),
+        '/add-phone?next=%2Fgyms%2Ftrainer%2Fprofile');
+    // Nothing waiting: the page's own ?next=, or home.
+    expect(back(CoreRoutes.signInFor('/gyms/7')), '/gyms/7');
+    expect(back(CoreRoutes.signIn), CoreRoutes.home);
+    // Never another site's address.
+    expect(back(CoreRoutes.signIn, waiting: 'https://example.com'), CoreRoutes.home);
+  });
+
   test('/ goes home when signed in, to Welcome otherwise', () {
     expect(guard('/', signedIn: true), CoreRoutes.home);
     expect(guard('/'), CoreRoutes.welcome);

@@ -82,6 +82,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         mustChooseCode: auth.mustChooseCode,
         mustAddPhone: auth.mustAddPhone,
         justSignedOut: justSignedOut,
+        nextAfterSignIn: signedIn ? auth.takeNextAfterGoogle() : null,
       );
     },
     errorBuilder: (context, state) => const NotFoundScreen(),

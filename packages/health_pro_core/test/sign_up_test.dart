@@ -15,6 +15,9 @@ class _Auth extends Fake implements AuthRepository {
 
   @override
   Future<void> signInWithGoogle({String? next}) async => googleNext.add(next);
+
+  @override
+  Stream<String> get unfinishedSignIns => const Stream.empty();
 }
 
 void main() {

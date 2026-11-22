@@ -10,6 +10,8 @@ import 'core_routes.dart';
 /// - Someone just signed up with Google ([mustAddPhone]) is asked for their
 ///   phone once, then goes on to the page they were opening (?next=).
 /// - Sign-in pages send signed-in users on (to ?next= when it's one of ours).
+///   Back from Google in the apps, the page they left stays open; where
+///   they were going waits in [nextAfterSignIn] and goes first.
 /// - Everything not in [publicPatterns] needs an account: visitors sign in
 ///   first and come back. Except right after signing out ([justSignedOut]):
 ///   that goes to Welcome, so whoever signs in next on this device isn't
@@ -27,18 +29,18 @@ String? guardRoute({
   bool mustChooseCode = false,
   bool mustAddPhone = false,
   bool justSignedOut = false,
+  String? nextAfterSignIn,
 }) {
   if (signedIn && mustChooseCode) return uri.path == CoreRoutes.setCode ? null : CoreRoutes.setCode;
+  final onward = safeNext(nextAfterSignIn) ?? safeNext(uri.queryParameters['next']) ?? CoreRoutes.home;
   if (signedIn && mustAddPhone && uri.path != CoreRoutes.addPhone) {
     final arriving = uri.path == CoreRoutes.root || uri.path.isEmpty || CoreRoutes.signedOutOnly.contains(pattern);
-    return CoreRoutes.addPhoneFor(arriving ? safeNext(uri.queryParameters['next']) ?? CoreRoutes.home : uri.toString());
+    return CoreRoutes.addPhoneFor(arriving ? onward : uri.toString());
   }
   final start = signedIn ? CoreRoutes.home : CoreRoutes.welcome;
   if (uri.path == CoreRoutes.root || uri.path.isEmpty) return start;
   if (moduleKey != null && enabledModuleKeys != null && !enabledModuleKeys.contains(moduleKey)) return start;
-  if (signedIn && CoreRoutes.signedOutOnly.contains(pattern)) {
-    return safeNext(uri.queryParameters['next']) ?? CoreRoutes.home;
-  }
+  if (signedIn && CoreRoutes.signedOutOnly.contains(pattern)) return onward;
   if (!signedIn && !publicPatterns.contains(pattern)) {
     return justSignedOut ? CoreRoutes.welcome : CoreRoutes.signInFor(uri.toString());
   }

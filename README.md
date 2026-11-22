@@ -84,7 +84,7 @@ The address needs an account already (nothing is made). Send it to an account ou
 
 ### Sign in with Google
 
-The website's sign-in and sign-up pages show **Continue with Google** once Google is on for the project (the button stays hidden until then; not in the apps yet). It's the same account as email + code: a Gmail that already has an account signs in to it, and a new one gets an account and profile with Google's name. Google doesn't share a phone number, so a Google sign-up is asked for it once (Add your phone, `/add-phone`; skippable, remembered as `phone_asked` in the account's metadata). Google users have no 6-digit code until they choose one with "Forgot code?".
+The sign-in and sign-up pages, on the website and in the Android and iOS apps, show **Continue with Google** once Google is on for the project (the button stays hidden until then). It's the same account as email + code: a Gmail that already has an account signs in to it, and a new one gets an account and profile with Google's name. Google doesn't share a phone number, so a Google sign-up is asked for it once (Add your phone, `/add-phone`; skippable, remembered as `phone_asked` in the account's metadata). Google users have no 6-digit code until they choose one with "Forgot code?".
 
 1. [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → **OAuth consent screen**: External, app name Health Pro, the logo, support email, and the privacy policy and terms pages of the website. Scopes: only `email`, `profile`, `openid`.
 2. **Credentials** → Create credentials → OAuth client ID → **Web application**.
@@ -98,6 +98,8 @@ GOOGLE_CLIENT_ID=....apps.googleusercontent.com GOOGLE_CLIENT_SECRET=GOCSPX-... 
 ```
 
 Coming back from Google lands on `/#/sign-in?next=...`, which sends them on; `additional_redirect_urls` in `supabase/config.toml` allows that address (the `/**` entries).
+
+In the apps, Google opens in a browser over the app (Android's own browser; on iPhone, one inside the app that closes by itself) and comes back through `bt.healthpro.app://login-callback`: Android's intent filter (`AndroidManifest.xml`) and iOS's URL type (`Info.plist`) open the app with it, `additional_redirect_urls` allows it, and the same web client is used (no Android or iOS client in Google Cloud). Flutter's own deep linking is off in both, so the page they left stays open and sends them on. On iPhone, Apple asks for **Sign in with Apple** next to any other sign-in service (App Store guideline 4.8) before the app is approved.
 
 ### Backups
 

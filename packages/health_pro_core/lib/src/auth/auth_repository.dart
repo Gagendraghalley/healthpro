@@ -1,23 +1,25 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart' show closeInAppWebView;
 
 import '../config/env.dart';
 import '../push/push_notifications.dart';
 import '../router/core_routes.dart';
 import '../supabase/supabase_provider.dart';
+import 'sign_in_return.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) => AuthRepository(ref.watch(supabaseProvider)));
 
-/// Whether 'Continue with Google' shows: on the website, once Google is
-/// switched on for the project (supabase/config.toml, README: Sign in with
-/// Google). Until then the button stays hidden rather than leading to
-/// Supabase's error page. Not in the apps yet.
+/// Whether 'Continue with Google' shows, on the website and in the apps: once
+/// Google is switched on for the project (supabase/config.toml, README: Sign
+/// in with Google). Until then the button stays hidden rather than leading
+/// to Supabase's error page.
 final googleSignInProvider = FutureProvider<bool>((ref) async {
-  if (!kIsWeb) return false;
   try {
     final res = await http
         .get(Uri.parse('${Env.supabaseUrl}/auth/v1/settings'), headers: {'apikey': Env.supabaseAnonKey})
@@ -110,19 +112,66 @@ class AuthRepository {
   Future<void> verifyCode({required String email, required String code}) =>
       _auth.verifyOTP(email: email.trim().toLowerCase(), token: code.trim(), type: OtpType.email);
 
-  /// Website only: off to Google in this tab and back to the sign-in page,
-  /// which sends them on to [next]. A Gmail that already has an account
-  /// signs in to that same account (Supabase links them by the email); a
-  /// new one gets an account and profile with Google's name for them
-  /// (handle_new_user). No sign-in code until they choose one (Forgot code?).
+  /// Where Google sends the apps back: this link opens the app (Android's
+  /// intent filter, iOS's URL type) and Supabase signs them in from it.
+  /// Allowed in supabase/config.toml (additional_redirect_urls).
+  static const appReturnUrl = 'bt.healthpro.app://login-callback';
+
+  /// Off to Google and back, then on to [next]. A Gmail that already has an
+  /// account signs in to that same account (Supabase links them by the
+  /// email); a new one gets an account and profile with Google's name for
+  /// them (handle_new_user). No sign-in code until they choose one (Forgot
+  /// code?).
+  ///
+  /// Website: in this tab, back to the sign-in page, which sends them on.
+  /// Apps: in a browser over the app (Android's own, iPhone's in the app),
+  /// back through [appReturnUrl] to the page they left; [next] waits here
+  /// meanwhile (takeNextAfterGoogle).
   Future<void> signInWithGoogle({String? next}) async {
+    if (!kIsWeb) {
+      _nextAfterGoogle = next;
+      _closeBrowserOnReturn();
+    }
     await _auth.signInWithOAuth(
       OAuthProvider.google,
-      redirectTo: webReturnUrl(Uri.base, next == null ? CoreRoutes.signIn : CoreRoutes.signInFor(next)),
+      redirectTo: kIsWeb ? webReturnUrl(Uri.base, next == null ? CoreRoutes.signIn : CoreRoutes.signInFor(next)) : appReturnUrl,
       // Shared computers (a gym's front desk): always ask which Google account.
       queryParams: const {'prompt': 'select_account'},
     );
   }
+
+  String? _nextAfterGoogle;
+
+  /// In the apps: where to go now that Google has brought them back signed
+  /// in; once (guardRoute, from the router).
+  String? takeNextAfterGoogle() {
+    final next = _nextAfterGoogle;
+    _nextAfterGoogle = null;
+    return next;
+  }
+
+  StreamSubscription<AuthState>? _browserOpen;
+
+  /// iPhone opens Google in a browser over the app, and it stays there after
+  /// Google sends them back; it closes then, signed in or not.
+  void _closeBrowserOnReturn() {
+    _browserOpen?.cancel();
+    _browserOpen = _auth.onAuthStateChange.listen((state) {
+      if (state.event == AuthChangeEvent.signedIn) _closeBrowser();
+    }, onError: (Object _) => _closeBrowser());
+  }
+
+  void _closeBrowser() {
+    _browserOpen?.cancel();
+    _browserOpen = null;
+    if (defaultTargetPlatform == TargetPlatform.iOS) unawaited(closeInAppWebView());
+  }
+
+  /// In the apps: why a Google sign-in came back unfinished (an account
+  /// that's turned off, cancelled), for the sign-in pages to show. The
+  /// website reads it from the address instead (SignInReturn).
+  Stream<String> get unfinishedSignIns => _auth.onAuthStateChange.transform(
+      StreamTransformer.fromHandlers(handleData: (_, __) {}, handleError: (e, _, sink) => sink.add(unfinishedSignInMessage(e))));
 
   /// Sets the signed-in person's 6-digit sign-in code.
   Future<void> setSignInCode(String code) =>

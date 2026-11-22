@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -117,7 +118,7 @@ class SignInScreen extends ConsumerStatefulWidget {
   ConsumerState<SignInScreen> createState() => _SignInScreenState();
 }
 
-class _SignInScreenState extends ConsumerState<SignInScreen> {
+class _SignInScreenState extends ConsumerState<SignInScreen> with _GoogleReturns {
   final _form = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _code = TextEditingController();
@@ -134,6 +135,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     _code.addListener(_codeChanged);
     // Back from Google unfinished (turned off, cancelled): say why.
     _error = SignInReturn.take();
+    listenForGoogleReturns((message) => setState(() => _error = message));
   }
 
   void _codeChanged() {
@@ -276,7 +278,7 @@ class SignUpScreen extends ConsumerStatefulWidget {
   ConsumerState<SignUpScreen> createState() => _SignUpScreenState();
 }
 
-class _SignUpScreenState extends ConsumerState<SignUpScreen> {
+class _SignUpScreenState extends ConsumerState<SignUpScreen> with _GoogleReturns {
   final _form = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _email = TextEditingController();
@@ -286,6 +288,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
   /// Joining as a trainer, not a member (the default).
   bool _asTrainer = false;
+
+  @override
+  void initState() {
+    super.initState();
+    listenForGoogleReturns((message) => setState(() => _error = message));
+  }
 
   @override
   void dispose() {
@@ -432,6 +440,26 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         ),
       ],
     );
+  }
+}
+
+/// In the apps, Google opens in a browser over the page; when it comes back
+/// unfinished (an account that's turned off, cancelled), the page says why.
+/// (The website reads it from the address as it starts: SignInReturn.)
+mixin _GoogleReturns<T extends ConsumerStatefulWidget> on ConsumerState<T> {
+  StreamSubscription<String>? _googleReturns;
+
+  void listenForGoogleReturns(void Function(String message) show) {
+    if (kIsWeb) return;
+    _googleReturns = ref.read(authRepositoryProvider).unfinishedSignIns.listen((message) {
+      if (mounted) show(message);
+    });
+  }
+
+  @override
+  void dispose() {
+    _googleReturns?.cancel();
+    super.dispose();
   }
 }
 

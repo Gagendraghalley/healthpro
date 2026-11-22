@@ -32,6 +32,18 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Sign in with Google: Google (through Supabase) sends people back
+                 to the app with bt.healthpro.app://login-callback
+                 (AuthRepository.appReturnUrl). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="bt.healthpro.app" android:host="login-callback" />
+            </intent-filter>
+            <!-- Links that open the app are for Supabase (app_links), not pages:
+                 the page they left stays open. -->
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

@@ -26,6 +26,24 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<!-- Sign in with Google: Google (through Supabase) sends people back to the app
+		     with bt.healthpro.app://login-callback (AuthRepository.appReturnUrl). -->
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>bt.healthpro.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>bt.healthpro.app</string>
+			</array>
+		</dict>
+	</array>
+	<!-- Links that open the app are for Supabase (app_links), not pages: the page they left stays open. -->
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>https</string>

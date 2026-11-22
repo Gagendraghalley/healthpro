@@ -29,6 +29,16 @@ void main() {
       expect(signInErrorIn(Uri.parse('https://sporthubs.pages.dev/?code=abc#/welcome')), isNull);
     });
 
+    test('in the apps: Supabase reads the return link and says what went wrong', () {
+      // As getSessionFromUrl throws them.
+      expect(unfinishedSignInMessage(const AuthException('User is banned', statusCode: 'user_banned', code: 'access_denied')),
+          off);
+      expect(
+          unfinishedSignInMessage(
+              const AuthException('Error in URL with unspecified error_description', code: 'access_denied')),
+          'Signing in with Google was cancelled.');
+    });
+
     test('the error leaves the address; the page stays, or becomes sign-in', () {
       expect(
           withoutSignInError(Uri.parse('https://sporthubs.pages.dev/?error=access_denied&error_code=user_banned'
