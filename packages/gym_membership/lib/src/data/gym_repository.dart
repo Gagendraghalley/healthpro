@@ -974,6 +974,28 @@ class GymRepository {
     return BhutanTime.parseDate((result as Map)['runs_until'] as String);
   }
 
+  /// Deletes them from the gym's register (20261122000005_gym_delete_member.sql):
+  /// they lose access to this gym and are told; their Health Pro account
+  /// stays, and so do the gym's payments. [evenIfActive] once the desk has
+  /// confirmed deleting a membership still paid for. True when they have an
+  /// account (and so were told).
+  Future<bool> deleteMember(String gymMemberId,
+      {bool evenIfActive = false}) async {
+    final result = await _client.rpc('gym_delete_member', params: {
+      'gym_member_id': gymMemberId,
+      'even_if_active': evenIfActive,
+    }) as Map;
+    final photo = result['photo_path'] as String?;
+    if (photo != null) {
+      try {
+        await _client.storage.from(photoBucket).remove([photo]);
+      } catch (_) {
+        // A leftover file is harmless; nothing points at it now.
+      }
+    }
+    return result['told'] == true;
+  }
+
   /// A gym's pauses running or planned, for its members list.
   Future<List<GymPause>> openPauses(String venueId) async {
     final rows = await _client

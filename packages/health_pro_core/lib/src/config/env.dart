@@ -12,6 +12,16 @@ abstract final class Env {
   /// is off, and notifications stay inside the app.
   static const vapidPublicKey = String.fromEnvironment('VAPID_PUBLIC_KEY');
 
+  /// Push on the Android and iOS apps (Firebase Cloud Messaging): the
+  /// Firebase project's apps (Project settings -> Your apps). Empty: phone
+  /// push is off, and notifications stay inside the app.
+  static const firebaseProjectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
+  static const firebaseSenderId = String.fromEnvironment('FIREBASE_SENDER_ID');
+  static const firebaseAndroidApiKey = String.fromEnvironment('FIREBASE_ANDROID_API_KEY');
+  static const firebaseAndroidAppId = String.fromEnvironment('FIREBASE_ANDROID_APP_ID');
+  static const firebaseIosApiKey = String.fromEnvironment('FIREBASE_IOS_API_KEY');
+  static const firebaseIosAppId = String.fromEnvironment('FIREBASE_IOS_APP_ID');
+
   /// What's wrong with the settings, or null when the app can start.
   static String? get problem {
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {

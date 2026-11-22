@@ -75,6 +75,56 @@ select t.as_user('00000000-0000-0000-0000-000000001102');
 select public.remove_push_subscription(:'phone');
 select t.eq((select count(*) from public.push_subscriptions)::int, 0, 'and off again');
 
+-- The phone apps (FCM tokens): Pem turns them on in the Android app.
+\set android 'dY3xQ9-hR0e:APA91bHq_Z9cZ8n2kLx-android-phone-1'
+select t.as_user('00000000-0000-0000-0000-000000001101');
+select t.fails($$select public.save_push_device('not a token!', 'android')$$, 'isn''t a push token');
+select t.fails(format($$select public.save_push_device(%L, 'windows')$$, :'android'), 'Android and iOS');
+select public.save_push_device(:'android', 'android');
+select public.save_push_device(:'android', 'android');
+select t.eq((select count(*) from public.push_devices)::int, 1, 'her Android phone, once');
+select t.fails(format($$insert into public.push_devices (user_id, token, platform) values (%L, 'aaaaaaaaaaaaaaaaaaaaaaaa', 'ios')$$,
+                      '00000000-0000-0000-0000-000000001101'), 'permission denied');
+select t.as_user('00000000-0000-0000-0000-000000001102');
+select t.eq((select count(*) from public.push_devices)::int, 0, 'nobody sees another''s phones');
+
+-- With only the phone app on (no browser), the notification is still made and
+-- send-push gets her phone with it.
+reset role;
+select set_config('request.jwt.claim.sub', '', false);
+select public.notify('00000000-0000-0000-0000-000000001101', null, 'Package ending', 'Monthly ends tomorrow.', '/gyms/my');
+select id as note2 from public.notifications where user_id = '00000000-0000-0000-0000-000000001101' and title = 'Package ending' \gset
+set role service_role;
+select public.push_claim_notification(:'note2') as claimed2 \gset
+select t.eq(:'claimed2'::jsonb -> 'devices' -> 0 ->> 'token', :'android', 'send-push gets her phone app');
+select t.eq(:'claimed2'::jsonb -> 'devices' -> 0 ->> 'platform', 'android', '...as Android');
+select t.eq(jsonb_array_length(:'claimed2'::jsonb -> 'subscriptions'), 0, '...and no browsers');
+select public.push_forget_devices(array[:'android']);
+reset role;
+select t.eq((select count(*) from public.push_devices)::int, 0, 'a phone FCM says is gone is forgotten');
+
+set role authenticated;
+select t.as_user('00000000-0000-0000-0000-000000001101');
+select t.fails(format($$select public.push_forget_devices(array[%L])$$, :'android'), 'permission denied');
+
+-- A phone passed from Pem to Kinley, now an iPhone app.
+select public.save_push_device(:'android', 'android');
+select t.as_user('00000000-0000-0000-0000-000000001102');
+select public.save_push_device(:'android', 'ios');
+select t.eq((select platform from public.push_devices), 'ios', 'the phone is Kinley''s now');
+select t.as_user('00000000-0000-0000-0000-000000001101');
+select t.eq((select count(*) from public.push_devices)::int, 0, '...not Pem''s');
+select t.as_user('00000000-0000-0000-0000-000000001102');
+select public.remove_push_device(:'android');
+select t.eq((select count(*) from public.push_devices)::int, 0, 'and off again on the phone');
+
+-- Twenty phones at most: the oldest makes room for a new one.
+select public.save_push_device('kinley-phone-' || lpad(i::text, 12, '0'), 'ios') from generate_series(1, 21) i;
+select t.eq((select count(*) from public.push_devices)::int, 20, 'twenty phones at most');
+select t.eq((select count(*) from public.push_devices where token = 'kinley-phone-000000000021')::int, 1, '...the newest kept');
+select public.save_push_device('kinley-phone-000000000021', 'ios');
+select t.eq((select count(*) from public.push_devices)::int, 20, 'saving one again doesn''t push another out');
+
 reset role;
 delete from private.settings;
 do $$ begin raise notice 'ALL PUSH CHECKS PASSED'; end $$;

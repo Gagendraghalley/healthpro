@@ -14,6 +14,7 @@ import '../data/registered_member.dart';
 import '../gym_permissions.dart';
 import '../gym_routes.dart';
 import '../widgets/coaching_widgets.dart';
+import '../widgets/delete_member_dialog.dart';
 import '../widgets/export_button.dart';
 import '../widgets/follow_up_widgets.dart';
 import '../widgets/gym_widgets.dart';
@@ -1504,6 +1505,8 @@ class _MemberPageState extends ConsumerState<_MemberPage> {
     final a = widget.access;
     // A package runs today or later, and nothing's paused or planned.
     final canPause = a.can(GymPermission.payments) && pause == null && until != null;
+    // Off the register; a membership still paid for also needs payments.
+    final canDelete = a.can(GymPermission.register) && (until == null || a.can(GymPermission.payments));
 
     final header = SectionCard(
       padding: const EdgeInsets.all(18),
@@ -1546,6 +1549,13 @@ class _MemberPageState extends ConsumerState<_MemberPage> {
                         onPressed: () => context.go(GymRoutes.editMemberFor(_venueId, m.id)),
                         icon: const Icon(Icons.edit_outlined),
                         label: const Text('Edit details'),
+                      ),
+                    if (canDelete)
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(foregroundColor: context.brand.danger),
+                        onPressed: () => _delete(context, until),
+                        icon: const Icon(Icons.person_remove_outlined),
+                        label: const Text('Delete member'),
                       ),
                   ],
                 ),
@@ -1649,7 +1659,7 @@ class _MemberPageState extends ConsumerState<_MemberPage> {
                 const SectionTitle('Progress'),
                 MemberProgress(gymMemberId: m.id, coach: true),
                 const SectionTitle('Workout & diet plans'),
-                MemberPlans(gymMemberId: m.id, coach: true),
+                MemberPlans(gymMemberId: m.id, venueId: _venueId, coach: true),
                 SectionTitle('Visits', trailing: Text('${visits.length} recorded', style: TextStyle(color: context.brand.muted))),
                 if (visits.isEmpty)
                   const FormHint('No visits yet.')
@@ -1734,6 +1744,15 @@ class _MemberPageState extends ConsumerState<_MemberPage> {
     final subs = membershipsOf(ref.read(gymSubscriptionsProvider(_venueId)).valueOrNull ?? const [], m.id);
     final done = await showPauseDialog(context, member: m, subscriptions: subs);
     if (done == true) refreshGym(ref, _venueId);
+  }
+
+  /// Off the register, after a warning when [activeUntil] says they've paid.
+  Future<void> _delete(BuildContext context, DateTime? activeUntil) async {
+    final done = await showDeleteMemberDialog(context, member: m, gymName: widget.access.venue.name, activeUntil: activeUntil);
+    if (done != true || !context.mounted) return;
+    context.go(GymRoutes.membersFor(_venueId));
+    refreshGym(ref, _venueId);
+    ref.invalidate(gymMemberProvider(m.id));
   }
 }
 

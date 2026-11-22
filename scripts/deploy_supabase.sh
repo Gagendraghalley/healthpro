@@ -29,6 +29,11 @@
 #                        env.json for the app. VAPID_SUBJECT: who sends them
 #                        (mailto:... or the site's address; the website's by
 #                        default).
+# FCM_SERVICE_ACCOUNT_FILE: optional. Turn on push notifications on the Android
+#                        and iOS apps: the path to the Firebase project's
+#                        service account key (Project settings -> Service
+#                        accounts -> Generate new private key). It becomes
+#                        send-push's secret; keep the file out of the project.
 # SMTP_HOST, SMTP_USER and SMTP_PASS: optional. Turn on the emails about
 #                        classes (booked, changed, cancelled) from the
 #                        send-email function; they're stored as its secrets.
@@ -93,6 +98,23 @@ if [[ -n "${VAPID_PUBLIC_KEY:-}" && -n "${VAPID_PRIVATE_KEY:-}" ]]; then
   trap 'rm -f "$secrets"' EXIT
   printf 'VAPID_PUBLIC_KEY=%s\nVAPID_PRIVATE_KEY=%s\nVAPID_SUBJECT=%s\n' \
     "$VAPID_PUBLIC_KEY" "$VAPID_PRIVATE_KEY" "${VAPID_SUBJECT:-https://myhealthpro.pages.dev}" > "$secrets"
+  sb secrets set --env-file "$secrets" --yes
+  rm -f "$secrets"
+fi
+
+if [[ -n "${FCM_SERVICE_ACCOUNT_FILE:-}" ]]; then
+  echo "== Push notifications on the phone apps: Firebase service account"
+  if ! node -e '
+    const k = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    if (k.type !== "service_account" || !k.project_id || !k.client_email || !k.private_key) process.exit(1);
+  ' "$FCM_SERVICE_ACCOUNT_FILE" 2>/dev/null; then
+    echo "FCM_SERVICE_ACCOUNT_FILE isn't a Firebase service account key (the JSON file from Project settings -> Service accounts)." >&2
+    exit 1
+  fi
+  secrets="$(mktemp)"
+  trap 'rm -f "$secrets"' EXIT
+  # In base64: one line, nothing in it to quote.
+  printf 'FCM_SERVICE_ACCOUNT=%s\n' "$(base64 < "$FCM_SERVICE_ACCOUNT_FILE" | tr -d '\n')" > "$secrets"
   sb secrets set --env-file "$secrets" --yes
   rm -f "$secrets"
 fi

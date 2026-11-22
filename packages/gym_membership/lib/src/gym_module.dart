@@ -190,6 +190,22 @@ class GymModule extends HealthProModule {
     ];
   }
 
+  /// Per gym: Trainer where it verified them (not while they wait), to their
+  /// trainer page; Member where they're registered, to My gym.
+  @override
+  List<AccountRole>? accountRoles(Ref ref) {
+    final training = ref.watch(myTrainingProvider);
+    final memberships = ref.watch(myMembershipsProvider);
+    if ([training, memberships].any((v) => v.isLoading && !v.hasValue)) return null;
+    return [
+      for (final g in training.valueOrNull?.gyms ?? const [])
+        if (g.status == TrainerStatus.verified)
+          AccountRole(venueId: g.venueId, venueName: g.venueName, role: 'Trainer', route: GymRoutes.trainerHome),
+      for (final g in memberships.valueOrNull?.gyms ?? const [])
+        AccountRole(venueId: g.venueId, venueName: g.venueName, role: 'Member', route: GymRoutes.my),
+    ];
+  }
+
   @override
   ServiceNav? navigation(WidgetRef ref, String location) =>
       gymNavigation(ref, location, name: name, icon: icon, color: color);

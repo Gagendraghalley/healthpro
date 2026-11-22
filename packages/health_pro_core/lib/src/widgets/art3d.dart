@@ -83,8 +83,27 @@ class Art3DIcon extends StatelessWidget {
 
   const Art3DIcon(this.art, {super.key, this.size = 24, this.fallback, this.fallbackColor});
 
+  /// How much colour the icons keep (1 = the emoji as drawn).
+  static const saturation = 0.55;
+
+  /// Turns saturation down to [s], keeping each pixel's brightness (Rec. 709 luma).
+  static ColorFilter _saturation(double s) {
+    const r = 0.2126, g = 0.7152, b = 0.0722;
+    final k = 1 - s;
+    return ColorFilter.matrix(<double>[
+      r * k + s, g * k, b * k, 0, 0,
+      r * k, g * k + s, b * k, 0, 0,
+      r * k, g * k, b * k + s, 0, 0,
+      0, 0, 0, 1, 0,
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
+    return ColorFiltered(colorFilter: _saturation(saturation), child: _image());
+  }
+
+  Widget _image() {
     return Image.asset(
       art.asset,
       package: 'health_pro_core',

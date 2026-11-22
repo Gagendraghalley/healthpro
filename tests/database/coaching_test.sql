@@ -1,4 +1,5 @@
--- Body progress, workout and diet plans, and group classes: runs after
+-- Body progress, goals, workout and diet plans (in meals too), foods, plan
+-- templates, and group classes: runs after
 -- scenario_test.sql (it uses its t.* helpers and super admin A). Owner Wangmo
 -- runs Coach Gym with front desk Dechen; Tashi trains Mindu there (Mindu has
 -- the app); Sonam and Pem have no app; Kinley is another trainer, not
@@ -127,6 +128,115 @@ select t.eq((select m ->> 'full_name' || '|' || (m ->> 'latest_weight') || '|' |
             'Mindu Dema|69.5|1|Coach Gym', 'Tashi sees his member: latest weight, plans, gym');
 select t.as_user('00000000-0000-0000-0000-0000000f3006');
 select t.eq(jsonb_array_length(public.trainer_my_members()), 0, 'Kinley has no members');
+
+-- ---- Goals -----------------------------------------------------------------------
+select t.as_user('00000000-0000-0000-0000-0000000f3004');
+select public.gym_save_member_goal(:'mindu', jsonb_build_object('goal', 'lose_fat', 'target_weight_kg', 64.96,
+  'target_date', public.bhutan_today() + 90, 'sex', 'female'));
+select t.eq((select goal || '|' || target_weight_kg || '|' || sex || '|' || activity || '|' || set_by_name
+             from public.gym_member_goals where gym_member_id = :'mindu'),
+            'lose_fat|65.0|female|moderate|Mindu Member', 'Mindu sets her own goal');
+select t.fails(format($$select public.gym_save_member_goal(%L, '{"goal":"fly"}')$$, :'mindu'), 'Choose a goal');
+select t.fails(format($$select public.gym_save_member_goal(%L, '{"target_weight_kg":10}')$$, :'mindu'), 'target weight');
+select t.fails(format($$select public.gym_save_member_goal(%L, jsonb_build_object('target_date', public.bhutan_today()))$$, :'mindu'),
+               'target day');
+select t.fails(format($$select public.gym_save_member_goal(%L, '{"activity":"sofa"}')$$, :'mindu'), 'how active');
+select t.as_user('00000000-0000-0000-0000-0000000f3003');
+select public.gym_save_member_goal(:'mindu', '{"goal":"build_muscle","sex":"female","activity":"active"}');
+select t.eq((select goal || '|' || coalesce(target_weight_kg::text, '-') || '|' || activity || '|' || set_by_name
+             from public.gym_member_goals where gym_member_id = :'mindu'),
+            'build_muscle|-|active|Tashi Trainer', 'her trainer changes it');
+select t.as_user('00000000-0000-0000-0000-0000000f3006');
+select t.fails(format($$select public.gym_save_member_goal(%L, '{"goal":"keep_fit"}')$$, :'mindu'), 'Only the member');
+select t.eq((select count(*) from public.gym_member_goals)::int, 0, 'another trainer doesn''t see it');
+
+reset role;
+update public.gym_members set date_of_birth = public.bhutan_today() - interval '30 years' where id = :'sonam';
+set role authenticated;
+select t.as_user('00000000-0000-0000-0000-0000000f3002');
+select t.eq(public.gym_member_age(:'sonam'), 30, 'the desk gets Sonam''s age for his calories');
+select t.eq(coalesce(public.gym_member_age(:'mindu'), -1), -1, 'no date of birth, no age');
+select t.as_user('00000000-0000-0000-0000-0000000f3005');
+select t.eq(coalesce(public.gym_member_age(:'sonam'), -1), -1, 'an outsider gets nothing');
+
+-- ---- Diet plans in meals, and foods ---------------------------------------------
+select t.as_user('00000000-0000-0000-0000-0000000f3002');
+select public.gym_save_member_plan(:'sonam', null, '{"kind":"diet","title":"Lean month","kcal_target":2100,"protein_target_g":120,
+  "meals":[{"name":" Breakfast ","items":[{"food":" Red rice, cooked ","amount":"1 cup","kcal":215.4,"protein_g":4.46},
+                                         {"food":"Egg, boiled","kcal":78}]}]}') as meals \gset
+select t.eq((select (meals -> 0 ->> 'name') || '|' || (meals -> 0 -> 'items' -> 0 ->> 'food') || '|'
+                    || (meals -> 0 -> 'items' -> 0 ->> 'kcal') || '|' || (meals -> 0 -> 'items' -> 0 ->> 'protein_g') || '|'
+                    || coalesce(meals -> 0 -> 'items' -> 1 ->> 'amount', '-') || '|' || kcal_target || '|' || protein_target_g
+                    || '|' || content
+             from public.gym_member_plans where id = :'meals'),
+            'Breakfast|Red rice, cooked|215|4.5|-|2100|120|', 'a diet plan in meals, without words, cleaned and with targets');
+select t.fails(format($$select public.gym_save_member_plan(%L, null, '{"kind":"diet","title":"Empty","meals":[{"name":"Lunch","items":[]}]}')$$,
+                      :'sonam'), 'Add a food to Lunch');
+select t.fails(format($$select public.gym_save_member_plan(%L, null,
+                 '{"kind":"diet","title":"Big","meals":[{"name":"Lunch","items":[{"food":"Cake","kcal":5000}]}]}')$$, :'sonam'),
+               'calories and protein of Cake');
+select t.fails(format($$select public.gym_save_member_plan(%L, null, '{"kind":"diet","title":"Low","content":"x","kcal_target":300}')$$,
+                      :'sonam'), 'Daily calories');
+select public.gym_save_member_plan(:'sonam', null, '{"kind":"workout","title":"Legs","content":"Squats","kcal_target":2000,
+  "meals":[{"name":"Lunch","items":[{"food":"Rice"}]}]}') as legs \gset
+select t.eq((select meals::text || '|' || coalesce(kcal_target::text, '-') from public.gym_member_plans where id = :'legs'), '[]|-',
+            'a workout plan keeps no meals or calories');
+select t.as_user('00000000-0000-0000-0000-0000000f3004');
+select t.eq((select kcal || '|' || protein_g from public.diet_foods where name = 'Ema datshi'), '220|9.0', 'anyone signed in reads the foods');
+
+-- ---- Plan templates -------------------------------------------------------------
+select t.as_user('00000000-0000-0000-0000-0000000f3003');
+select public.gym_save_plan_template(:'gym', '{"kind":"workout","title":"Beginner, 3 days","content":"Day 1: squats 3x10"}') as tpl \gset
+select public.gym_save_plan_template(:'gym', '{"kind":"workout","title":"beginner, 3 days ","content":"Day 1: squats 4x8"}');
+select t.eq((select count(*) || '|' || max(content) || '|' || max(author_name) from public.gym_plan_templates), '1|Day 1: squats 4x8|Tashi Trainer',
+            'a trainer keeps a template; the same title replaces it');
+select t.as_user('00000000-0000-0000-0000-0000000f3004');
+select t.eq((select count(*) from public.gym_plan_templates)::int, 0, 'members don''t see the gym''s templates');
+select t.as_user('00000000-0000-0000-0000-0000000f3005');
+select t.fails(format($$select public.gym_save_plan_template(%L, '{"title":"Mine","content":"x"}')$$, :'gym'), 'staff and its trainers');
+select t.fails(format($$select public.gym_delete_plan_template(%L)$$, :'tpl'), 'staff and its trainers');
+select t.as_user('00000000-0000-0000-0000-0000000f3002');
+select t.eq((select count(*) from public.gym_plan_templates)::int, 1, 'the desk sees it');
+select public.gym_delete_plan_template(:'tpl');
+select t.eq((select count(*) from public.gym_plan_templates)::int, 0, 'and removes it');
+
+-- ---- Nudges ----------------------------------------------------------------------
+-- Mindu wants to build muscle; her weight hasn't moved in 3 weeks.
+reset role;
+delete from public.gym_body_measurements where gym_member_id = :'mindu';
+insert into public.gym_body_measurements (venue_id, gym_member_id, measured_on, weight_kg) values
+  (:'gym', :'mindu', public.bhutan_today() - 2, 70.0),
+  (:'gym', :'mindu', public.bhutan_today() - 25, 70.1);
+select t.eq(public.gym_coaching_nudges(), 1, 'one nudge today');
+select t.eq((select title || '|' || body || '|' || link from public.notifications
+             where user_id = '00000000-0000-0000-0000-0000000f3003' order by created_at desc limit 1),
+            'Mindu Dema''s weight hasn''t moved in 3 weeks|Their goal is to build muscle. Have a look at their diet plan.|/gyms/trainer/members/'
+              || :'mindu', 'her trainer hears her weight hasn''t moved');
+select t.eq(public.gym_coaching_nudges(), 0, 'and not again tomorrow');
+
+-- Then she stops measuring.
+delete from public.gym_body_measurements where gym_member_id = :'mindu';
+insert into public.gym_body_measurements (venue_id, gym_member_id, measured_on, weight_kg)
+  values (:'gym', :'mindu', public.bhutan_today() - 31, 70);
+select t.eq(public.gym_coaching_nudges(), 1, 'one reminder');
+select t.eq((select title || '|' || body from t.mindu_notes() order by created_at desc limit 1),
+            'Time for a new measurement|Your last one was 31 days ago. Log your weight on My gym, or ask your trainer or the desk.',
+            'Mindu is reminded to measure');
+select t.eq(public.gym_coaching_nudges(), 0, 'once in 30 days');
+set role authenticated;
+
+-- ---- AI drafts of plans -----------------------------------------------------------
+select t.as_user('00000000-0000-0000-0000-0000000f3003');
+select t.eq(public.ai_take_plan_draft(:'mindu'), 9, 'her trainer drafts a plan: 9 left today');
+select t.as_user('00000000-0000-0000-0000-0000000f3004');
+select t.fails(format('select public.ai_take_plan_draft(%L)', :'mindu'), 'trainer and the gym''s staff');
+select t.as_user('00000000-0000-0000-0000-0000000f3006');
+select t.fails(format('select public.ai_take_plan_draft(%L)', :'mindu'), 'trainer and the gym''s staff');
+reset role;
+insert into public.ai_plan_drafts (user_id, venue_id) select '00000000-0000-0000-0000-0000000f3003', :'gym' from generate_series(1, 9);
+set role authenticated;
+select t.as_user('00000000-0000-0000-0000-0000000f3003');
+select t.fails(format('select public.ai_take_plan_draft(%L)', :'mindu'), 'drafted 10 plans');
 
 -- ---- Classes --------------------------------------------------------------------
 select public.bhutan_today() + 1 as tomorrow \gset

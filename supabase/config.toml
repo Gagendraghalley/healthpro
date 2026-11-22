@@ -462,6 +462,11 @@ verify_jwt = true
 [functions.ask-ai]
 verify_jwt = true
 
+# AI drafts of a member's workout or diet plan (the plan form): only for a
+# signed-in user; the database checks they coach the member and counts drafts.
+[functions.draft-plan]
+verify_jwt = true
+
 # Health Pro's assistant (the floating Ask AI button, for anyone): visitors
 # have no account, so no token is needed; the database counts questions by
 # a hash of their address instead.

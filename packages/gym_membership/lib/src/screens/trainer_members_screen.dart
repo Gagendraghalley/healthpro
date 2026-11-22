@@ -140,7 +140,7 @@ class TrainerMemberScreen extends ConsumerWidget {
               const SectionTitle('Progress'),
               MemberProgress(gymMemberId: m.gymMemberId, coach: true),
               const SectionTitle('Workout & diet plans'),
-              MemberPlans(gymMemberId: m.gymMemberId, coach: true),
+              MemberPlans(gymMemberId: m.gymMemberId, venueId: m.venueId, coach: true),
             ],
           ),
         );

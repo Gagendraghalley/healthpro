@@ -32,6 +32,14 @@ select t.eq((select string_agg(concat_ws('|', title, body, link), ',') from publ
              where user_id = '00000000-0000-0000-0000-0000000f3005' and title = 'Spin has changed'),
             'Spin has changed|New description. Your place on ' || :'day' || ' is kept.|/gyms/' || :'gym',
             'but the app tells Xo of the change, with the gym''s page');
+select t.eq((select string_agg(distinct concat_ws('|', body, link), ',') from public.notifications
+             where title = 'New class booking' and body like '%Spin%'),
+            'Xo Out booked Spin on ' || :'day' || ' at 9:00 AM. They aren''t a member here yet.|/gyms/' || :'gym' || '/manage/classes',
+            'Xo booking a class tells the gym who, which class, when, and links to Classes');
+select t.eq((select string_agg(user_id::text, ',' order by user_id) from public.notifications
+             where title = 'New class booking' and body like '%Spin%'),
+            '00000000-0000-0000-0000-0000000f3001,00000000-0000-0000-0000-0000000f3002,00000000-0000-0000-0000-0000000f3008',
+            'everyone whose role has Classes: the owner, the front desk and the class host; not Xo');
 set role authenticated;
 select t.fails($$select public.email_configure('https://abc.supabase.co/functions/v1/send-email')$$, 'permission denied');
 reset role;
@@ -51,6 +59,11 @@ reset role;
 select t.eq((select string_agg(to_email || ':' || kind, ',' order by to_email) from private.email_outbox),
             'coach.mindu@x.bt:class_booked,coach.outsider@x.bt:class_booked',
             'booking emails Xo, and Mindu at her account''s email; not Sonam (none); cancelling one''s own sends nothing');
+select t.eq((select count(*) from public.notifications
+             where user_id = '00000000-0000-0000-0000-0000000f3001' and title = 'New class booking' and body like '%Spin%')::int, 3,
+            'the owner is told of each booking members make themselves (Xo twice, Mindu)');
+select t.eq((select count(*) from public.notifications where title = 'New class booking' and body like 'Sonam%')::int, 0,
+            'not of the desk booking Sonam in');
 select t.eq((select concat_ws('|', data ->> 'class', data ->> 'date', data ->> 'starts_at', data ->> 'minutes', data ->> 'trainer',
                               data ->> 'gym', data ->> 'address', data ->> 'phone', data ->> 'name')
              from private.email_outbox where to_email = 'coach.outsider@x.bt'),

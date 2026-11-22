@@ -27,6 +27,8 @@ dependencies:
   video_player: ^2.10.0 # plays a venue's promotional video (its own short clip)
   archive: ^4.0.0 # zips the Excel files that staff export (Spreadsheet)
   http: ^1.2.0 # asks Supabase Auth whether Google sign-in is on (googleSignInProvider)
+  firebase_core: ^5.1.0 # push notifications on the Android and iOS apps (Firebase Cloud Messaging)
+  firebase_messaging: ^17.0.1 # ...the phone's token, and opening a notification's page
 
 dev_dependencies:
   flutter_test:

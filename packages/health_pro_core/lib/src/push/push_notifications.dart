@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -12,6 +13,8 @@ import '../pwa/pwa_stub.dart' if (dart.library.js_interop) '../pwa/pwa_web.dart'
 import '../supabase/supabase_provider.dart';
 import '../theme/brand.dart';
 import '../widgets/feedback.dart';
+import '../widgets/motion.dart';
+import 'native_push.dart';
 import 'web_push_stub.dart' if (dart.library.js_interop) 'web_push_web.dart';
 
 /// Where push notifications stand on this device.
@@ -30,20 +33,31 @@ enum PushStatus {
 
 /// Push on this device; reading it never asks the person anything.
 final pushStatusProvider = FutureProvider<PushStatus>((ref) async {
-  ref.watch(currentUserIdProvider);
-  return PushNotifications.status();
+  return PushNotifications.status(ref.watch(currentUserIdProvider));
 });
 
 /// Every notification also arrives as a push on the devices where the person
 /// turned them on: Health Pro tells them about join requests, payments,
 /// packages ending, trainers and reviews even when it's closed. Asked after
 /// signing in, not on first opening; anyone who says no still sees them in
-/// the app, under Notifications.
+/// the app, under Notifications. The website uses web push; the Android and
+/// iOS apps use Firebase Cloud Messaging (NativePush).
 abstract final class PushNotifications {
-  static bool get configured => Env.vapidPublicKey.isNotEmpty;
+  static bool get configured => NativePush.isPhoneApp ? NativePush.configured : Env.vapidPublicKey.isNotEmpty;
 
-  static Future<PushStatus> status() async {
+  /// For [userId] (the signed-in person) on this device.
+  static Future<PushStatus> status([String? userId]) async {
     if (!configured) return PushStatus.unavailable;
+    if (NativePush.isPhoneApp) {
+      try {
+        final permission = await NativePush.permission();
+        if (permission == 'denied') return PushStatus.blocked;
+        if (permission != 'granted') return PushStatus.off;
+        return await NativePush.current(userId) == null ? PushStatus.off : PushStatus.on;
+      } catch (_) {
+        return PushStatus.unavailable;
+      }
+    }
     if (PwaInstall.isIos && !PwaInstall.isInstalled) return PushStatus.needsInstall;
     if (!WebPush.supported) return PushStatus.unavailable;
     if (WebPush.permission == 'denied') return PushStatus.blocked;
@@ -58,6 +72,7 @@ abstract final class PushNotifications {
   /// Asks to show notifications, subscribes this device and keeps it on
   /// Health Pro. False when they said no.
   static Future<bool> turnOn(SupabaseClient client) async {
+    if (NativePush.isPhoneApp) return _turnOnPhone(client);
     final json = await WebPush.subscribe(Env.vapidPublicKey);
     if (json == null) {
       if (WebPush.permission == 'denied') {
@@ -76,8 +91,26 @@ abstract final class PushNotifications {
     return true;
   }
 
+  /// The Android or iOS app: asks, registers this phone with FCM and keeps
+  /// it on Health Pro.
+  static Future<bool> _turnOnPhone(SupabaseClient client) async {
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) throw StateError('Sign in first.');
+    final token = await NativePush.subscribe();
+    if (token == null) throw StateError('Notifications are off for Health Pro. Allow them in your phone settings.');
+    await client.rpc('save_push_device', params: {'token': token, 'platform': NativePush.platform});
+    await NativePush.remember(userId, token);
+    return true;
+  }
+
   /// This device stops getting notifications.
   static Future<void> turnOff(SupabaseClient client) async {
+    if (NativePush.isPhoneApp) {
+      final token = await NativePush.current(client.auth.currentUser?.id);
+      if (token != null) await client.rpc('remove_push_device', params: {'token': token});
+      await NativePush.unsubscribe();
+      return;
+    }
     final endpoint = await WebPush.unsubscribe();
     if (endpoint != null) await client.rpc('remove_push_subscription', params: {'endpoint': endpoint});
   }
@@ -85,27 +118,34 @@ abstract final class PushNotifications {
   /// Before signing out: this device stops getting this person's
   /// notifications. Never in the way of signing out.
   static Future<void> forgetThisDevice(SupabaseClient client) async {
-    if (!configured || !WebPush.supported) return;
+    if (!configured || (!NativePush.isPhoneApp && !WebPush.supported)) return;
     try {
       await turnOff(client).timeout(const Duration(seconds: 4));
     } catch (_) {}
   }
 
-  static const _snoozeKey = 'push_prompt_snoozed_until';
+  static const _oldSnoozeKey = 'push_prompt_snoozed_until';
   static bool _askedThisSession = false;
 
-  /// After signing in, once a session: asks whether to turn notifications on,
-  /// unless they're on, blocked, can't be, or the person said "Not now" in
-  /// the last two weeks.
+  /// After the first sign-in, once only: asks whether to turn notifications
+  /// on, unless they're on, blocked or can't be. Whatever the answer, it's
+  /// never asked again for this person on this device; they can still turn
+  /// them on under Notifications.
   static Future<void> maybeAsk(BuildContext context, WidgetRef ref) async {
     if (_askedThisSession || !configured) return;
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
     _askedThisSession = true;
-    if (await status() != PushStatus.off) return;
+    if (await status(userId) != PushStatus.off) return;
+    final askedKey = 'push_prompt_asked_$userId';
     try {
       final prefs = await SharedPreferences.getInstance();
-      final until = prefs.getInt(_snoozeKey);
-      if (until != null && DateTime.now().millisecondsSinceEpoch < until) return;
-    } catch (_) {}
+      if (prefs.getBool(askedKey) ?? false) return;
+      await prefs.setBool(askedKey, true);
+      await prefs.remove(_oldSnoozeKey);
+    } catch (_) {
+      return;
+    }
     if (!context.mounted) return;
     final yes = await showAppDialog<bool>(
       context: context,
@@ -122,18 +162,52 @@ abstract final class PushNotifications {
         ],
       ),
     );
-    if (yes != true) {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setInt(_snoozeKey, DateTime.now().add(const Duration(days: 14)).millisecondsSinceEpoch);
-      } catch (_) {}
-      return;
-    }
-    if (!context.mounted) return;
+    if (yes != true || !context.mounted) return;
     await runAction(context, () => turnOn(ref.read(supabaseProvider)), success: 'Notifications are on');
     ref.invalidate(pushStatusProvider);
   }
+
+  /// After signing in, on the Android and iOS apps: a tapped notification
+  /// opens its page, and one that comes while Health Pro is open shows as a
+  /// bar at the foot of the page (on the website, push_sw.js does both).
+  static void listen(BuildContext context, WidgetRef ref) {
+    if (!NativePush.configured) return;
+    final router = GoRouter.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    unawaited(NativePush.listen(
+      ref.read(supabaseProvider),
+      open: router.go,
+      show: (title, body, link) => messenger.showSnackBar(_arrivedBar(title, body, () => router.go(link))),
+    ).catchError((Object _) {}));
+  }
 }
+
+/// A notification that came while Health Pro is open: its title and text,
+/// and View to open its page.
+SnackBar _arrivedBar(String title, String body, VoidCallback onView) => SnackBar(
+      backgroundColor: BrandColors.navy,
+      duration: const Duration(seconds: 6),
+      content: Row(
+        children: [
+          const PopIn(
+            delay: Duration(milliseconds: 120),
+            child: Icon(Icons.notifications_active_rounded, color: Color(0xFF4CC983), size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                if (body.isNotEmpty) Text(body, maxLines: 2, overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+        ],
+      ),
+      action: SnackBarAction(label: 'View', onPressed: onView),
+    );
 
 /// On the Notifications page: push on this device, and turning it on or off.
 class PushSettingCard extends ConsumerWidget {

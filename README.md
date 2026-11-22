@@ -17,7 +17,7 @@ packages/health_pro_core/      accounts, profiles, venues and staff, payments, n
                               the module contract, router, home page, admin, theme
 packages/gym_membership/      the gym module: gym plans, memberships, check-in, staff and owner pages
 supabase/migrations/          core, then one migration per module
-supabase/functions/           Edge Functions (delete-account, admin-users, ask-ai, ask-health-pro; _shared)
+supabase/functions/           Edge Functions (delete-account, admin-users, ask-ai, ask-health-pro, draft-plan; _shared)
 supabase/config.toml          auth settings (email codes) and function settings
 supabase/templates/code.html  the sign-in email, showing the 6-digit code
 supabase/test_users.sql       test accounts, one per role (test_users_remove.sql removes them)
@@ -167,6 +167,12 @@ select cron.schedule('gym-daily-maintenance', '5 18 * * *', 'select public.gym_d
 select cron.schedule('gym-birthday-wishes', '5 2 * * *', 'select public.gym_birthday_wishes()');
 ```
 
+`gym_coaching_nudges()` runs every day at 08:15 Bhutan time: members with the app and a package running, last measured 30 days ago or more, are reminded to log their weight (once in 30 days); a member's trainer is told when their weight hasn't moved toward their goal for 3 weeks (once in 21 days). If it isn't scheduled:
+
+```sql
+select cron.schedule('gym-coaching-nudges', '15 2 * * *', 'select public.gym_coaching_nudges()');
+```
+
 ## How it fits together
 
 ### A platform of services
@@ -253,6 +259,7 @@ Members walk in (they need no account), or ask to join in the app. Either way ea
 3. **Check in** (`gym.check_in`): scan the card with the camera, a USB QR scanner (it types into the member code box, which keeps the cursor on a computer), or type the 6-character member code (`gym_check_in_member`, `gym_check_in_by_code`). It's recorded only if a package at that gym covers today. The desk sees **Checked in** with their photo, days left and medical notes, or **Not checked in** with why ("…'s package ended on …") and a button to renew.
 4. **Renew**: on their page. A renewal starts on the day the current package expires, so the dates don't drift (8 Feb, 8 May, 8 Aug), or today once it has ended (`gym_renew_member`). Its receipt opens straight after.
    - **Pause** (`gym.payments`, on their page): travel, illness or an injury, from today or a later day, 1 to 180 days, with a reason. The running package ends that many days later and any renewal after it moves too, so nothing paid for is lost (`gym_pause_member`, `gym_membership_pauses`). While paused, check-in refuses them ("…'s membership is paused until …"). Back early, **Resume** gives the unused days back off the dates; before it begins, **Take back** undoes it (`gym_resume_member`). One pause at a time; a member with an account is told both times, and sees it on My dashboard and My gym ("Paused until …", when they can check in again, until when their package runs).
+   - **Delete member** (`gym.register`, on their page): takes them off the gym's register with everything kept on it there (packages, visits, pause, trainer, progress, plans, goals, class bookings, follow-ups), so they lose all access to that gym (`gym_delete_member`, 20261122000005). Their Health Pro account stays: they still sign in, keep their other gyms and can ask to join again; with an account they're told ("Removed from …"). Payments stay in income and receipts, and the activity log keeps the name. A membership still running, paused or to come also needs `gym.payments`, and the dialog warns in red ("still active until …, N days left") and waits for a tick before **Delete anyway**; the database refuses it unconfirmed too. An online payment waiting to be checked is confirmed or rejected first. A person the desk registered without an account, at no other gym, is forgotten; their photo file is removed.
    - **Receipts**: every payment gets the gym's next receipt number (1, 2, 3… per gym, `payments.receipt_no`; older payments were numbered oldest first). Open one from the payment's package on the member's page, any row of Payments & income, or the page after registering: **Print** (website), **Save picture** / **Share** (phone), and **WhatsApp** with the receipt as a message (`gym_payment_receipt`, for staff who see members, payments or income, and the member who paid). Members find their last 10 under Receipts on My gym, to print or keep (`my_gyms()` lists them).
    - **Export to Excel** (.xlsx): Members (everyone: details, package, until when, standing), Payments & income (the month, day or dates on screen, with receipt numbers and packages) and Reports (every visit in the range). A download in a browser, the share sheet on a phone.
    - **Reminders on WhatsApp** (`gym.members`): a chat button on the dashboard's Ending soon list, on Members under "Ending in 7 days" and "Ended", and on the member's page opens WhatsApp on the desk's phone with a renewal reminder ready to send. It's free and reaches members without the app. The app notes each one (`gym_note_message`, `gym_member_messages`), so the button shows "Reminded yesterday" for a week.
@@ -332,7 +339,7 @@ Migration `20261118000009_gym_inventory.sql`, the `supplier-catalog` Edge Functi
 
 ### Push notifications
 
-Migration `20261115000005_push_notifications.sql`, the `send-push` Edge Function, checks in `tests/database/push_test.sql` and `tests/functions/web_push_test.ts`.
+Migration `20261115000005_push_notifications.sql`, the `send-push` Edge Function, checks in `tests/database/push_test.sql`, `tests/functions/web_push_test.ts` and `tests/functions/fcm_test.ts`.
 
 - **What goes out**: every notification Health Pro makes (new join request; join approved or declined; payment to confirm; payment confirmed; package ending on the gym's reminder days and on its last day; trainer request; trainer verified or not; new review; trainer changed) also arrives as a push on each phone or browser where the person turned them on. Tapping it opens the page it's about. Notifications are still kept in the app under **Notifications** (under Me), for anyone who said no.
 - **Asking**: after signing in (not on first opening), once a session, Health Pro asks "Turn on notifications?"; "Not now" waits two weeks. The **Notifications** page shows push on this device and turns it on or off. Signing out turns it off on that device, so a shared phone doesn't get the last person's notifications.
@@ -353,6 +360,19 @@ SUPABASE_ACCESS_TOKEN=sbp_... SUPABASE_DB_PASSWORD=... scripts/deploy_supabase.s
 3. Build the website with the public key: from `env.json` on your computer, or add `VAPID_PUBLIC_KEY` to the host's build variables (Cloudflare Pages).
 
 Without the keys, nothing changes: notifications stay inside the app and nobody is asked.
+
+**On the Android and iOS apps** (migration `20261122000001_native_push.sql`, `push/native_push.dart`): the phone apps get the same notifications through Firebase Cloud Messaging (FCM). A phone's address at FCM is its Firebase Installation ID (kept in `push_devices`; turned on in `AndroidManifest.xml` and `Info.plist`). Asking, the Notifications page and signing out work as on the website. Tapping a notification opens its page, whether Health Pro was closed or in the background; one that comes while it's open shows as a bar with **View**. The iOS app needs iOS 15 or later (Firebase).
+
+The Firebase project's Android and iOS apps (both `bt.healthpro.app`; Project settings → Your apps) go into `env.json`: `FIREBASE_PROJECT_ID`, `FIREBASE_SENDER_ID`, `FIREBASE_ANDROID_API_KEY`, `FIREBASE_ANDROID_APP_ID`, `FIREBASE_IOS_API_KEY`, `FIREBASE_IOS_APP_ID`. There's no `google-services.json` or `GoogleService-Info.plist`. Without them, the phone apps keep notifications inside the app.
+
+`send-push` sends to the phones through FCM's HTTP v1 API (`_shared/fcm.ts`, on WebCrypto alone; checks in `tests/functions/fcm_test.ts`). It signs in with the Firebase project's service account, sends to each phone's installation ID (`fid`), and forgets a phone only when FCM says its app is unregistered. To turn it on, download the service account key (Firebase → Project settings → Service accounts → Generate new private key), keep it out of the project, and deploy with it once:
+
+```sh
+FCM_SERVICE_ACCOUNT_FILE=~/keys/health-pro-firebase.json \
+SUPABASE_ACCESS_TOKEN=sbp_... SUPABASE_DB_PASSWORD=... scripts/deploy_supabase.sh
+```
+
+On Android they show on the app's own channel, `health_pro` ("Notifications": pop-up, with sound; `MainActivity.kt` makes it), with the white mark (`drawable-*/ic_notification.png`, made by `tool/brand_images.dart`) tinted brand blue. On iOS the app has the Push Notifications capability (`Runner/Runner.entitlements`; Xcode signs App Store builds as production) and wakes for them in the background. Apple's side, once: in the Apple Developer account, Keys → create a key with Apple Push Notifications service (APNs), and upload the .p8 with its Key ID and Team ID in Firebase → Project settings → Cloud Messaging → Apple app configuration.
 
 ### Class emails
 
@@ -412,6 +432,8 @@ The suggestions in each chat have their answers written into the app: they skip 
 CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_AI_TOKEN=... \
 SUPABASE_ACCESS_TOKEN=sbp_... SUPABASE_DB_PASSWORD=... scripts/deploy_supabase.sh
 ```
+
+The same secrets turn on **Draft with AI** in a member's plan form (`draft-plan`, for their trainer and the gym's staff who see members, 10 drafts a day each): it drafts a workout, or a diet from the shared food list, from the member's numbers and goal (never their name, phone or medical notes), and only fills the form for the coach to check.
 
 Without them, both chats still work: the suggestions answer, and typed questions say it isn't set up yet. To try another Workers AI model (it must support JSON mode), set `CLOUDFLARE_AI_MODEL` the same way with `supabase secrets set`. The functions log each question's token use (Supabase → Edge Functions → ask-ai or ask-health-pro → Logs).
 

@@ -2,14 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../access/access.dart';
-import '../access/access_repository.dart';
+import '../access/my_roles.dart';
 import '../auth/auth_repository.dart';
 import '../profiles/profile_repository.dart';
 import '../router/core_routes.dart';
 import '../theme/brand.dart';
-import '../venues/venue.dart';
-import '../venues/venue_repository.dart';
 
 // The account menu (their account, sign out): at the top right of every
 // signed-in page, and under the side menu. Light or dark is the bar's own
@@ -78,23 +75,12 @@ class _MenuRow extends StatelessWidget {
   }
 }
 
-/// What the account menu says they are: super admin, Health Pro team, their
-/// role at each venue they run ('Owner · Iron Gym'), or 'Member' when none.
-@visibleForTesting
-List<String> accountRoleLabels(PlatformAccess access, List<MyVenue> venues) {
-  final roles = [
-    if (access.isSuperAdmin) 'Super admin' else if (access.isTeam) 'Health Pro team',
-    for (final v in venues) '${v.roleName} · ${v.venue.name}',
-  ];
-  return roles.isEmpty ? const ['Member'] : roles;
-}
-
-/// The top of the account menu: who is signed in, larger, with a badge for
-/// each role they have (the first three, then how many more).
+/// The top of the account menu: who is signed in, larger, with their roles
+/// by place (the first three places, then how many more).
 class _AccountHeader extends StatelessWidget {
   final String name;
   final String? photoUrl;
-  final List<String> roles;
+  final List<RoleGroup> roles;
 
   const _AccountHeader({required this.name, required this.photoUrl, required this.roles});
 
@@ -115,17 +101,30 @@ class _AccountHeader extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: context.colors.onSurface, fontWeight: FontWeight.w700, fontSize: 15)),
-                if (roles.isNotEmpty)
+                for (final group in roles.take(3))
                   Padding(
                     padding: const EdgeInsets.only(top: 7),
                     child: Wrap(
                       spacing: 5,
-                      runSpacing: 5,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        for (final role in roles.take(3)) _RoleBadge(role),
-                        if (roles.length > 3) _RoleBadge('+${roles.length - 3} more'),
+                        if (group.venue case final venue?)
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 190),
+                            child: Text(venue,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: context.brand.muted, fontWeight: FontWeight.w600, fontSize: 12)),
+                          ),
+                        for (final role in group.roles) _RoleBadge(role.name),
                       ],
                     ),
+                  ),
+                if (roles.length > 3)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 7),
+                    child: _RoleBadge('+${roles.length - 3} more ${roles.length - 3 == 1 ? 'place' : 'places'}'),
                   ),
               ],
             ),
@@ -212,10 +211,8 @@ class AccountButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(myProfileProvider).valueOrNull;
     final name = (profile?.fullName ?? '').trim();
-    final access = ref.watch(myAccessProvider).valueOrNull;
-    final venues = ref.watch(myVenuesProvider).valueOrNull;
-    // Nothing until both have loaded, so a gym owner never flashes as 'Member'.
-    final roles = access == null || venues == null ? const <String>[] : accountRoleLabels(access, venues);
+    // Nothing until all of it has loaded, so no one flashes as 'Member'.
+    final roles = ref.watch(myRoleGroupsProvider) ?? const <RoleGroup>[];
     return PopupMenuButton<String>(
       tooltip: 'Account and settings',
       position: PopupMenuPosition.under,

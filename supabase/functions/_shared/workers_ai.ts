@@ -22,10 +22,15 @@ export function workersAi(): WorkersAi | null {
   return { account, token, model: Deno.env.get('CLOUDFLARE_AI_MODEL') || DEFAULT_MODEL };
 }
 
-/** The model's answer to [messages], held to [schema]: an object or JSON
- *  text; null when it couldn't fit its answer to the schema. Throws
- *  [AskError] with words to show for what the person should know. */
-export async function askWorkersAi(ai: WorkersAi, messages: Message[], schema: unknown): Promise<unknown> {
+/** How long and how freely the model may answer: a short choice by default;
+ *  longer for a drafted plan. */
+export type AskOptions = { maxTokens?: number; temperature?: number; timeoutMs?: number };
+
+/** The model's answer to [messages], held to [schema] (JSON mode): an object
+ *  or JSON text; null when it couldn't fit its answer to the schema. With no
+ *  schema, its answer as text. Throws [AskError] with words to show for what
+ *  the person should know. */
+export async function askWorkersAi(ai: WorkersAi, messages: Message[], schema: unknown, options: AskOptions = {}): Promise<unknown> {
   let res: Response;
   try {
     res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${ai.account}/ai/run/${ai.model}`, {
@@ -33,11 +38,11 @@ export async function askWorkersAi(ai: WorkersAi, messages: Message[], schema: u
       headers: { Authorization: `Bearer ${ai.token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messages,
-        response_format: { type: 'json_schema', json_schema: schema },
-        max_tokens: 300,
-        temperature: 0,
+        ...(schema ? { response_format: { type: 'json_schema', json_schema: schema } } : {}),
+        max_tokens: options.maxTokens ?? 300,
+        temperature: options.temperature ?? 0,
       }),
-      signal: AbortSignal.timeout(25_000),
+      signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),
     });
   } catch (e) {
     if (e instanceof DOMException && e.name === 'TimeoutError') {

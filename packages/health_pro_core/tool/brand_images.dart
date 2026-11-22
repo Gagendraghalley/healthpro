@@ -1,5 +1,6 @@
 // Makes every logo image from the Health Pro brand files (tool/brand/):
-// the in-app logos (assets/images/), the launch screens and the app icons.
+// the in-app logos (assets/images/), the launch screens, the app icons and
+// Android's notification icon.
 //
 //   cd packages/health_pro_core && flutter test tool/brand_images.dart
 //
@@ -351,6 +352,22 @@ Pixels only(Pixels p, Uint8List mask) {
   return out;
 }
 
+/// For Android's status bar, which takes only the alpha: [p]'s colour in
+/// solid white, and what's white or pale in it (the runner, the glow under
+/// the cross) see-through, softly at the edges.
+Pixels silhouette(Pixels p) {
+  final out = Pixels.blank(p.width, p.height);
+  final px = p.rgba;
+  for (var i = 0; i < px.length; i += 4) {
+    // Coloured (far enough from white) and solid (the glow is faint).
+    final colour = (255 - math.min(px[i], math.min(px[i + 1], px[i + 2]))) / 255;
+    final solid = ((px[i + 3] / 255 - 0.55) / 0.25).clamp(0.0, 1.0);
+    out.rgba.fillRange(i, i + 3, 255);
+    out.rgba[i + 3] = (((colour - 0.12) / 0.13).clamp(0.0, 1.0) * solid * 255).round();
+  }
+  return out;
+}
+
 void main() {
   testWidgets('brand images', (tester) async {
     await tester.runAsync(() async {
@@ -423,6 +440,7 @@ void main() {
       final beatOnDarkImage = await beatOnDark.toImage();
       final markImage = await markPixels.toImage();
       final markOnDarkImage = await markOnDark.toImage();
+      final markSilhouetteImage = await silhouette(markPixels).toImage();
 
       /// [image] scaled to [width].
       Future<ui.Image> scaled(double width, ui.Image image) {
@@ -474,6 +492,9 @@ void main() {
         await save('$preview/beat.png', beatImage);
         await save('$preview/mark_dark.png', await markAt(256, background: navy));
         await save('$preview/app_icon.png', await markAt(512, scale: 0.84, background: Colors.white), opaque: true);
+        // Android's status bar and notification, tinted as the phone does.
+        await save('$preview/notification_icon.png', await markAt(96, scale: 0.9, image: markSilhouetteImage, background: navy));
+        await save('$preview/notification_icon_24.png', await markAt(24, scale: 0.9, image: markSilhouetteImage, background: navy));
         // Close up: the cross's edge, 3x.
         await save('$preview/edge_zoom.png', await render(600, 600, (c, s) {
           c.drawColor(const Color(0xFF6B4A2A), BlendMode.src);
@@ -511,6 +532,10 @@ void main() {
         await save('$res/drawable-$dpi/splash_icon.png', await markAt((288 * scale).round(), scale: 0.5));
         await save('$res/mipmap-$dpi/ic_launcher.png',
             await markAt((48 * scale).round(), scale: 0.86, background: Colors.white), opaque: true);
+        // Push notifications: the mark in white, its runner see-through, in
+        // a 24dp square (Android tints it; AndroidManifest.xml names it).
+        await save('$res/drawable-$dpi/ic_notification.png',
+            await markAt((24 * scale).round(), scale: 0.9, image: markSilhouetteImage));
       }
       for (final (suffix, scale) in [('', 1), ('@2x', 2), ('@3x', 3)]) {
         await save('$ios/LaunchImage.imageset/LaunchImage$suffix.png', await logoAt(240.0 * scale, dark: false));

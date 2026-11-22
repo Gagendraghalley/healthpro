@@ -50,7 +50,8 @@ packages/health_pro_core/lib/src/
 packages/gym_membership/lib/src/
   gym_routes.dart (every /gyms path), gym_module.dart, gym_permissions.dart
   data/           gym_repository (all Supabase calls), gym_models, member_qr, registered_member (packageEnd,
-                  renewalStart), joining, online_payments, trainers, inventory, reports/dashboard/ask data
+                  renewalStart), joining, online_payments, trainers, inventory, reports/dashboard/ask data,
+                  coaching (measurements, readings, plans), nutrition (goals, daily calories, meals, foods, templates)
   screens/        members_screens (Members, RegisterMember, GymMember), check_in, staff_screens (Plans, Income),
                   payment_screens, join_screens (JoinRequests, GymQr), my_gyms_screen (MyGym), trainer_screens,
                   gym_trainer_screens, public_screens (GymList, GymDetails), reports, ask_screen,
@@ -58,7 +59,7 @@ packages/gym_membership/lib/src/
   shell/          gym_navigation (the gym's menu section), current_gym
   dashboard/ welcome/ (public landing page) widgets/
 supabase/migrations/    YYYYMMDDNNNNNN_name.sql, one per change
-supabase/functions/     admin-users, ask-ai, ask-health-pro, delete-account, send-email (class emails, SMTP), send-push,
+supabase/functions/     admin-users, ask-ai, ask-health-pro, delete-account, draft-plan, send-email (class emails, SMTP), send-push,
                         supplier-catalog, _shared/
 tests/database/         *_test.sql, run by scripts/test_database.sh
 tests/functions/        Deno tests for the Edge Functions

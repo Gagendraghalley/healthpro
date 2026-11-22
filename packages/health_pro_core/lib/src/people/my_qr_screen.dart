@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../access/my_roles.dart';
 import '../module/health_pro_module.dart';
 import '../module/module_providers.dart';
 import '../notifications/app_notification.dart';
@@ -73,6 +74,7 @@ class _Dashboard extends ConsumerWidget {
       for (final m in modules)
         if (m.buildMemberDashboard(context) case final section?) section,
     ];
+    final roles = ref.watch(myRoleGroupsProvider);
     const start = Duration(milliseconds: 120);
     final deep = DeepTone.of(context);
     return ListView(
@@ -82,12 +84,15 @@ class _Dashboard extends ConsumerWidget {
         const SizedBox(height: 22),
         LayoutBuilder(
           builder: (context, constraints) {
-            final pass = _QrPass(me: me, deep: deep);
+            final pass = _QrPass(me: me, deep: deep, roleLine: roles == null ? 'Health Pro member' : roleSummary(roles));
+            // Where they're what, once they're more than a member somewhere.
+            final myRoles = [if (roles != null && hasRolesBeyondMember(roles)) _MyRoles(groups: roles)];
             if (constraints.maxWidth < _besideFrom) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: _arriving(from: start, [
                   Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 360), child: pass)),
+                  ...myRoles,
                   ...sections,
                   const _Updates(),
                   const _MyDetails(),
@@ -102,7 +107,7 @@ class _Dashboard extends ConsumerWidget {
                   width: 330,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: _arriving(from: start, [pass, const _MyDetails(), const _QrTips()]),
+                    children: _arriving(from: start, [pass, ...myRoles, const _MyDetails(), const _QrTips()]),
                   ),
                 ),
                 const SizedBox(width: 24),
@@ -148,13 +153,14 @@ class _Hero extends ConsumerWidget {
 }
 
 /// Their QR code as a membership pass (the logo, the code on a white
-/// plate, their name), and under it what they can do with it: enlarge it
-/// for the scanner, copy, share or save its picture.
+/// plate, their name and what they are, [roleLine]), and under it what they
+/// can do with it: enlarge it for the scanner, copy, share or save its picture.
 class _QrPass extends StatefulWidget {
   final MyPerson me;
   final DeepTone deep;
+  final String roleLine;
 
-  const _QrPass({required this.me, required this.deep});
+  const _QrPass({required this.me, required this.deep, required this.roleLine});
 
   @override
   State<_QrPass> createState() => _QrPassState();
@@ -314,7 +320,13 @@ class _QrPassState extends State<_QrPass> {
                     children: [
                       Icon(Icons.verified_rounded, size: 15, color: brand.highlight),
                       const SizedBox(width: 5),
-                      Text('Health Pro member', style: TextStyle(color: faint, fontWeight: FontWeight.w600, fontSize: 13)),
+                      Flexible(
+                        child: Text(widget.roleLine,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: faint, fontWeight: FontWeight.w600, fontSize: 13)),
+                      ),
                     ],
                   ),
                 ],
@@ -746,6 +758,109 @@ class _PassActionState extends State<_PassAction> {
         ),
       ),
     );
+  }
+}
+
+/// Where they're what, place by place (an owner at one gym, a trainer and a
+/// member at another), each role a way to its page.
+class _MyRoles extends StatelessWidget {
+  final List<RoleGroup> groups;
+
+  const _MyRoles({required this.groups});
+
+  @override
+  Widget build(BuildContext context) {
+    return ConsoleCard(
+      icon: Icons.workspace_premium_outlined,
+      title: 'My roles',
+      child: Column(
+        children: [
+          for (final (i, group) in groups.indexed) ...[
+            if (i > 0) Divider(height: 1, thickness: 1, color: context.brand.glassBorder),
+            _RolePlace(group: group),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// One place on My roles: its name over each role they have there.
+class _RolePlace extends StatelessWidget {
+  final RoleGroup group;
+
+  const _RolePlace({required this.group});
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = ConsoleInk.of(context);
+    final brand = context.brand;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: brand.accent.withValues(alpha: ink.dark ? 0.14 : 0.08),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(group.venue == null ? Icons.verified_user_outlined : Icons.storefront_outlined,
+                size: 18, color: ink.dark ? brand.accent : brand.accentText),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(group.venue ?? 'Health Pro',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: ink.heading, fontSize: 14.5, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 6),
+                Wrap(spacing: 6, runSpacing: 6, children: [for (final role in group.roles) _RoleChip(role: role)]),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A role as a soft pill; with a page, it opens it.
+class _RoleChip extends StatelessWidget {
+  final PlaceRole role;
+
+  const _RoleChip({required this.role});
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = ConsoleInk.of(context);
+    final brand = context.brand;
+    final color = ink.dark ? brand.accent : brand.accentText;
+    final route = role.route;
+    final chip = Material(
+      color: brand.accent.withValues(alpha: ink.dark ? 0.14 : 0.08),
+      shape: const StadiumBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: route == null ? null : () => context.go(route),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(10, 4, route == null ? 10 : 5, 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(role.name, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+              if (route != null) Icon(Icons.chevron_right_rounded, size: 16, color: color),
+            ],
+          ),
+        ),
+      ),
+    );
+    return route == null ? chip : Tooltip(message: 'Open as ${role.name.toLowerCase()}', child: chip);
   }
 }
 

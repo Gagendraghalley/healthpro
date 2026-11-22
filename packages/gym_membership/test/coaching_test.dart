@@ -14,12 +14,14 @@ import 'gym_screens_test.dart' show day, inDialog, overrides, show;
 // Body progress, workout and diet plans, and group classes (the database
 // side: tests/database/coaching_test.sql).
 
-BodyMeasurement measured(String id, int daysAgo, {double? weight, double? height, double? waist, String? by}) => BodyMeasurement(
+BodyMeasurement measured(String id, int daysAgo, {double? weight, double? height, double? fat, double? waist, String? by}) =>
+    BodyMeasurement(
       id: id,
       gymMemberId: 'm1',
       measuredOn: day(-daysAgo),
       weightKg: weight,
       heightCm: height,
+      bodyFatPct: fat,
       waistCm: waist,
       recordedBy: by,
       recordedByName: by == null ? null : 'Tashi Trainer',
@@ -62,11 +64,79 @@ void main() {
       expect(s.change, -2.5);
       expect(s.firstOn, day(-30));
       expect(s.bmi!.toStringAsFixed(1), '23.2');
-      expect(bmiBand(s.bmi!), 'Healthy weight');
+      // The WHO's bands for Asian people: overweight from 23, obese from 27.5.
+      expect(bmiBand(s.bmi!), 'Overweight');
       expect(bmiBand(17), 'Underweight');
-      expect(bmiBand(27), 'Overweight');
-      expect(bmiBand(31), 'Obese');
+      expect(bmiBand(22.9), 'Healthy weight');
+      expect(bmiBand(27.4), 'Overweight');
+      expect(bmiBand(27.5), 'Obese');
       expect(ProgressSummary.of([measured('a', 0, weight: 70)]).change, isNull, reason: 'one weighing: no change yet');
+    });
+
+    test('fat and lean mass, waist to height, and the pace of the weight', () {
+      final s = ProgressSummary.of([
+        measured('c', 0, weight: 68, fat: 20, waist: 80),
+        measured('b', 14, weight: 69),
+        measured('a', 28, weight: 70, height: 170, fat: 24),
+      ]);
+      expect(s.bodyFatPct, 20);
+      expect(s.fatKg, closeTo(13.6, 0.001));
+      expect(s.leanKg, closeTo(54.4, 0.001));
+      expect(s.fatChange, closeTo(-3.2, 0.001));
+      expect(s.leanChange, closeTo(1.2, 0.001));
+      expect(s.waistToHeight!.toStringAsFixed(2), '0.47');
+      expect(s.waistBand, WaistBand.healthy);
+      expect(s.pacePerWeek, closeTo(-0.5, 0.001));
+      expect(s.paceWeeks, 4);
+      expect(s.trends.keys, [BodyMeasure.weight, BodyMeasure.bodyFat], reason: 'a line for any measure taken twice');
+      final readings = progressReadings(s, today: day(0));
+      expect(readings.map((r) => r.text), [
+        'Losing 0.5 kg a week over 4 weeks: a steady pace.',
+        '3.2 kg less fat and 1.2 kg more lean mass since ${formatShortDate(day(-28))}.',
+      ]);
+      expect(readings.map((r) => r.tone), [ReadingTone.good, ReadingTone.good]);
+    });
+
+    test('a body fat that can\'t be right is flagged, not split into fat and lean', () {
+      final s = ProgressSummary.of([measured('b', 0, weight: 50, height: 170, fat: 60), measured('a', 20, weight: 51, fat: 15)]);
+      expect(s.fatKg, isNull);
+      expect(s.fatChange, isNull);
+      expect(s.unlikely?.id, 'b');
+      final check = progressReadings(s, today: day(0)).first;
+      expect(check.tone, ReadingTone.alert);
+      expect(check.text, 'Body fat 60% at 50 kg isn\'t likely. Check the ${formatShortDate(day(0))} measurement.');
+    });
+
+    test('losing weight while underweight, and a measurement due', () {
+      final s = ProgressSummary.of([measured('b', 40, weight: 48), measured('a', 61, weight: 50, height: 170)]);
+      expect(s.bmiBand, BmiBand.under);
+      final readings = progressReadings(s, today: day(0));
+      expect(readings.map((r) => r.text), [
+        'Losing 0.7 kg a week over 3 weeks while underweight.',
+        'Last measured 40 days ago. Time for a new measurement.',
+      ]);
+      expect(readings.first.tone, ReadingTone.alert);
+      expect(progressReadings(s, today: day(0), self: true).last.text, 'Last logged 40 days ago. Time to log your weight.');
+      expect(ProgressSummary.of([measured('b', 0, weight: 48), measured('a', 10, weight: 50)]).pacePerWeek, isNull,
+          reason: 'under 2 weeks is too short for a pace');
+    });
+
+    test('numbers that can\'t all be right are caught before saving', () {
+      // 60% body fat at 50 kg and 170 cm leaves 20 kg for bones, muscle and organs.
+      expect(measurementWarnings(measured('', 0, weight: 50, height: 170, fat: 60), const []),
+          ['Body fat 60% at 50 kg leaves 20 kg of lean mass, which isn\'t likely. Check the body fat.']);
+      expect(measurementWarnings(measured('', 0, weight: 50, height: 260), const []),
+          ['BMI 7.4 isn\'t likely. Check the weight and height.']);
+
+      final before = [measured('a', 7, weight: 70, height: 172, fat: 22, waist: 84)];
+      final week = formatShortDate(day(-7));
+      expect(measurementWarnings(measured('', 0, weight: 71, fat: 23), before), isEmpty, reason: 'the height carries over');
+      expect(measurementWarnings(measured('', 0, weight: 77, height: 182, fat: 30, waist: 84), before), [
+        'Weight: 7 kg more than on $week (70 kg).',
+        'Height: 10 cm more than on $week (172 cm).',
+        'Body fat: 8 points more than on $week (22%).',
+      ]);
+      expect(measurementWarnings(measured('a', 7, weight: 90), before), isEmpty, reason: 'a changed measurement leaves itself out');
     });
 
     test('a measurement in words, and as the database takes it', () {
@@ -88,9 +158,39 @@ void main() {
       ]);
       expect(find.text('68.5 kg'), findsWidgets);
       expect(find.text('−2.5 kg'), findsOneWidget);
-      expect(find.text('Healthy weight'), findsOneWidget);
+      expect(find.text('Overweight'), findsOneWidget);
+      expect(find.text('Losing 0.6 kg a week over 4 weeks: a steady pace.'), findsOneWidget);
       expect(find.text('Log my weight'), findsOneWidget);
       expect(find.byIcon(Icons.edit_outlined), findsOneWidget, reason: 'only their own can be changed');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('fat and lean mass, a line for each measure, and a check before saving odd numbers', (tester) async {
+      await pump(tester, const MemberProgress(gymMemberId: 'm1', coach: true), [
+        memberMeasurementsProvider.overrideWith((ref, id) async => [
+              measured('b', 0, weight: 68, fat: 20, waist: 80),
+              measured('a', 28, weight: 70, height: 170, fat: 24, waist: 84),
+            ]),
+      ]);
+      expect(find.text('13.6 kg fat · 54.4 kg lean'), findsOneWidget);
+      expect(find.text('Waist to height'), findsOneWidget);
+      expect(find.text('Weight since ${formatShortDate(day(-28))}: 70 kg → 68 kg'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Waist'));
+      await tester.pumpAndSettle();
+      expect(find.text('Waist since ${formatShortDate(day(-28))}: 84 cm → 80 cm'), findsOneWidget);
+
+      await tester.tap(find.text('Add measurement'));
+      await tester.pumpAndSettle();
+      expect(inDialog(find.text('Blank keeps 170 cm')), findsOneWidget);
+      await tester.enterText(inDialog(find.widgetWithText(TextFormField, 'Weight')), '50');
+      await tester.enterText(inDialog(find.widgetWithText(TextFormField, 'Body fat')), '60');
+      await tester.tap(inDialog(find.text('Save')));
+      await tester.pumpAndSettle();
+      expect(inDialog(find.text('Check these before saving')), findsOneWidget);
+      expect(inDialog(find.text('Save anyway')), findsOneWidget);
+      await tester.enterText(inDialog(find.widgetWithText(TextFormField, 'Body fat')), '18');
+      await tester.pump();
+      expect(inDialog(find.text('Check these before saving')), findsNothing, reason: 'a changed number is checked again');
       expect(tester.takeException(), isNull);
     });
   });
@@ -122,7 +222,8 @@ void main() {
       expect(find.text('Give a plan'), findsNothing);
       await tester.tap(find.text('Strength, 3 days'));
       await tester.pumpAndSettle();
-      expect(find.text('Day 1: squats 4 x 8'), findsOneWidget);
+      expect(find.text('Day 1'), findsOneWidget, reason: 'the day as a badge');
+      expect(find.text('squats 4 x 8'), findsOneWidget);
       expect(find.text('Change'), findsNothing, reason: 'members don\'t change plans');
     });
 

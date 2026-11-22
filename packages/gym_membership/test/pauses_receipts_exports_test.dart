@@ -243,5 +243,6 @@ void main() {
     expect(find.text('Resume'), findsOneWidget);
     expect(find.text('Pause'), findsNothing, reason: 'one pause at a time');
     expect(find.byTooltip('Receipt'), findsOneWidget);
+    expect(find.text('Delete member'), findsOneWidget, reason: 'the owner can take them off the register');
   });
 }

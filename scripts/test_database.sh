@@ -61,5 +61,6 @@ db -f tests/database/inventory_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" 
 db -f tests/database/money_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 db -f tests/database/coaching_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 db -f tests/database/class_emails_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
+db -f tests/database/delete_member_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 echo "Applying supabase/seed.sql (local test data)"
 db -f supabase/seed.sql

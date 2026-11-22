@@ -53,6 +53,13 @@ abstract class HealthProModule {
   /// For players and members: what the module offers them.
   List<ModuleMenuItem> playerMenuItems([WidgetRef? ref]) => const [];
 
+  /// What the signed-in person is at each of this service's venues besides
+  /// its staff (venue_staff gives those): e.g. a trainer a gym verified, a
+  /// gym's member. The account menu and My dashboard show them by venue
+  /// (myRoleGroupsProvider). Null while still loading; read providers with
+  /// `ref.watch`.
+  List<AccountRole>? accountRoles(Ref ref) => const [];
+
   /// The service's part of a person's own dashboard (My dashboard, beside
   /// their QR code): what it keeps for them, e.g. their gyms, packages and
   /// visits. It sits in a scrolling page, so it sizes to its content; null
@@ -152,6 +159,17 @@ class VenueKind {
     required this.icon,
     this.facilities = const [],
   });
+}
+
+/// Someone's [role] at one venue, e.g. Trainer at Iron Gym, and the page
+/// they work in as that ([route]; null for none).
+class AccountRole {
+  final String venueId;
+  final String venueName;
+  final String role;
+  final String? route;
+
+  const AccountRole({required this.venueId, required this.venueName, required this.role, this.route});
 }
 
 /// A menu entry: a page in the app ([route]) or a website ([externalUrl]).

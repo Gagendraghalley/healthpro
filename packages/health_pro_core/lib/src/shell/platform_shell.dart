@@ -71,8 +71,11 @@ class _PlatformShellState extends ConsumerState<PlatformShell> {
     super.initState();
     HardwareKeyboard.instance.addHandler(_onKey);
     // After signing in, not on first opening: notifications on this device?
+    // On the phone apps, a tapped notification also opens its page from here.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && PushNotifications.configured) PushNotifications.maybeAsk(context, ref);
+      if (!mounted || !PushNotifications.configured) return;
+      PushNotifications.listen(context, ref);
+      PushNotifications.maybeAsk(context, ref);
     });
   }
 
@@ -1025,6 +1028,15 @@ class ServiceIconTile extends StatelessWidget {
 
   const ServiceIconTile({super.key, required this.icon, required this.color, this.filled = false, this.size = 34});
 
+  /// How much colour a glossy tile keeps (1 = the colour as given).
+  static const saturation = 0.7;
+
+  /// [color] toned down for a glossy tile, so it doesn't glare.
+  static Color muted(Color color) {
+    final hsl = HSLColor.fromColor(color);
+    return hsl.withSaturation(hsl.saturation * saturation).toColor();
+  }
+
   /// A glossy tile of [color]: lighter at the top left, deeper at the
   /// bottom right.
   static Gradient gloss(Color color) => LinearGradient(
@@ -1053,6 +1065,7 @@ class ServiceIconTile extends StatelessWidget {
     // Softer in the light: a paler tint, and a shorter glow under it.
     final dark = Theme.of(context).brightness == Brightness.dark;
     final radius = BorderRadius.circular(size * 0.3);
+    final color = filled ? muted(this.color) : this.color;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       width: size,
@@ -1188,6 +1201,7 @@ class _ScopeSwitcher extends StatelessWidget {
     // On the menu's grid: the initials on the icon column (inside the card's
     // edge), the name where every name starts.
     const avatar = 28.0;
+    final tile = ServiceIconTile.muted(context.brand.themed(color));
     final card = Container(
       margin: const EdgeInsets.only(bottom: 4),
       padding: const EdgeInsets.fromLTRB(_MenuGrid.column - avatar / 2 - 1, 8, 8, 8),
@@ -1204,10 +1218,10 @@ class _ScopeSwitcher extends StatelessWidget {
             height: avatar,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              gradient: ServiceIconTile.gloss(context.brand.themed(color)),
+              gradient: ServiceIconTile.gloss(tile),
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
-                BoxShadow(color: context.brand.themed(color).withValues(alpha: 0.28), blurRadius: 6, offset: const Offset(0, 2)),
+                BoxShadow(color: tile.withValues(alpha: 0.28), blurRadius: 6, offset: const Offset(0, 2)),
               ],
             ),
             foregroundDecoration: ServiceIconTile.shine(BorderRadius.circular(8)),
@@ -1216,7 +1230,7 @@ class _ScopeSwitcher extends StatelessWidget {
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
                     fontSize: 11.5,
-                    shadows: ServiceIconTile.raised(context.brand.themed(color), avatar))),
+                    shadows: ServiceIconTile.raised(tile, avatar))),
           ),
           const SizedBox(width: _MenuGrid.label - _MenuGrid.column - avatar / 2),
           Expanded(
