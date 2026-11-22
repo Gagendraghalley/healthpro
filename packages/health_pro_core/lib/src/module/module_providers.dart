@@ -26,6 +26,13 @@ final enabledModulesProvider = FutureProvider<List<HealthProModule>>((ref) async
   return visibleModules(ref.watch(registeredModulesProvider), rows, isAdmin: access.can(PlatformPermission.modules));
 });
 
+/// Where a new trainer goes after signing up (an enabled module's
+/// trainerSignUpRoute); null when no service has trainers.
+final trainerSignUpRouteProvider = Provider<String?>((ref) {
+  final modules = ref.watch(enabledModulesProvider).valueOrNull ?? const [];
+  return modules.map((m) => m.trainerSignUpRoute).nonNulls.firstOrNull;
+});
+
 /// The module that runs venues of [type], among the enabled ones.
 final moduleForVenueTypeProvider = Provider.family<HealthProModule?, String>((ref, type) {
   final modules = ref.watch(enabledModulesProvider).valueOrNull ?? const [];

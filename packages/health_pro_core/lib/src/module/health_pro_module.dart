@@ -112,6 +112,12 @@ abstract class HealthProModule {
   /// null when it has none in the app.
   String? publicVenueRoute(Venue venue) => null;
 
+  /// Where someone who signs up as a trainer goes first: the module's page
+  /// for setting up their trainer profile (gyms verify them from it). Null
+  /// when the module has no trainers. With one, the sign-up page offers
+  /// 'Join as Trainer'; everyone else joins as a member.
+  String? get trainerSignUpRoute => null;
+
   /// Whether [path] is one of this module's pages.
   bool ownsPath(String path) => basePaths.any((base) => path == base || path.startsWith('$base/'));
 

@@ -284,12 +284,22 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   bool _busy = false;
   String? _error;
 
+  /// Joining as a trainer, not a member (the default).
+  bool _asTrainer = false;
+
   @override
   void dispose() {
     _name.dispose();
     _email.dispose();
     _phone.dispose();
     super.dispose();
+  }
+
+  /// Where they go once signed up: a trainer sets up their trainer profile
+  /// first (Become a trainer); a member goes where they were going.
+  String? get _next {
+    final trainerStart = ref.read(trainerSignUpRouteProvider);
+    return _asTrainer && trainerStart != null ? trainerStart : widget.next;
   }
 
   Future<void> _submit() async {
@@ -302,7 +312,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       final phone = _phone.text.trim().isEmpty ? null : Validators.normalizePhone(_phone.text);
       await ref.read(authRepositoryProvider).sendSignUpCode(email: _email.text, fullName: _name.text, phone: phone);
       ref.read(pendingCodeProvider.notifier).state =
-          PendingCode(email: _email.text.trim().toLowerCase(), purpose: CodePurpose.signUp, next: widget.next);
+          PendingCode(email: _email.text.trim().toLowerCase(), purpose: CodePurpose.signUp, next: _next);
       if (mounted) context.push(CoreRoutes.verify);
     } catch (e) {
       if (mounted) setState(() => _error = friendlyError(e));
@@ -318,7 +328,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       _error = null;
     });
     try {
-      await ref.read(authRepositoryProvider).signInWithGoogle(next: widget.next);
+      await ref.read(authRepositoryProvider).signInWithGoogle(next: _next);
     } catch (e) {
       if (mounted) setState(() => _error = friendlyError(e));
     } finally {
@@ -329,12 +339,31 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   @override
   Widget build(BuildContext context) {
     final google = ref.watch(googleSignInProvider).valueOrNull ?? false;
+    // 'Join as Trainer' only where a service has trainers (the gym module).
+    final trainers = ref.watch(trainerSignUpRouteProvider) != null;
+    final asTrainer = trainers && _asTrainer;
     return AuthLayout(
       side: AuthSide.join,
       title: 'Create Your Account',
       subtitle: 'Get started with Health Pro today',
       onBack: () => context.go(CoreRoutes.welcome),
       children: [
+        if (trainers) ...[
+          Text('Join as',
+              style: TextStyle(fontFamily: brandFont, fontSize: 14, fontWeight: FontWeight.w600, color: context.brand.muted)),
+          const SizedBox(height: 8),
+          SegmentedButton<bool>(
+            expandedInsets: EdgeInsets.zero,
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: false, label: Text('Member'), icon: Icon(Icons.fitness_center_rounded)),
+              ButtonSegment(value: true, label: Text('Trainer'), icon: Icon(Icons.sports_rounded)),
+            ],
+            selected: {asTrainer},
+            onSelectionChanged: _busy ? null : (picked) => setState(() => _asTrainer = picked.first),
+          ),
+          const SizedBox(height: 18),
+        ],
         Form(
           key: _form,
           child: AutofillGroup(
@@ -376,10 +405,11 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        const AuthNote(
+        AuthNote(
           icon: Icons.mark_email_unread_outlined,
           text: "We'll email you a 6-digit code to confirm it's you, then you choose "
-              'your own 6-digit code to sign in with. The same account works on the website and in the app.',
+              'your own 6-digit code to sign in with. The same account works on the website and in the app.'
+              '${asTrainer ? ' Then you set up your trainer profile: gyms check it before members can choose you.' : ''}',
         ),
         if (_error != null) ...[const SizedBox(height: 14), AuthError(_error!)],
         const SizedBox(height: 22),

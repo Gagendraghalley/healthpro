@@ -53,6 +53,10 @@ class GymModule extends HealthProModule {
   @override
   IconData get icon => Icons.fitness_center_rounded;
 
+  /// 'Join as Trainer' on sign-up leads to Become a trainer.
+  @override
+  String? get trainerSignUpRoute => GymRoutes.trainerProfile;
+
   @override
   Color get color => BrandColors.orange;
 
