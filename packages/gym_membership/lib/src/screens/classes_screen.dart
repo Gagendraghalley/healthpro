@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,7 +12,7 @@ import '../widgets/class_widgets.dart';
 import '../widgets/gym_widgets.dart';
 
 /// Group classes, for the desk: who's booked into each class on a day (the
-/// next two weeks), members of the gym and non-members on Health Pro, booking
+/// last two weeks and the next two), members of the gym and non-members on Health Pro, booking
 /// members in and taking anyone out; how many have registered to date; and
 /// the weekly timetable. Every role given Classes (GymPermission.classes:
 /// front desk, trainer, manager...) adds and changes classes too.
@@ -31,9 +32,31 @@ class ClassesScreen extends ConsumerStatefulWidget {
 enum _View { bookings, registered, timetable }
 
 class _ClassesScreenState extends ConsumerState<ClassesScreen> {
-  /// The day picked; null for the first day with a class.
+  /// The day picked; null for the first day with a class from today on.
   DateTime? _picked;
   _View _view = _View.bookings;
+
+  /// The days' row, scrolled once so the latest past day comes first.
+  final _days = ScrollController();
+  final _lastPast = GlobalKey();
+  bool _scrolledToNow = false;
+
+  @override
+  void dispose() {
+    _days.dispose();
+    super.dispose();
+  }
+
+  void _scrollToNow() {
+    if (_scrolledToNow) return;
+    _scrolledToNow = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final chip = _lastPast.currentContext?.findRenderObject();
+      if (chip == null || !_days.hasClients) return;
+      final to = RenderAbstractViewport.of(chip).getOffsetToReveal(chip, 0).offset;
+      _days.jumpTo(to.clamp(0, _days.position.maxScrollExtent));
+    });
+  }
 
   Future<void> _edit([GymClass? c]) async {
     final saved = await showAppDialog<bool>(context: context, builder: (_) => _ClassDialog(venueId: widget.venueId, gymClass: c));
@@ -71,15 +94,27 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
             data: (classes) {
               final today = BhutanTime.today();
               final active = classes.where((c) => c.isActive).toList();
-              // The next two weeks' days that have a class; the first is open to start with.
-              final classDays = [
-                for (var i = 0; i < 14; i++) DateTime(today.year, today.month, today.day + i),
-              ].where((d) => active.any((c) => c.weekday == d.weekday)).toList();
-              final day = classDays.contains(_picked) ? _picked! : (classDays.firstOrNull ?? today);
               final places = ref.watch(gymClassPlacesProvider(id)).valueOrNull ?? const <ClassPlaces>[];
               int bookedOn(DateTime d) => places.where((p) => p.date == d).fold(0, (n, p) => n + p.booked);
-              final onDay = active.where((c) => c.weekday == day.weekday).toList()
-                ..sort((a, b) => (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute));
+              bool bookedIn(GymClass c, DateTime d) => places.any((p) => p.classId == c.id && p.date == d && p.booked > 0);
+              // The last two weeks' days and the next two's that have a class (or had
+              // bookings, in a class since moved or taken off); the first from today is open to start with.
+              final classDays = [
+                for (var i = -14; i < 14; i++) DateTime(today.year, today.month, today.day + i),
+              ].where((d) => active.any((c) => c.weekday == d.weekday) || bookedOn(d) > 0).toList();
+              final lastPast = classDays.lastWhere((d) => d.isBefore(today), orElse: () => today);
+              if (_view == _View.bookings && classDays.isNotEmpty) _scrollToNow();
+              final day = classDays.contains(_picked)
+                  ? _picked!
+                  : (classDays.where((d) => !d.isBefore(today)).firstOrNull ?? classDays.lastOrNull ?? today);
+              // The day's dates changed or cancelled on their own; each class in order of when it runs that day.
+              final changes = (ref.watch(gymClassDaysProvider(id)).valueOrNull ?? const <ClassDay>[]).where((x) => x.date == day).toList();
+              int startsOn(GymClass c) {
+                final on = c.onDay(changes.where((x) => x.classId == c.id).firstOrNull);
+                return on.hour * 60 + on.minute;
+              }
+              final onDay = classes.where((c) => (c.isActive && c.weekday == day.weekday) || bookedIn(c, day)).toList()
+                ..sort((a, b) => startsOn(a).compareTo(startsOn(b)));
               final bookings = ref.watch(gymClassBookingsProvider((venueId: id, date: day))).valueOrNull ?? const <ClassBooking>[];
               // Each view's count: places booked to come, people to date, classes a week.
               final toCome = places.where((p) => !p.date.isBefore(today)).fold(0, (n, p) => n + p.booked);
@@ -89,6 +124,7 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
                   ref.invalidate(gymClassesProvider(id));
                   ref.invalidate(gymClassBookingsProvider);
                   ref.invalidate(gymClassPlacesProvider(id));
+                  ref.invalidate(gymClassDaysProvider(id));
                   ref.invalidate(gymClassRegistrationsProvider(id));
                 },
                 child: ListView(
@@ -136,17 +172,19 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
                             if (classDays.isEmpty)
                               SectionCard(
                                 padding: const EdgeInsets.all(16),
-                                child: Text('No classes on the timetable in the next two weeks.',
+                                child: Text('No classes on the timetable in the last two weeks or the next two.',
                                     style: TextStyle(color: context.brand.muted)),
                               )
                             else ...[
                               SizedBox(
                                 height: 40,
                                 child: ListView(
+                                  controller: _days,
                                   scrollDirection: Axis.horizontal,
                                   children: [
                                     for (final d in classDays)
                                       Padding(
+                                        key: d == lastPast ? _lastPast : null,
                                         padding: const EdgeInsets.only(right: 8),
                                         child: ChoiceChip(
                                           label: Text(bookedOn(d) == 0
@@ -161,7 +199,15 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
                               ),
                               const SizedBox(height: 14),
                               _SessionsTable(
-                                  venueId: id, day: day, classes: onDay, bookings: bookings, canRegister: canRegister, canBook: canBook),
+                                venueId: id,
+                                day: day,
+                                classes: onDay,
+                                changes: changes,
+                                bookings: bookings,
+                                canRegister: canRegister,
+                                canBook: canBook,
+                                canEdit: canEdit,
+                              ),
                             ],
                           ],
                         _View.registered => [_RegisteredToDate(venueId: id, canRegister: canRegister)],
@@ -201,68 +247,88 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
       _view = _View.bookings;
       _picked = day;
     });
-    _openSession(context, c, venueId: widget.venueId, day: day, canRegister: canRegister, canBook: canBook);
+    _openSession(context, c, venueId: widget.venueId, day: day, canRegister: canRegister, canBook: canBook, canEdit: canEdit);
   }
 }
 
-/// Shows a class on [day]: who's booked (each can be taken out, and a
-/// non-member registered), and books a member in.
+/// Shows class [c] (as the timetable has it) on [day], as it runs that day:
+/// who's booked (each can be taken out, and a non-member registered), and
+/// books a member in; for who keeps the timetable, changes or cancels that
+/// date only.
 void _openSession(BuildContext context, GymClass c,
         {required String venueId,
         required DateTime day,
         List<ClassBooking> bookings = const [],
         bool canRegister = false,
-        bool canBook = false}) =>
+        bool canBook = false,
+        bool canEdit = false}) =>
     showRowDetails(
       context,
       title: 'Class',
-      // Watched, so a booking made or taken out shows straight away.
+      // Watched, so a booking made or taken out, or the date changed, shows straight away.
       builder: (context) => Consumer(builder: (context, ref, _) {
         final now = ref.watch(gymClassBookingsProvider((venueId: venueId, date: day))).valueOrNull ?? bookings;
+        final change = (ref.watch(gymClassDaysProvider(venueId)).valueOrNull ?? const <ClassDay>[])
+            .where((x) => x.classId == c.id && x.date == day)
+            .firstOrNull;
         final mine = now.where((b) => b.classId == c.id).toList();
         return _SessionCard(
           venueId: venueId,
-          session: ClassSession(gymClass: c, date: day, booked: mine.length),
+          weekly: c,
+          session: ClassSession(gymClass: c.onDay(change), date: day, booked: mine.length, change: change),
           bookings: mine,
           canRegister: canRegister,
           canBook: canBook,
+          canEdit: canEdit,
         );
       }),
     );
 
-/// The chosen day's classes as a table, with how many of those booked are
-/// members and how many non-members. Open shows who's booked (each can be
-/// taken out, and a non-member registered) and books a member in.
+/// The chosen day's classes as a table, each as it runs that day, with how
+/// many of those booked are members and how many non-members. Open shows
+/// who's booked (each can be taken out, and a non-member registered), books
+/// a member in, and changes or cancels that date only.
 class _SessionsTable extends StatelessWidget {
   final String venueId;
   final DateTime day;
+
+  /// As the timetable has them; [changes]: the day's dates changed or cancelled on their own.
   final List<GymClass> classes;
+  final List<ClassDay> changes;
   final List<ClassBooking> bookings;
   final bool canRegister;
   final bool canBook;
+  final bool canEdit;
 
   const _SessionsTable({
     required this.venueId,
     required this.day,
     required this.classes,
+    this.changes = const [],
     required this.bookings,
     this.canRegister = false,
     this.canBook = false,
+    this.canEdit = false,
   });
 
-  void _open(BuildContext context, GymClass c) =>
-      _openSession(context, c, venueId: venueId, day: day, bookings: bookings, canRegister: canRegister, canBook: canBook);
+  void _open(BuildContext context, GymClass c) => _openSession(context, c,
+      venueId: venueId, day: day, bookings: bookings, canRegister: canRegister, canBook: canBook, canEdit: canEdit);
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
+    ClassDay? changeOf(GymClass c) => changes.where((x) => x.classId == c.id).firstOrNull;
+    GymClass on(GymClass c) => c.onDay(changeOf(c));
+    bool cancelled(GymClass c) => changeOf(c)?.isCancelled ?? false;
     int booked(GymClass c) => bookings.where((b) => b.classId == c.id).length;
     int nonMembers(GymClass c) => bookings.where((b) => b.classId == c.id && b.isNonMember).length;
-    Widget places(GymClass c) => StatusChip(
-          label: '${booked(c)} / ${c.capacity}',
-          color: booked(c) >= c.capacity ? brand.warning : brand.success,
-          icon: Icons.people_alt_outlined,
-        );
+    Widget places(GymClass c) => cancelled(c)
+        ? StatusChip(label: 'Cancelled', color: brand.danger, icon: Icons.event_busy_outlined)
+        : StatusChip(
+            label: '${booked(c)} / ${on(c).capacity}',
+            color: booked(c) >= on(c).capacity ? brand.warning : brand.success,
+            icon: Icons.people_alt_outlined,
+          );
     return DataGrid<GymClass>(
       rows: classes,
       noun: 'classes',
@@ -280,9 +346,12 @@ class _SessionsTable extends StatelessWidget {
             children: [
               Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink)),
               _CellNote([
-                if (!DataGrid.shows(context, 'time')) c.span,
-                if (c.trainerName != null && !DataGrid.shows(context, 'trainer')) 'with ${c.trainerName}',
+                if (!DataGrid.shows(context, 'time')) on(c).span,
+                if (on(c).trainerName != null && !DataGrid.shows(context, 'trainer')) 'with ${on(c).trainerName}',
               ]),
+              if (changeOf(c) case final change?)
+                Text(change.isCancelled ? 'Not held this day' : 'Changed this day only',
+                    style: TextStyle(color: change.isCancelled ? brand.danger : brand.highlight, fontSize: 12, fontWeight: FontWeight.w600)),
               if (!DataGrid.shows(context, 'booked')) Padding(padding: const EdgeInsets.only(top: 4), child: places(c)),
             ],
           ),
@@ -292,17 +361,17 @@ class _SessionsTable extends StatelessWidget {
           label: 'Time',
           flex: 2,
           showFrom: 600,
-          sortBy: (c) => c.hour * 60 + c.minute,
-          cell: (context, c) => Text(c.span, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.body)),
+          sortBy: (c) => on(c).hour * 60 + on(c).minute,
+          cell: (context, c) => Text(on(c).span, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.body)),
         ),
         GridColumn(
           key: 'trainer',
           label: 'Trainer',
           flex: 3,
           showFrom: 860,
-          sortBy: (c) => (c.trainerName ?? '').toLowerCase(),
-          cell: (context, c) => Text(c.trainerName ?? '—',
-              maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.trainerName == null ? brand.muted : brand.body)),
+          sortBy: (c) => (on(c).trainerName ?? '').toLowerCase(),
+          cell: (context, c) => Text(on(c).trainerName ?? '—',
+              maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: on(c).trainerName == null ? brand.muted : brand.body)),
         ),
         GridColumn(
           key: 'booked',
@@ -681,23 +750,59 @@ class _TimetableTable extends StatelessWidget {
 /// and booking a member in.
 class _SessionCard extends ConsumerWidget {
   final String venueId;
+
+  /// The class as the timetable has it; [session]: as it runs that day.
+  final GymClass weekly;
   final ClassSession session;
   final List<ClassBooking> bookings;
   final bool canRegister;
   final bool canBook;
 
+  /// Who keeps the timetable: changes or cancels this date only.
+  final bool canEdit;
+
   const _SessionCard({
     required this.venueId,
+    required this.weekly,
     required this.session,
     required this.bookings,
     this.canRegister = false,
     this.canBook = false,
+    this.canEdit = false,
   });
 
   void _refresh(WidgetRef ref) {
     ref.invalidate(gymClassBookingsProvider((venueId: venueId, date: session.date)));
     ref.invalidate(gymClassPlacesProvider(venueId));
+    ref.invalidate(gymClassDaysProvider(venueId));
     ref.invalidate(gymClassRegistrationsProvider(venueId));
+  }
+
+  /// A new time, trainer or places on this date, or [cancel] it.
+  Future<void> _changeDay(BuildContext context, WidgetRef ref, {bool cancel = false}) async {
+    final saved = await showAppDialog<bool>(
+      context: context,
+      builder: (_) => _ClassDayDialog(session: session, weekly: weekly, cancel: cancel),
+    );
+    if (saved == true) _refresh(ref);
+  }
+
+  Future<void> _backToTimetable(BuildContext context, WidgetRef ref) async {
+    final day = _onDay(session.date);
+    final sure = await confirmAction(
+      context,
+      title: '${weekly.name} $day as the timetable has it?',
+      message: session.cancelled
+          ? 'It can be booked again. Places cancelled with the date stay cancelled.'
+          : '${weekly.span}${weekly.trainerName == null ? '' : ' with ${weekly.trainerName}'}, ${weekly.capacity} places. '
+              'Those booked are told.',
+      confirmLabel: 'Back to the timetable',
+      cancelLabel: 'Keep this date\'s',
+    );
+    if (!sure || !context.mounted) return;
+    final ok = await runAction(context, () => ref.read(gymClassRepositoryProvider).clearDay(weekly.id, session.date),
+        success: '${weekly.name} $day is back as the timetable has it');
+    if (ok) _refresh(ref);
   }
 
   Future<void> _remove(BuildContext context, WidgetRef ref, ClassBooking b) async {
@@ -739,6 +844,8 @@ class _SessionCard extends ConsumerWidget {
     final brand = context.brand;
     final c = session.gymClass;
     final ended = !c.startOn(session.date).add(Duration(minutes: c.durationMinutes)).isAfter(BhutanTime.now());
+    final started = session.startedBy(BhutanTime.now());
+    final change = session.change;
     final nonMembers = bookings.where((b) => b.isNonMember).length;
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -763,16 +870,53 @@ class _SessionCard extends ConsumerWidget {
                   ],
                 ),
               ),
-              StatusChip(
-                label: '${session.booked} / ${c.capacity}',
-                color: session.isFull ? brand.warning : brand.success,
-                icon: Icons.people_alt_outlined,
-              ),
+              session.cancelled
+                  ? StatusChip(label: 'Cancelled', color: brand.danger, icon: Icons.event_busy_outlined)
+                  : StatusChip(
+                      label: '${session.booked} / ${c.capacity}',
+                      color: session.isFull ? brand.warning : brand.success,
+                      icon: Icons.people_alt_outlined,
+                    ),
             ],
           ),
+          // This date only: what's different, and how every other week runs.
+          if (change != null)
+            Container(
+              margin: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: (change.isCancelled ? brand.danger : brand.highlight).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(change.isCancelled ? Icons.event_busy_outlined : Icons.edit_calendar_outlined,
+                      size: 18, color: change.isCancelled ? brand.danger : brand.highlight),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      [
+                        change.isCancelled ? 'Not held this day.' : 'Changed this day only.',
+                        if (change.note != null) change.note!,
+                        'Every other ${weekdayNames[weekly.weekday - 1]}: ${weekly.span}'
+                            '${weekly.trainerName == null ? '' : ' with ${weekly.trainerName}'}, ${weekly.capacity} places.',
+                      ].join(' '),
+                      style: TextStyle(color: brand.body, fontSize: 12.5, height: 1.45),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 8),
           if (bookings.isEmpty)
-            Text('Nobody booked yet.', style: TextStyle(color: brand.muted))
+            Text(
+                session.cancelled
+                    ? 'Nobody booked: places were cancelled with the date.'
+                    : ended
+                        ? 'Nobody booked.'
+                        : 'Nobody booked yet.',
+                style: TextStyle(color: brand.muted))
           else
             for (final b in bookings)
               Row(
@@ -802,24 +946,50 @@ class _SessionCard extends ConsumerWidget {
                       onPressed: () => _register(context, b),
                       icon: Icon(Icons.person_add_alt_1_outlined, size: 18, color: brand.muted),
                     ),
-                  IconButton(
-                    tooltip: 'Take ${b.memberName} out',
-                    onPressed: () => _remove(context, ref, b),
-                    icon: Icon(Icons.close_rounded, size: 18, color: brand.muted),
-                  ),
+                  // Over: who came stays on record.
+                  if (!ended)
+                    IconButton(
+                      tooltip: 'Take ${b.memberName} out',
+                      onPressed: () => _remove(context, ref, b),
+                      icon: Icon(Icons.close_rounded, size: 18, color: brand.muted),
+                    ),
                 ],
               ),
-          if (canBook && !ended && !session.isFull) ...[
-            const SizedBox(height: 6),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => _book(context, ref),
-                icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
-                label: const Text('Book a member'),
-              ),
-            ),
-          ],
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 4,
+            runSpacing: 2,
+            children: [
+              if (canBook && !ended && !session.isFull && !session.cancelled)
+                TextButton.icon(
+                  onPressed: () => _book(context, ref),
+                  icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
+                  label: const Text('Book a member'),
+                ),
+              // This date only, before it starts; Edit on the timetable changes every week.
+              if (canEdit && !started) ...[
+                if (!session.cancelled) ...[
+                  TextButton.icon(
+                    onPressed: () => _changeDay(context, ref),
+                    icon: const Icon(Icons.edit_calendar_outlined, size: 18),
+                    label: const Text('Change this date'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _changeDay(context, ref, cancel: true),
+                    style: TextButton.styleFrom(foregroundColor: brand.danger),
+                    icon: const Icon(Icons.event_busy_outlined, size: 18),
+                    label: const Text('Cancel this date'),
+                  ),
+                ],
+                if (change != null)
+                  TextButton.icon(
+                    onPressed: () => _backToTimetable(context, ref),
+                    icon: const Icon(Icons.undo_rounded, size: 18),
+                    label: const Text('Back to the timetable'),
+                  ),
+              ],
+            ],
+          ),
         ],
       ),
     );
@@ -976,6 +1146,25 @@ class _ClassDialogState extends ConsumerState<_ClassDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Editing changes every week; one date has its own Change on Bookings.
+                if (_old != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline_rounded, size: 17, color: brand.muted),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Changes every ${weekdayNames[_old.weekday - 1]}. To change one date only, open it on Bookings '
+                            'and use Change this date.',
+                            style: TextStyle(color: brand.body, fontSize: 12.5, height: 1.45),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 TextFormField(
                   controller: _name,
                   maxLength: 60,
@@ -1061,6 +1250,170 @@ class _ClassDialogState extends ConsumerState<_ClassDialog> {
       actions: [
         TextButton(onPressed: _saving ? null : () => Navigator.pop(context, false), child: const Text('Cancel')),
         FilledButton(onPressed: _saving ? null : _save, child: Text(_old == null ? 'Add' : 'Save')),
+      ],
+    );
+  }
+}
+
+/// A class day in a sentence: 'tomorrow', 'Sat 28 Nov'.
+String _dayWord(DateTime d) {
+  final label = classDayLabel(d, BhutanTime.today());
+  return const {'Yesterday', 'Today', 'Tomorrow'}.contains(label) ? label.toLowerCase() : label;
+}
+
+/// 'tomorrow', 'on Sat 28 Nov'.
+String _onDay(DateTime d) {
+  final word = _dayWord(d);
+  return word == word.toLowerCase() ? word : 'on $word';
+}
+
+/// One date of a class only (gym_save_class_day): a new time, length,
+/// trainer or places, or [cancel] it; with a note for those booked, who are
+/// told. Every other week stays as the timetable has it ([weekly]).
+class _ClassDayDialog extends ConsumerStatefulWidget {
+  final ClassSession session;
+  final GymClass weekly;
+  final bool cancel;
+
+  const _ClassDayDialog({required this.session, required this.weekly, this.cancel = false});
+
+  @override
+  ConsumerState<_ClassDayDialog> createState() => _ClassDayDialogState();
+}
+
+class _ClassDayDialogState extends ConsumerState<_ClassDayDialog> {
+  final _form = GlobalKey<FormState>();
+  late final GymClass _now = widget.session.gymClass;
+  late final _trainer = TextEditingController(text: _now.trainerName ?? '');
+  late final _capacity = TextEditingController(text: '${_now.capacity}');
+  late final _note = TextEditingController(text: widget.session.change?.note ?? '');
+  late TimeOfDay _time = TimeOfDay(hour: _now.hour, minute: _now.minute);
+  late int _minutes = _now.durationMinutes;
+  bool _saving = false;
+
+  String get _day => _dayWord(widget.session.date);
+
+  @override
+  void dispose() {
+    for (final c in [_trainer, _capacity, _note]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_form.currentState!.validate()) return;
+    setState(() => _saving = true);
+    final details = widget.cancel
+        ? classDayDetails(cancel: true, note: _note.text)
+        : classDayDetails(
+            hour: _time.hour,
+            minute: _time.minute,
+            durationMinutes: _minutes,
+            trainerName: _trainer.text,
+            capacity: int.parse(_capacity.text.trim()),
+            note: _note.text,
+          );
+    final ok = await runAction(
+      context,
+      () => ref.read(gymClassRepositoryProvider).saveDay(_now.id, widget.session.date, details),
+      success: widget.cancel ? '${_now.name} ${_onDay(widget.session.date)} is cancelled' : '${_now.name} changed for $_day only',
+    );
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (ok) Navigator.pop(context, true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final booked = widget.session.booked;
+    final w = widget.weekly;
+    final usual = '${w.span}${w.trainerName == null ? '' : ' with ${w.trainerName}'}, ${w.capacity} places';
+    Widget label(String text) => Padding(
+          padding: const EdgeInsets.only(top: 14, bottom: 6),
+          child: Text(text, style: TextStyle(fontWeight: FontWeight.w600, color: brand.ink)),
+        );
+    final intro = widget.cancel
+        ? '${booked == 0 ? 'Nobody is booked yet.' : '$booked booked ${booked == 1 ? 'loses their place' : 'lose their places'} and '
+            '${booked == 1 ? 'is' : 'are'} told, with your note.'} Every other ${weekdayNames[w.weekday - 1]} runs as usual.'
+        : 'Only $_day changes. Every other ${weekdayNames[w.weekday - 1]} stays $usual.'
+            '${booked == 0 ? '' : ' The $booked booked keep their place and are told what changed.'}';
+    return AlertDialog(
+      title: Text(widget.cancel ? 'Cancel ${_now.name} ${_onDay(widget.session.date)}?' : '${_now.name}, $_day only'),
+      content: SizedBox(
+        width: 520,
+        child: Form(
+          key: _form,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(intro, style: TextStyle(color: brand.body, height: 1.45)),
+                if (!widget.cancel) ...[
+                  label('Starts at, and how long'),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final picked = await showTimePicker(context: context, initialTime: _time);
+                          if (picked != null) setState(() => _time = picked);
+                        },
+                        icon: const Icon(Icons.schedule_rounded, size: 18),
+                        label: Text(clockTime(_time.hour, _time.minute)),
+                      ),
+                      for (final m in _ClassDialogState._lengths)
+                        ChoiceChip(label: Text('$m min'), selected: _minutes == m, onSelected: (_) => setState(() => _minutes = m)),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _trainer,
+                    maxLength: 100,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(labelText: 'Trainer', hintText: 'Who takes it that day'),
+                  ),
+                  TextFormField(
+                    controller: _capacity,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: InputDecoration(
+                        labelText: 'Places *', helperText: booked == 0 ? 'How many can book it that day' : 'At least $booked: booked already'),
+                    validator: (v) => Validators.wholeNumber(v, min: booked < 1 ? 1 : booked, max: 500, what: 'Places'),
+                  ),
+                  const SizedBox(height: 8),
+                ] else
+                  const SizedBox(height: 12),
+                TextFormField(
+                  controller: _note,
+                  maxLength: 200,
+                  minLines: 1,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    labelText: widget.cancel ? 'Why' : 'Note',
+                    hintText: widget.cancel ? 'Public holiday, trainer away...' : 'Tashi is away; Kinley takes it',
+                    helperText: 'Those booked see it',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context, false),
+          child: Text(widget.cancel ? 'Keep it' : 'Cancel'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          style: widget.cancel ? FilledButton.styleFrom(backgroundColor: brand.danger) : null,
+          child: Text(widget.cancel ? 'Cancel this date' : 'Save for $_day'),
+        ),
       ],
     );
   }

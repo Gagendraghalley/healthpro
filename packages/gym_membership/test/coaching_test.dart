@@ -349,6 +349,41 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('on the gym\'s page: places left fill the bar; a full class can\'t be booked', (tester) async {
+      await pump(tester, const ClassWeek(venueId: 'g1', signedIn: false, member: false, explain: true), [
+        gymClassesProvider.overrideWith((ref, id) async => [
+              yoga(capacity: 6),
+              GymClass(id: 'hiit', venueId: 'g1', name: 'HIIT', weekday: day(2).weekday, hour: 9, minute: 0, capacity: 2),
+            ]),
+        gymClassPlacesProvider.overrideWith((ref, id) async => [
+              ClassPlaces(classId: 'yoga', date: day(1), booked: 3),
+              ClassPlaces(classId: 'hiit', date: day(2), booked: 2),
+            ]),
+      ]);
+      expect(find.textContaining('3 of 6 places left'), findsOneWidget);
+      expect(find.text('No places left'), findsOneWidget);
+      expect(find.text('Full'), findsOneWidget);
+      expect(find.text('Book'), findsOneWidget, reason: 'only the class with places');
+      final fill = find.descendant(of: find.byType(FractionallySizedBox), matching: find.byType(DecoratedBox));
+      expect(tester.getSize(fill.first), const Size(28, 4), reason: 'half of the 56px bar, and visible');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('on the gym\'s page: a class that filled since it loaded says so on Book', (tester) async {
+      var calls = 0;
+      await pump(tester, const ClassWeek(venueId: 'g1', signedIn: false, member: false, explain: true), [
+        gymClassesProvider.overrideWith((ref, id) async => [yoga(capacity: 2)]),
+        gymClassPlacesProvider.overrideWith((ref, id) async => [ClassPlaces(classId: 'yoga', date: day(1), booked: calls++ == 0 ? 1 : 2)]),
+      ]);
+      expect(find.textContaining('1 of 2 places left'), findsOneWidget);
+      await tester.tap(find.text('Book'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('is full now'), findsOneWidget, reason: 'not sent to sign in');
+      expect(find.text('Full'), findsOneWidget);
+      expect(find.text('Book'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     test('My dashboard: a booked class, and when it ends', () {
       final b = MyClassBooking.fromJson({
         'id': 'b1', 'class_id': 'yoga', 'venue_id': 'g1', 'venue_name': 'Coach Gym', 'class_date': '2026-11-21',
@@ -375,6 +410,162 @@ void main() {
     testWidgets('a gym without classes shows nothing on My gym', (tester) async {
       await pump(tester, const MyClassesCard(venueId: 'g1'), [gymClassesProvider.overrideWith((ref, id) async => const [])]);
       expect(find.text('Classes'), findsNothing);
+    });
+
+    test('a date changed on its own runs at its own time, in order; a cancelled one says so', () {
+      final classes = [
+        yoga(hour: 7),
+        GymClass(id: 'hiit', venueId: 'g1', name: 'HIIT', weekday: day(1).weekday, hour: 9, minute: 0, capacity: 5),
+      ];
+      final moved = ClassDay(classId: 'yoga', date: day(1), hour: 10, minute: 0, durationMinutes: 45, trainerName: 'Kinley', capacity: 4);
+      final sessions = sessionsFrom(classes, const [], day(0), days: 2, changes: [moved]);
+      expect(sessions.map((s) => s.gymClass.name), ['HIIT', 'Yoga'], reason: 'Yoga runs after HIIT that day');
+      final y = sessions.last;
+      expect((y.gymClass.span, y.gymClass.trainerName, y.gymClass.capacity, y.changed, y.cancelled),
+          ('10:00 AM to 10:45 AM', 'Kinley', 4, true, false));
+      expect(classes.first.time, '7:00 AM', reason: 'the timetable keeps its own');
+
+      final off = ClassDay(classId: 'hiit', date: day(1), hour: 9, minute: 0, capacity: 5, isCancelled: true, note: 'Public holiday.');
+      expect(sessionsFrom(classes, const [], day(0), days: 2, changes: [off]).firstWhere((s) => s.gymClass.id == 'hiit').cancelled, isTrue);
+      expect(ClassDay.fromJson({
+        'class_id': 'hiit', 'class_date': '2026-11-28', 'starts_at': '09:00:00', 'duration_minutes': 45, 'trainer_name': null,
+        'capacity': 5, 'is_cancelled': true, 'note': 'Public holiday.',
+      }).note, 'Public holiday.');
+      expect(classDayDetails(cancel: true, note: ' Public holiday. '), {'is_cancelled': true, 'note': 'Public holiday.'});
+      expect(classDayDetails(hour: 9, minute: 5, durationMinutes: 45, trainerName: ' ', capacity: 4, note: ''),
+          {'starts_at': '09:05', 'duration_minutes': 45, 'trainer_name': null, 'capacity': 4, 'is_cancelled': false, 'note': null});
+    });
+
+    testWidgets('on the gym\'s page: a cancelled date can\'t be booked; a changed one shows its own time', (tester) async {
+      await pump(tester, const ClassWeek(venueId: 'g1', signedIn: true, member: true), [
+        gymClassesProvider.overrideWith((ref, id) async => [
+              yoga(capacity: 6),
+              GymClass(id: 'hiit', venueId: 'g1', name: 'HIIT', weekday: day(2).weekday, hour: 9, minute: 0, capacity: 5),
+            ]),
+        gymClassPlacesProvider.overrideWith((ref, id) async => const []),
+        gymClassDaysProvider.overrideWith((ref, id) async => [
+              ClassDay(classId: 'yoga', date: day(1), hour: 7, minute: 0, capacity: 6, isCancelled: true, note: 'Public holiday.'),
+              ClassDay(classId: 'hiit', date: day(2), hour: 10, minute: 30, durationMinutes: 45, capacity: 8, trainerName: 'Kinley'),
+            ]),
+      ]);
+      expect(find.text('Cancelled'), findsOneWidget);
+      expect(find.text('Not held this day · Public holiday.'), findsOneWidget);
+      expect(find.textContaining('places left'), findsOneWidget, reason: 'only the class that runs');
+      expect(find.text('Book'), findsOneWidget, reason: 'HIIT, not the cancelled Yoga');
+      expect(find.text('10:30 AM'), findsOneWidget, reason: 'HIIT at its time that day');
+      expect(find.text('Changed this day only'), findsOneWidget);
+      expect(find.textContaining('with Kinley'), findsOneWidget);
+      expect(find.textContaining('8 of 8 places left'), findsOneWidget, reason: 'the day\'s places');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the desk: a date changed on its own, and Change, Cancel or Back for that date only', (tester) async {
+      await show(tester, const ClassesScreen(venueId: 'g1'), with_: [
+        ...overrides(),
+        gymClassesProvider.overrideWith((ref, id) async => [yoga(capacity: 6)]),
+        gymClassPlacesProvider.overrideWith((ref, id) async => [ClassPlaces(classId: 'yoga', date: day(1), booked: 1)]),
+        gymClassDaysProvider.overrideWith((ref, id) async => [
+              ClassDay(
+                  classId: 'yoga', date: day(1), hour: 10, minute: 0, durationMinutes: 60, trainerName: 'Kinley', capacity: 4,
+                  note: 'Tashi is away.'),
+            ]),
+        gymClassBookingsProvider.overrideWith((ref, q) async =>
+            q.date == day(1) ? [ClassBooking(id: 'b1', classId: 'yoga', classDate: day(1), gymMemberId: 'm1', memberName: 'Mindu Dema')] : const []),
+        gymClassRegistrationsProvider.overrideWith((ref, id) async => const ClassRegistrations()),
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.text('10:00 AM to 11:00 AM'), findsOneWidget, reason: 'the day\'s time in the table');
+      expect(find.text('Kinley'), findsOneWidget);
+      expect(find.text('1 / 4'), findsOneWidget, reason: 'the day\'s places');
+      expect(find.text('Changed this day only'), findsOneWidget);
+
+      await tester.tap(find.text('Open').first);
+      await tester.pumpAndSettle();
+      expect(inDialog(find.textContaining('Changed this day only. Tashi is away. Every other ${weekdayNames[day(1).weekday - 1]}: '
+          '7:00 AM to 8:00 AM with Tashi, 6 places.')), findsOneWidget);
+      expect(find.text('Change this date'), findsOneWidget);
+      expect(find.text('Back to the timetable'), findsOneWidget);
+      await tester.tap(find.text('Cancel this date'));
+      await tester.pumpAndSettle();
+      expect(find.text('Cancel Yoga tomorrow?'), findsOneWidget);
+      expect(find.textContaining('1 booked loses their place and is told, with your note.'), findsOneWidget);
+      expect(find.text('Keep it'), findsOneWidget);
+      await tester.tap(find.text('Keep it'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Change this date'));
+      await tester.pumpAndSettle();
+      expect(find.text('Yoga, tomorrow only'), findsOneWidget);
+      expect(find.textContaining('Only tomorrow changes.'), findsOneWidget);
+      expect(find.text('At least 1: booked already'), findsOneWidget);
+      expect(find.text('Save for tomorrow'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the desk: editing a class says it changes every week', (tester) async {
+      await show(tester, const ClassesScreen(venueId: 'g1'), with_: [
+        ...overrides(),
+        gymClassesProvider.overrideWith((ref, id) async => [yoga()]),
+        gymClassPlacesProvider.overrideWith((ref, id) async => const []),
+        gymClassBookingsProvider.overrideWith((ref, q) async => const []),
+        gymClassRegistrationsProvider.overrideWith((ref, id) async => const ClassRegistrations()),
+      ]);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Timetable'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open').first);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Changes every ${weekdayNames[day(1).weekday - 1]}. To change one date only'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the desk: past class days too, with who was booked, kept on record', (tester) async {
+      ClassBooking booking(int n, int inDays, {String classId = 'yoga'}) =>
+          ClassBooking(id: 'b$n', classId: classId, classDate: day(inDays), gymMemberId: 'm$n', memberName: 'Member $n');
+      await show(tester, const ClassesScreen(venueId: 'g1'), with_: [
+        ...overrides(),
+        gymClassesProvider.overrideWith((ref, id) async => [
+              yoga(capacity: 6),
+              // Off the timetable now, with a booking last week.
+              GymClass(id: 'hiit', venueId: 'g1', name: 'HIIT', weekday: day(-3).weekday, hour: 9, minute: 0, capacity: 4, isActive: false),
+            ]),
+        gymClassPlacesProvider.overrideWith((ref, id) async => [
+              ClassPlaces(classId: 'yoga', date: day(-6), booked: 5),
+              ClassPlaces(classId: 'hiit', date: day(-3), booked: 1),
+              ClassPlaces(classId: 'yoga', date: day(1), booked: 1),
+            ]),
+        gymClassBookingsProvider.overrideWith((ref, q) async => q.date == day(-6)
+            ? [for (var n = 1; n <= 5; n++) booking(n, -6)]
+            : q.date == day(-3)
+                ? [booking(9, -3, classId: 'hiit')]
+                : q.date == day(1)
+                    ? [booking(1, 1)]
+                    : const []),
+        gymClassRegistrationsProvider.overrideWith((ref, id) async => const ClassRegistrations()),
+      ]);
+      await tester.pumpAndSettle();
+      final today = day(0);
+      expect(find.text('${classDayLabel(day(-6), today)} · 5 booked'), findsOneWidget, reason: 'last week\'s class');
+      expect(find.text('${classDayLabel(day(-3), today)} · 1 booked'), findsOneWidget, reason: 'a class taken off since');
+      expect(find.text('Tomorrow · 1 booked'), findsOneWidget);
+      expect(find.text('1 / 6'), findsOneWidget, reason: 'the next class day is open to start with');
+
+      await tester.tap(find.text('${classDayLabel(day(-6), today)} · 5 booked'));
+      await tester.pumpAndSettle();
+      expect(find.text('5 / 6'), findsOneWidget);
+      await tester.tap(find.text('Open').first);
+      await tester.pumpAndSettle();
+      expect(inDialog(find.text('Member 5')), findsOneWidget);
+      expect(find.byTooltip('Take Member 5 out'), findsNothing, reason: 'over: who came stays on record');
+      expect(find.text('Book a member'), findsNothing);
+      Navigator.of(tester.element(find.text('Member 5'))).pop();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('${classDayLabel(day(-3), today)} · 1 booked'));
+      await tester.pumpAndSettle();
+      expect(find.text('HIIT'), findsOneWidget);
+      expect(find.text('1 / 4'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('the desk: bookings by class day, who has registered to date, and the timetable', (tester) async {

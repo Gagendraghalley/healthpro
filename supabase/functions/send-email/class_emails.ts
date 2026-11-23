@@ -28,8 +28,10 @@ export interface ClassDetails {
   longitude?: number | null;
   /** Who it's for. */
   name?: string | null;
-  /** Cancelled: taken off the timetable, moved to another day, or the gym cancelled the place. */
-  reason?: 'off' | 'moved' | 'gym' | null;
+  /** Cancelled: taken off the timetable, moved to another day, not held that day, or the gym cancelled the place. */
+  reason?: 'off' | 'moved' | 'day' | 'gym' | null;
+  /** Not held that day: the gym's note on why. */
+  note?: string | null;
   /** Changed: the days they're booked on, and the class as it was. */
   dates?: string[];
   before?: {
@@ -217,6 +219,8 @@ export function classEmail(kind: ClassEmailKind, d: ClassDetails, site: string):
       ? `${d.gym} has taken ${d.class} off its timetable, so your place on ${day} was cancelled.`
       : d.reason === 'moved' && d.weekday
       ? `${d.gym} has moved ${d.class} to ${days[d.weekday - 1]}s, so your place on ${day} was cancelled. You can book it on its new day.`
+      : d.reason === 'day'
+      ? `${d.gym} isn't holding ${d.class} on ${day}, so your place was cancelled.${d.note ? ` ${d.note}` : ''}`
       : `${d.gym} has cancelled your place in ${d.class} on ${day}.`;
     layout = {
       subject: `Cancelled: ${d.class} on ${shortDate(d.date)} at ${d.gym}`,

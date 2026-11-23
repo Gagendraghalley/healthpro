@@ -61,6 +61,25 @@ class GymClass {
   /// When it starts on [day], in Bhutan time.
   DateTime startOn(DateTime day) => DateTime(day.year, day.month, day.day, hour, minute);
 
+  /// As it runs on a date changed on its own ([change]): that day's time,
+  /// length, trainer and places. As the timetable has it otherwise.
+  GymClass onDay(ClassDay? change) => change == null
+      ? this
+      : GymClass(
+          id: id,
+          venueId: venueId,
+          name: name,
+          description: description,
+          trainerName: change.trainerName,
+          weekday: weekday,
+          hour: change.hour,
+          minute: change.minute,
+          durationMinutes: change.durationMinutes,
+          capacity: change.capacity,
+          isActive: isActive,
+          openToAll: openToAll,
+        );
+
   factory GymClass.fromJson(Map<String, dynamic> json) {
     final parts = (json['starts_at'] as String).split(':');
     return GymClass(
@@ -105,6 +124,70 @@ Map<String, dynamic> classDetails({
       'open_to_all': openToAll,
     };
 
+/// One date of a class changed or cancelled on its own (gym_class_days,
+/// 20261123000001): its time, length, trainer and places that day, or not
+/// held at all, with the gym's note for who's booked.
+class ClassDay {
+  final String classId;
+  final DateTime date;
+  final int hour;
+  final int minute;
+  final int durationMinutes;
+  final String? trainerName;
+  final int capacity;
+  final bool isCancelled;
+  final String? note;
+
+  const ClassDay({
+    required this.classId,
+    required this.date,
+    required this.hour,
+    required this.minute,
+    this.durationMinutes = 60,
+    this.trainerName,
+    required this.capacity,
+    this.isCancelled = false,
+    this.note,
+  });
+
+  factory ClassDay.fromJson(Map<String, dynamic> json) {
+    final parts = (json['starts_at'] as String).split(':');
+    return ClassDay(
+      classId: json['class_id'] as String,
+      date: BhutanTime.parseDate(json['class_date'] as String),
+      hour: int.parse(parts[0]),
+      minute: int.parse(parts[1]),
+      durationMinutes: (json['duration_minutes'] as num).toInt(),
+      trainerName: json['trainer_name'] as String?,
+      capacity: (json['capacity'] as num).toInt(),
+      isCancelled: json['is_cancelled'] as bool? ?? false,
+      note: json['note'] as String?,
+    );
+  }
+}
+
+String? _trimmed(String? s) => s == null || s.trim().isEmpty ? null : s.trim();
+
+/// What changing one date of a class sends (gym_save_class_day's details);
+/// [cancel] for not holding it that day.
+Map<String, dynamic> classDayDetails({
+  int? hour,
+  int? minute,
+  int? durationMinutes,
+  String? trainerName,
+  int? capacity,
+  String? note,
+  bool cancel = false,
+}) =>
+    {
+      if (hour != null && minute != null) 'starts_at': '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}',
+      if (durationMinutes != null) 'duration_minutes': durationMinutes,
+      if (!cancel) 'trainer_name': _trimmed(trainerName),
+      if (capacity != null) 'capacity': capacity,
+      'is_cancelled': cancel,
+      'note': _trimmed(note),
+    };
+
 /// How many places are booked in a class on a day, and the signed-in
 /// member's own booking.
 class ClassPlaces {
@@ -123,14 +206,22 @@ class ClassPlaces {
       );
 }
 
-/// A class on a day: places booked and left, and the member's booking.
+/// A class on a day, as it runs that day ([change]: changed or cancelled on
+/// its own): places booked and left, and the member's booking.
 class ClassSession {
   final GymClass gymClass;
   final DateTime date;
   final int booked;
   final String? myBookingId;
+  final ClassDay? change;
 
-  const ClassSession({required this.gymClass, required this.date, this.booked = 0, this.myBookingId});
+  const ClassSession({required this.gymClass, required this.date, this.booked = 0, this.myBookingId, this.change});
+
+  /// Not held that day: the gym cancelled the date.
+  bool get cancelled => change?.isCancelled ?? false;
+
+  /// A new time, trainer or places that day only.
+  bool get changed => change != null && !cancelled;
 
   int get left => (gymClass.capacity - booked).clamp(0, gymClass.capacity);
   bool get isFull => left == 0;
@@ -141,17 +232,21 @@ class ClassSession {
 }
 
 /// The classes on each of the [days] days from [today], in time order, with
-/// their places.
-List<ClassSession> sessionsFrom(Iterable<GymClass> classes, Iterable<ClassPlaces> places, DateTime today, {int days = 7}) {
+/// their places, each as it runs that day ([changes]: dates changed or
+/// cancelled on their own).
+List<ClassSession> sessionsFrom(Iterable<GymClass> classes, Iterable<ClassPlaces> places, DateTime today,
+    {int days = 7, Iterable<ClassDay> changes = const []}) {
   final out = <ClassSession>[];
+  int startOf(ClassSession s) => s.gymClass.hour * 60 + s.gymClass.minute;
   for (var i = 0; i < days; i++) {
     final date = DateTime(today.year, today.month, today.day + i);
-    final those = classes.where((c) => c.isActive && c.weekday == date.weekday).toList()
-      ..sort((a, b) => (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute));
-    for (final c in those) {
+    final those = <ClassSession>[];
+    for (final c in classes.where((c) => c.isActive && c.weekday == date.weekday)) {
+      final change = changes.where((d) => d.classId == c.id && d.date == date).firstOrNull;
       final p = places.where((p) => p.classId == c.id && p.date == date).firstOrNull;
-      out.add(ClassSession(gymClass: c, date: date, booked: p?.booked ?? 0, myBookingId: p?.myBookingId));
+      those.add(ClassSession(gymClass: c.onDay(change), date: date, booked: p?.booked ?? 0, myBookingId: p?.myBookingId, change: change));
     }
+    out.addAll(those..sort((a, b) => startOf(a).compareTo(startOf(b))));
   }
   return out;
 }
@@ -434,10 +529,21 @@ final gymClassesProvider = FutureProvider.autoDispose.family<List<GymClass>, Str
   (ref, venueId) => ref.watch(gymClassRepositoryProvider).classes(venueId),
 );
 
-/// Places booked in a gym's classes over the next two weeks.
-final gymClassPlacesProvider = FutureProvider.autoDispose.family<List<ClassPlaces>, String>(
-  (ref, venueId) => ref.watch(gymClassRepositoryProvider).places(venueId, BhutanTime.today()),
-);
+/// Places booked in a gym's classes from two weeks back (the desk looks back
+/// at them) to two weeks ahead.
+final gymClassPlacesProvider = FutureProvider.autoDispose.family<List<ClassPlaces>, String>((ref, venueId) {
+  final today = BhutanTime.today();
+  return ref.watch(gymClassRepositoryProvider).places(venueId, DateTime(today.year, today.month, today.day - 14), days: 28);
+});
+
+/// A gym's class dates changed or cancelled on their own, from two weeks
+/// back to two weeks ahead.
+final gymClassDaysProvider = FutureProvider.autoDispose.family<List<ClassDay>, String>((ref, venueId) {
+  final today = BhutanTime.today();
+  return ref
+      .watch(gymClassRepositoryProvider)
+      .days(venueId, DateTime(today.year, today.month, today.day - 14), DateTime(today.year, today.month, today.day + 13));
+});
 
 /// Who's booked into a gym's classes on a day (the desk).
 final gymClassBookingsProvider = FutureProvider.autoDispose.family<List<ClassBooking>, ({String venueId, DateTime date})>(
@@ -473,8 +579,8 @@ class GymClassRepository {
   Future<void> saveClass(String venueId, Map<String, dynamic> details, {String? classId}) =>
       _client.rpc('gym_save_class', params: {'venue_id': venueId, 'class_id': classId, 'details': details});
 
-  Future<List<ClassPlaces>> places(String venueId, DateTime from) async {
-    final rows = await _client.rpc('gym_class_places', params: {'venue_id': venueId, 'from_date': _iso(from), 'days': 14}) as List? ??
+  Future<List<ClassPlaces>> places(String venueId, DateTime from, {int days = 14}) async {
+    final rows = await _client.rpc('gym_class_places', params: {'venue_id': venueId, 'from_date': _iso(from), 'days': days}) as List? ??
         const [];
     return [for (final r in rows) ClassPlaces.fromJson(Map<String, dynamic>.from(r as Map))];
   }
@@ -509,4 +615,20 @@ class GymClassRepository {
   }
 
   Future<void> cancel(String bookingId) => _client.rpc('gym_cancel_class_booking', params: {'booking_id': bookingId});
+
+  /// The class dates changed or cancelled on their own, [from] to [to].
+  Future<List<ClassDay>> days(String venueId, DateTime from, DateTime to) async {
+    final rows =
+        await _client.from('gym_class_days').select().eq('venue_id', venueId).gte('class_date', _iso(from)).lte('class_date', _iso(to));
+    return [for (final r in rows) ClassDay.fromJson(r)];
+  }
+
+  /// Class [classId] on [date] only (classDayDetails): a new time, trainer
+  /// or places, or not held; those booked are told.
+  Future<void> saveDay(String classId, DateTime date, Map<String, dynamic> details) =>
+      _client.rpc('gym_save_class_day', params: {'class_id': classId, 'class_date': _iso(date), 'details': details});
+
+  /// Class [classId] on [date] as the timetable has it again.
+  Future<void> clearDay(String classId, DateTime date) =>
+      _client.rpc('gym_clear_class_day', params: {'class_id': classId, 'class_date': _iso(date)});
 }

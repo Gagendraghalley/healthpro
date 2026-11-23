@@ -8,9 +8,10 @@ import '../gym_routes.dart';
 
 const _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-/// 'Today', 'Tomorrow', 'Wed 20 Nov'.
+/// 'Yesterday', 'Today', 'Tomorrow', 'Wed 20 Nov'.
 String classDayLabel(DateTime day, DateTime today) {
   final ahead = BhutanTime.daysBetween(today, day);
+  if (ahead == -1) return 'Yesterday';
   if (ahead == 0) return 'Today';
   if (ahead == 1) return 'Tomorrow';
   return '${_days[day.weekday - 1]} ${formatShortDate(day)}';
@@ -56,13 +57,32 @@ class ClassWeek extends ConsumerWidget {
   const ClassWeek({super.key, required this.venueId, required this.signedIn, required this.member, this.explain = false});
 
   Future<void> _book(BuildContext context, WidgetRef ref, ClassSession s) async {
+    // Places go while the page is open: count them again first, so a class
+    // that has filled isn't booked, nor a visitor sent to sign in for it.
+    List<ClassPlaces>? places;
+    try {
+      places = await ref.refresh(gymClassPlacesProvider(venueId).future);
+    } catch (_) {
+      // Can't tell: the database still refuses a full class.
+    }
+    if (!context.mounted) return;
+    final booked = places?.where((p) => p.classId == s.gymClass.id && p.date == s.date).firstOrNull?.booked ?? 0;
+    if (places != null && booked >= s.gymClass.capacity) {
+      showFeedback(context, '${s.gymClass.name}, ${classDayLabel(s.date, BhutanTime.today())} at ${s.gymClass.time}, is full now.',
+          problem: true);
+      return;
+    }
     if (!signedIn) {
       context.go(CoreRoutes.signInFor(GymRoutes.gymFor(venueId)));
       return;
     }
     final ok = await runAction(context, () => ref.read(gymClassRepositoryProvider).book(s.gymClass.id, s.date));
-    if (!ok) return;
     ref.invalidate(gymClassPlacesProvider(venueId));
+    if (!ok) {
+      // Cancelled or changed that day since: show it as it is.
+      ref.invalidate(gymClassDaysProvider(venueId));
+      return;
+    }
     ref.invalidate(myClassBookingsProvider);
     if (context.mounted) {
       showFeedback(context, 'Booked: ${s.gymClass.name}, ${classDayLabel(s.date, BhutanTime.today())} at ${s.gymClass.time}');
@@ -88,9 +108,11 @@ class ClassWeek extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final classes = (ref.watch(gymClassesProvider(venueId)).valueOrNull ?? const <GymClass>[]).where((c) => c.isActive).toList();
     final places = ref.watch(gymClassPlacesProvider(venueId)).valueOrNull ?? const <ClassPlaces>[];
+    final changes = ref.watch(gymClassDaysProvider(venueId)).valueOrNull ?? const <ClassDay>[];
     final today = BhutanTime.today();
     final now = BhutanTime.now();
-    final sessions = sessionsFrom(classes, places, today).where((s) => !s.startedBy(now) || s.myBookingId != null).toList();
+    final sessions =
+        sessionsFrom(classes, places, today, changes: changes).where((s) => !s.startedBy(now) || s.myBookingId != null).toList();
     final brand = context.brand;
     final days = <DateTime, List<ClassSession>>{};
     for (final s in sessions) {
@@ -199,7 +221,9 @@ class _SessionRow extends ConsumerWidget {
     const size = Size(84, 38);
     const pad = EdgeInsets.symmetric(horizontal: 18);
     final Widget action;
-    if (mine) {
+    if (s.cancelled) {
+      action = StatusChip(label: 'Cancelled', color: brand.danger, icon: Icons.event_busy_outlined);
+    } else if (mine) {
       action = started
           ? StatusChip(label: 'Booked', color: brand.success, icon: Icons.check_rounded)
           : OutlinedButton(
@@ -254,30 +278,45 @@ class _SessionRow extends ConsumerWidget {
           const SizedBox(height: 2),
           Text(meta.join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.muted, fontSize: 12.5)),
         ],
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Container(
-              width: 56,
-              height: 4,
-              alignment: Alignment.centerLeft,
-              decoration: BoxDecoration(color: brand.fieldBorder.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(2)),
-              child: FractionallySizedBox(
-                widthFactor: fill,
-                child: DecoratedBox(decoration: BoxDecoration(color: barColor, borderRadius: BorderRadius.circular(2))),
+        // This date only: not held, or a new time, trainer or places; with the gym's note.
+        if (s.change != null) ...[
+          const SizedBox(height: 3),
+          Text(
+            [s.cancelled ? 'Not held this day' : 'Changed this day only', if (s.change!.note != null) s.change!.note!].join(' · '),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: s.cancelled ? brand.danger : brand.highlight, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ],
+        if (!s.cancelled) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Container(
+                width: 56,
+                height: 4,
+                alignment: Alignment.centerLeft,
+                decoration: BoxDecoration(color: brand.fieldBorder.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(2)),
+                // heightFactor: an empty box otherwise takes no height, and the bar never fills.
+                child: FractionallySizedBox(
+                  widthFactor: fill,
+                  heightFactor: 1,
+                  child: DecoratedBox(decoration: BoxDecoration(color: barColor, borderRadius: BorderRadius.circular(2))),
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                s.isFull ? 'No places left' : '${s.left} of ${c.capacity} places left',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: low ? brand.warning : brand.muted, fontSize: 12, fontWeight: low ? FontWeight.w700 : FontWeight.w500),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  s.isFull ? 'No places left' : '${s.left} of ${c.capacity} places left',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      TextStyle(color: low ? brand.warning : brand.muted, fontSize: 12, fontWeight: low ? FontWeight.w700 : FontWeight.w500),
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ],
     );
     return Container(

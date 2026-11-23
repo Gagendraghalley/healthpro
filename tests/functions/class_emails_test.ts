@@ -103,4 +103,6 @@ Deno.test('cancelled: why, and where to book another', () => {
     'Coach Gym has moved Spin to Tuesdays, so your place on Saturday, 21 November 2026 was cancelled.');
   has(classEmail('class_cancelled', { ...spin, reason: 'off' }, site).text, 'has taken Spin off its timetable',
     'Questions? Call Coach Gym on +975 17000701.');
+  has(classEmail('class_cancelled', { ...spin, reason: 'day', note: 'Public holiday.' }, site).text,
+    'Coach Gym isn\'t holding Spin on Saturday, 21 November 2026, so your place was cancelled. Public holiday.');
 });
