@@ -219,19 +219,21 @@ class AuthLayout extends StatelessWidget {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      // The rainbow's top just behind the buttons, over the dzong.
-                      const Hero(
-                        tag: _Photo.heroTag,
-                        child: ClipRect(child: _Drift(child: _Sky(rainbow: _Rainbow(center: Offset(0.5, 1.25), radius: 0.6)))),
-                      ),
-                      // A shade at the top for the buttons, clear over the dzong.
+                      const Hero(tag: _Photo.heroTag, child: ClipRect(child: _Drift(child: _Photo()))),
+                      // The photo is bright: a shade at the top for the buttons, lighter over the
+                      // gear, then deepening into the navy under the headline.
                       DecoratedBox(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [navy.withValues(alpha: 0.5), navy.withValues(alpha: 0), navy.withValues(alpha: 0), navy],
-                            stops: const [0, 0.3, 0.55, 0.95],
+                            colors: [
+                              navy.withValues(alpha: 0.6),
+                              navy.withValues(alpha: 0.25),
+                              navy.withValues(alpha: 0.5),
+                              navy,
+                            ],
+                            stops: const [0, 0.3, 0.55, 0.9],
                           ),
                         ),
                       ),
@@ -315,10 +317,10 @@ class AuthLayout extends StatelessWidget {
   }
 }
 
-/// The photo's slow breath: a gentle push in towards the dzong over 15
-/// seconds and back again, calm enough to sit behind a form; still when
-/// they ask for less motion. Where it is in the swing comes from the clock,
-/// so moving between the sign-in pages doesn't jump it.
+/// The photo's slow zoom out: in close on the gear, it pulls back over 14
+/// seconds, then eases in again over 6, calm enough to sit behind a form;
+/// still when they ask for less motion. Where it is in the swing comes from
+/// the clock, so moving between the sign-in pages doesn't jump it.
 class _Drift extends StatefulWidget {
   final Widget child;
 
@@ -329,7 +331,10 @@ class _Drift extends StatefulWidget {
 }
 
 class _DriftState extends State<_Drift> with SingleTickerProviderStateMixin {
-  static const _period = Duration(seconds: 30);
+  static const _period = Duration(seconds: 20);
+
+  /// The share of the swing spent zooming out; the rest eases back in.
+  static const _out = 0.7;
 
   late final AnimationController _swing = AnimationController(vsync: this, duration: _period);
 
@@ -357,199 +362,18 @@ class _DriftState extends State<_Drift> with SingleTickerProviderStateMixin {
       child: RepaintBoundary(child: widget.child),
       builder: (context, child) {
         final t = _swing.value;
-        final closer = Motion.easeInOut.transform(t < 0.5 ? t * 2 : 2 - t * 2);
-        // The dzong, on the photo's left.
-        return Transform.scale(scale: 1 + 0.08 * closer, alignment: const Alignment(-0.5, 0.05), child: child);
+        final closer = t < _out
+            ? 1 - Motion.easeInOut.transform(t / _out)
+            : Motion.easeInOut.transform((t - _out) / (1 - _out));
+        // The gym gear, on the photo's left.
+        return Transform.scale(scale: 1 + 0.16 * closer, alignment: const Alignment(-0.5, 0.05), child: child);
       },
     );
   }
 }
 
-/// The photo with a rainbow in its sky.
-class _Sky extends StatelessWidget {
-  final _Rainbow rainbow;
-
-  const _Sky({required this.rainbow});
-
-  @override
-  Widget build(BuildContext context) => Stack(fit: StackFit.expand, children: [const _Photo(), rainbow]);
-}
-
-/// A soft rainbow arching over the photo: drawn in from its left foot the
-/// first time a sign-in page opens, then a light running along it every
-/// few seconds as it glows a little brighter and back; still when they ask
-/// for less motion. [center] is a share of the box's width and height,
-/// [radius] a share of its width; its feet fade into the hills.
-class _Rainbow extends StatefulWidget {
-  final Offset center;
-  final double radius;
-
-  const _Rainbow({required this.center, required this.radius});
-
-  @override
-  State<_Rainbow> createState() => _RainbowState();
-}
-
-class _RainbowState extends State<_Rainbow> with TickerProviderStateMixin {
-  static const _period = Duration(seconds: 9);
-
-  /// Drawn in once: moving between the sign-in pages doesn't draw it again.
-  static bool _drawn = false;
-
-  late final AnimationController _draw =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 2400), value: _drawn ? 1 : 0);
-  late final AnimationController _cycle = AnimationController(vsync: this, duration: _period);
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (reduceMotion(context)) {
-      _draw.value = 1;
-      _cycle.value = 0;
-    } else {
-      if (!_drawn) {
-        _drawn = true;
-        _draw.forward();
-      }
-      if (!_cycle.isAnimating) {
-        // From the clock, so the light carries on where it was on the last page.
-        _cycle.value = DateTime.now().millisecondsSinceEpoch % _period.inMilliseconds / _period.inMilliseconds;
-        _cycle.repeat();
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _draw.dispose();
-    _cycle.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final still = reduceMotion(context);
-    return IgnorePointer(
-      child: RepaintBoundary(
-        child: AnimatedBuilder(
-          animation: Listenable.merge([_draw, _cycle]),
-          builder: (context, _) {
-            final t = _cycle.value;
-            return CustomPaint(
-              painter: _RainbowPainter(
-                center: widget.center,
-                radius: widget.radius,
-                reveal: Motion.easeInOut.transform(_draw.value),
-                // The light runs along it in the first part of each cycle, then rests.
-                glint: still || t > 0.4 ? null : t / 0.4,
-                glow: still ? 1 : 0.92 + 0.08 * math.sin(t * 2 * math.pi),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _RainbowPainter extends CustomPainter {
-  final Offset center;
-  final double radius;
-  final double reveal;
-  final double? glint;
-  final double glow;
-
-  const _RainbowPainter({
-    required this.center,
-    required this.radius,
-    required this.reveal,
-    required this.glint,
-    required this.glow,
-  });
-
-  /// Outside in, as in the sky.
-  static const _colors = [
-    Color(0xFFFF4D5E),
-    Color(0xFFFF9A3C),
-    Color(0xFFFFE05C),
-    Color(0xFF5EE087),
-    Color(0xFF45B8F5),
-    Color(0xFF6C7CFF),
-    Color(0xFFB57BFF),
-  ];
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (reveal <= 0) return;
-    final c = Offset(center.dx * size.width, center.dy * size.height);
-    final r = radius * size.width;
-    final circle = Rect.fromCircle(center: c, radius: r);
-    final bounds = Offset.zero & size;
-    canvas.saveLayer(bounds, Paint()..color = Color.fromRGBO(0, 0, 0, 0.88 * glow));
-
-    // Drawn from its left foot, over the top, to its right one.
-    canvas.clipPath(Path()
-      ..moveTo(c.dx, c.dy)
-      ..arcTo(Rect.fromCircle(center: c, radius: r * 1.1), math.pi, math.pi * reveal, false)
-      ..close());
-
-    // The band: crisp-edged, violet inside to red outside.
-    const band = 0.1;
-    final stops = <double>[1 - band];
-    for (var i = 0; i < _colors.length; i++) {
-      stops.add(1 - band + band * (0.04 + 0.92 * i / (_colors.length - 1)));
-    }
-    stops.add(1);
-    canvas.drawCircle(
-      c,
-      r,
-      Paint()
-        ..shader = RadialGradient(
-          colors: [const Color(0x00B57BFF), ..._colors.reversed, const Color(0x00FF4D5E)],
-          stops: stops,
-        ).createShader(circle),
-    );
-
-    // A light running along it.
-    final at = glint;
-    if (at != null) {
-      final angle = math.pi + math.pi * at;
-      canvas.drawCircle(
-        c,
-        r,
-        Paint()
-          ..blendMode = BlendMode.srcATop
-          ..shader = SweepGradient(
-            colors: const [Color(0x00FFFFFF), Color(0xB3FFFFFF), Color(0x00FFFFFF)],
-            stops: const [0, 0.03, 0.06],
-            transform: GradientRotation(angle - 0.03 * 2 * math.pi),
-          ).createShader(circle),
-      );
-    }
-
-    // Its feet fading into the hills.
-    canvas.drawRect(
-      bounds,
-      Paint()
-        ..blendMode = BlendMode.dstIn
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: const [Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0x00FFFFFF)],
-          stops: [0, ((c.dy - r * 0.55) / size.height).clamp(0.0, 1.0), ((c.dy - r * 0.1) / size.height).clamp(0.0, 1.0)],
-        ).createShader(bounds),
-    );
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(_RainbowPainter old) =>
-      old.center != center || old.radius != radius || old.reveal != reveal || old.glint != glint || old.glow != glow;
-}
-
 /// The photo, cropped to fill; navy if it can't be read. The first time,
-/// it fades up from the navy and settles from a slight zoom: once, then
-/// still.
+/// it fades up from the navy and zooms out into place: once, then still.
 class _Photo extends StatelessWidget {
   const _Photo();
 
@@ -562,7 +386,7 @@ class _Photo extends StatelessWidget {
       AuthLayout.photo,
       package: HealthProLogo.package,
       fit: BoxFit.cover,
-      // Keeping the dzong (the photo's left) when the window crops it.
+      // Keeping the gym gear (the photo's left) when the window crops it.
       alignment: const Alignment(-0.6, -0.6),
       excludeFromSemantics: true,
       gaplessPlayback: true,
@@ -575,8 +399,8 @@ class _Photo extends StatelessWidget {
           duration: const Duration(milliseconds: 700),
           curve: Motion.ease,
           child: AnimatedScale(
-            scale: shown ? 1 : 1.06,
-            duration: const Duration(milliseconds: 1600),
+            scale: shown ? 1 : 1.2,
+            duration: const Duration(milliseconds: 2600),
             curve: Motion.ease,
             child: child,
           ),
@@ -598,9 +422,9 @@ class _Photo extends StatelessWidget {
 /// The navy of the panel on a computer: royal navy in light, the night in dark.
 Color _navy(BuildContext context) => context.brand.pick(const Color(0xFF0C2152), BrandColors.night);
 
-/// On a computer: the photo on the right, its dzong just clear of the card,
-/// with the navy panel on the left fading into it, and a light shade along
-/// the top for Ask AI on the bright sky.
+/// On a computer: the photo on the right, its gym gear just clear of the
+/// card, with the navy panel on the left fading into it, and a light shade
+/// along the top for Ask AI.
 class _WidePhoto extends StatelessWidget {
   final Color navy;
 
@@ -615,9 +439,9 @@ class _WidePhoto extends StatelessWidget {
         // As tall as the window, and always reaching past the card.
         final photoWidth = math.max(h * AuthLayout.photoAspect, 820.0);
         final photoHeight = photoWidth / AuthLayout.photoAspect;
-        // The dzong ends about 37% of the way across the photo.
+        // The gear ends about 37% of the way across the photo.
         final photoLeft = cardLeft - 16 - 0.37 * photoWidth;
-        // Solid navy over the photo's left edge, clear just into the dzong.
+        // Solid navy over the photo's left edge, clear just into the gear.
         final solid = (photoLeft / w).clamp(0.18, 0.6);
         final clear = math.min(0.95, solid + 0.18 * photoWidth / w);
         return Stack(
@@ -627,11 +451,7 @@ class _WidePhoto extends StatelessWidget {
               top: (h - photoHeight) / 2,
               width: photoWidth,
               height: photoHeight,
-              // The rainbow over the dzong, its top just left of the card.
-              child: const Hero(
-                tag: _Photo.heroTag,
-                child: ClipRect(child: _Drift(child: _Sky(rainbow: _Rainbow(center: Offset(0.27, 0.66), radius: 0.29)))),
-              ),
+              child: const Hero(tag: _Photo.heroTag, child: ClipRect(child: _Drift(child: _Photo()))),
             ),
             Positioned.fill(
               child: DecoratedBox(
@@ -973,9 +793,10 @@ class _BackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Navy like Ask AI, so it shows on the bright photo.
     return Material(
-      color: Colors.white.withValues(alpha: 0.14),
-      shape: CircleBorder(side: BorderSide(color: Colors.white.withValues(alpha: 0.22))),
+      color: _navy(context).withValues(alpha: 0.88),
+      shape: CircleBorder(side: BorderSide(color: Colors.white.withValues(alpha: 0.3))),
       child: IconButton(
         tooltip: tooltip,
         color: Colors.white,
@@ -986,8 +807,8 @@ class _BackButton extends StatelessWidget {
   }
 }
 
-/// Ask AI (Health Pro's assistant), frosted on the photo like Back: "Ask AI"
-/// beside its icon on a computer, the icon alone on a phone.
+/// Ask AI (Health Pro's assistant), navy on the bright photo so it stands
+/// out: "Ask AI" beside its icon on a computer, the icon alone on a phone.
 class _AskAiButton extends StatelessWidget {
   const _AskAiButton();
 
@@ -996,8 +817,8 @@ class _AskAiButton extends StatelessWidget {
     // The panel opens under the button.
     void open() => openAssistant(context, const HealthProAssistantPanel(), underBar: 64);
     final icon = Icon(Icons.auto_awesome_rounded, size: 20, color: context.brand.highlight);
-    final side = BorderSide(color: Colors.white.withValues(alpha: 0.22));
-    final glass = Colors.white.withValues(alpha: 0.14);
+    final side = BorderSide(color: Colors.white.withValues(alpha: 0.3));
+    final glass = _navy(context).withValues(alpha: 0.88);
     if (MediaQuery.sizeOf(context).width < 700) {
       return Material(
         color: glass,
