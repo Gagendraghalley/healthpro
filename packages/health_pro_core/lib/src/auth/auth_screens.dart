@@ -218,7 +218,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> with _GoogleReturns
                 const SizedBox(height: 8),
                 CodeBoxes(
                   controller: _code,
-                  label: 'Your 6-digit code',
+                  label: 'Your code',
+                  hint: 'Enter your 6-digit code to sign in',
                   hidden: _hide,
                   onToggleHidden: () => setState(() => _hide = !_hide),
                   autofillHints: const [AutofillHints.password],
@@ -820,7 +821,8 @@ class _SetCodeScreenState extends ConsumerState<SetCodeScreen> {
               children: [
                 CodeBoxes(
                   controller: _code,
-                  label: 'New 6-digit code',
+                  label: 'New code',
+                  hint: 'Choose 6 digits to sign in with',
                   autofocus: true,
                   hidden: _hide,
                   onToggleHidden: () => setState(() => _hide = !_hide),

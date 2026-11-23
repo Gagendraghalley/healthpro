@@ -58,6 +58,7 @@ packages/gym_membership/lib/src/
                   inventory_screens (Inventory, Suppliers: shown only, bought in the supplier's own system)
   shell/          gym_navigation (the gym's menu section), current_gym
   dashboard/ welcome/ (public landing page) widgets/
+docs/                   features.md (features by role) → Health_Pro_Features.docx (scripts/build_features_doc.py)
 supabase/migrations/    YYYYMMDDNNNNNN_name.sql, one per change
 supabase/functions/     admin-users, ask-ai, ask-health-pro, delete-account, draft-plan, send-email (class emails, SMTP), send-push,
                         supplier-catalog, _shared/
@@ -85,6 +86,10 @@ tests/functions/        Deno tests for the Edge Functions
   Phone sizing is global (`PhoneSized`); don't shrink sizes per screen.
 - No mock data in the app. Don't change routes, permissions, API or database unless asked.
 - Mockups from the user are style only: copy the look, keep the existing fields and flow.
+- Features doc: `docs/features.md` lists every built feature by role (Where, what it does, Check), for testers.
+  Whenever a feature is added, changed or removed, update its section there (short, plain words, no code names), set
+  its "Last updated" date, then run `python3 scripts/build_features_doc.py` to rebuild `docs/Health_Pro_Features.docx`.
+  Never edit the .docx by hand.
 - When new logos or assets replace old ones, delete the old files. Brand sources are in
   `packages/health_pro_core/tool/brand/`; regenerate with `cd packages/health_pro_core && flutter test tool/brand_images.dart`.
 - Never read or print `deploy.local.sh` or `env.json` (secrets).

@@ -1182,6 +1182,9 @@ class CodeBoxes extends StatefulWidget {
   /// Above the boxes; with [onToggleHidden], the eye sits at its right.
   final String? label;
 
+  /// A quieter line under [label] ("Enter your 6-digit code to sign in").
+  final String? hint;
+
   /// Dots instead of the digits.
   final bool hidden;
   final VoidCallback? onToggleHidden;
@@ -1216,6 +1219,7 @@ class CodeBoxes extends StatefulWidget {
     required this.controller,
     this.length = 6,
     this.label,
+    this.hint,
     this.hidden = false,
     this.onToggleHidden,
     this.autofocus = false,
@@ -1318,7 +1322,7 @@ class _CodeBoxesState extends State<CodeBoxes> with TickerProviderStateMixin {
                     Expanded(
                       child: Text(
                         label,
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: brand.muted),
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: brand.ink),
                       ),
                     ),
                     if (widget.onToggleHidden != null)
@@ -1326,6 +1330,12 @@ class _CodeBoxesState extends State<CodeBoxes> with TickerProviderStateMixin {
                   ],
                 ),
               ),
+            if (widget.hint != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(widget.hint!, style: TextStyle(fontSize: 13, color: brand.muted)),
+              ),
+            if (label != null || widget.hint != null) const SizedBox(height: 10),
             Semantics(
               label: label ?? '${widget.length}-digit code',
               textField: true,
@@ -1366,9 +1376,10 @@ class _CodeBoxesState extends State<CodeBoxes> with TickerProviderStateMixin {
                     ),
                     LayoutBuilder(
                       builder: (context, box) {
-                        const gap = 10.0;
-                        final size = ((box.maxWidth - gap * (widget.length - 1)) / widget.length).clamp(36.0, 58.0);
-                        final height = (size * 1.12).clamp(44.0, 60.0);
+                        // Round, spread across the width, at least [gap] apart.
+                        const gap = 8.0;
+                        final size = ((box.maxWidth - gap * (widget.length - 1)) / widget.length).clamp(38.0, 64.0);
+                        final fill = brand.pick(LightColors.backgroundAlt, brand.card);
                         // Shaking when refused; each box bobbing in turn once
                         // they're all filled.
                         return AnimatedBuilder(
@@ -1386,10 +1397,9 @@ class _CodeBoxesState extends State<CodeBoxes> with TickerProviderStateMixin {
                             return Transform.translate(
                               offset: Offset(shake, 0),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   for (var i = 0; i < widget.length; i++) ...[
-                                    if (i > 0) const SizedBox(width: gap),
                                     // Arriving one after another.
                                     PopIn(
                                       delay: Duration(milliseconds: 260 + 55 * i),
@@ -1399,15 +1409,12 @@ class _CodeBoxesState extends State<CodeBoxes> with TickerProviderStateMixin {
                                           duration: Motion.of(context, Motion.hover),
                                           curve: Motion.ease,
                                           width: size,
-                                          // A little shorter when they're narrow (a phone).
-                                          height: height,
+                                          height: size,
                                           alignment: Alignment.center,
                                           decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
                                             // Filled ones warm a little; the one waiting glows.
-                                            color: i < text.length
-                                                ? Color.alphaBlend(brand.accent.withValues(alpha: 0.07), brand.card)
-                                                : brand.card,
-                                            borderRadius: BorderRadius.circular(14),
+                                            color: i < text.length ? Color.alphaBlend(brand.accent.withValues(alpha: 0.07), fill) : fill,
                                             border: Border.all(
                                               color: error != null
                                                   ? brand.danger
@@ -1418,9 +1425,15 @@ class _CodeBoxesState extends State<CodeBoxes> with TickerProviderStateMixin {
                                                           : brand.fieldBorder,
                                               width: i == active ? 1.8 : 1,
                                             ),
+                                            // A soft drop under each in the light.
                                             boxShadow: i == active && error == null
                                                 ? [BoxShadow(color: brand.accent.withValues(alpha: 0.24), blurRadius: 14, spreadRadius: 1)]
-                                                : null,
+                                                : [
+                                                    BoxShadow(
+                                                        color: brand.pick(const Color(0x1417243B), Colors.transparent),
+                                                        blurRadius: 6,
+                                                        offset: const Offset(0, 2)),
+                                                  ],
                                           ),
                                           // Each digit popping in as it's typed;
                                           // the waiting box showing where it goes.
@@ -1437,13 +1450,13 @@ class _CodeBoxesState extends State<CodeBoxes> with TickerProviderStateMixin {
                                                 ? Text(
                                                     widget.hidden ? '•' : text[i],
                                                     key: ValueKey('$i ${widget.hidden ? '•' : text[i]}'),
-                                                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: brand.ink),
+                                                    style: TextStyle(fontSize: (size * 0.42).clamp(18.0, 24.0), fontWeight: FontWeight.w800, color: brand.ink),
                                                   )
                                                 : i == active
                                                     ? Container(
                                                         key: const ValueKey('caret'),
                                                         width: 2.5,
-                                                        height: height * 0.42,
+                                                        height: size * 0.38,
                                                         decoration: BoxDecoration(
                                                           color: brand.accent,
                                                           borderRadius: BorderRadius.circular(2),
