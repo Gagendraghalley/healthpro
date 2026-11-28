@@ -6,6 +6,7 @@ import 'package:health_pro_core/src/access/organisation_screens.dart';
 import 'package:health_pro_core/src/access/role_screens.dart';
 import 'package:health_pro_core/src/access/user_screens.dart';
 import 'package:health_pro_core/src/masters/master_screens.dart';
+import 'package:health_pro_core/src/masters/service_type_screens.dart';
 import 'package:health_pro_core/src/venues/venue_staff_screen.dart';
 
 final gym = Venue.fromJson({
@@ -92,8 +93,15 @@ List<Override> overrides() => [
           ]),
       venueAccessProvider.overrideWith((ref, id) async => VenueAccess(gym, VenueRole.owner)),
       organisationsProvider.overrideWith((ref) async => const [
-            Organisation(id: 'o1', name: 'Peak Fitness Pvt Ltd', description: 'Two gyms in Thimphu', venueCount: 1),
-            Organisation(id: 'o2', name: 'Druk Wellness Cooperative of Eastern Bhutan', venueCount: 0),
+            Organisation(id: 'o1', name: 'Peak Fitness Pvt Ltd', description: 'Two gyms in Thimphu', serviceType: 'gym', venueCount: 1),
+            Organisation(id: 'o2', name: 'Druk Wellness Cooperative of Eastern Bhutan', serviceType: 'wellness_centre', venueCount: 0),
+          ]),
+      venueTypesProvider.overrideWith((ref) async => const [
+            VenueType(key: 'gym', moduleKey: 'gym_membership', name: 'Gym', description: 'Packages and trainers', color: 'orange', sortOrder: 10),
+            VenueType(key: 'swimming', moduleKey: 'gym_membership', name: 'Swimming Pool', icon: 'pool', color: 'blue', sortOrder: 30),
+            VenueType(key: 'wellness_centre', moduleKey: 'gym_membership', name: 'Wellness Centre', icon: 'wellness', sortOrder: 60,
+                showWhenEmpty: false, photo: 'https://example.invalid/spa.jpg'),
+            VenueType(key: 'old', moduleKey: 'gym_membership', name: 'Bowling Alley', isActive: false),
           ]),
       organisationRolesProvider.overrideWith((ref, id) async => chainRoles()),
       organisationVenuesProvider.overrideWith((ref, id) async => [gym]),
@@ -231,6 +239,44 @@ void main() {
       await centre(tester, find.text('Roles and permissions'));
       expect(find.text('Roles and permissions'), findsOneWidget);
       expect(find.text('Its people'), findsOneWidget);
+    });
+
+    testWidgets('a new organisation needs a service type, on a $at', (tester) async {
+      await show(tester, const AdminOrganisationsScreen(), size);
+      if (size == laptop) expect(find.text('Wellness Centre'), findsOneWidget, reason: 'its type, in its own column');
+      await tester.tap(find.text('New organisation'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.widgetWithText(TextFormField, 'Name *'), 'Blue Lane Pools');
+      await tester.tap(find.text('Make'));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose its service type'), findsOneWidget);
+      await tester.tap(find.text('Service type *'));
+      await tester.pumpAndSettle();
+      expect(find.text('Bowling Alley'), findsNothing, reason: 'a type turned off is not offered');
+      await tester.tap(find.text('Swimming Pool').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Choose its service type'), findsNothing);
+    });
+
+    testWidgets('service types fit a $at, and their card settings', (tester) async {
+      await show(tester, const ServiceTypesScreen(), size);
+      for (final name in ['Gym', 'Swimming Pool', 'Wellness Centre', 'Bowling Alley']) {
+        expect(find.text(name), findsOneWidget, reason: name);
+      }
+      await tester.tap(find.text('Swimming Pool'));
+      await tester.pumpAndSettle();
+      expect(find.text('Change Swimming Pool'), findsOneWidget);
+      for (final text in ['Colour', 'Cover photo', 'Choose photo', 'Show before there are any', 'In use']) {
+        final inDialog = find.descendant(of: find.byType(AlertDialog), matching: find.text(text));
+        await tester.scrollUntilVisible(inDialog, 100, scrollable: find.byType(Scrollable).last);
+        expect(inDialog, findsOneWidget, reason: text);
+      }
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('master data leads to the service types, on a $at', (tester) async {
+      await show(tester, const AdminMastersScreen(), size);
+      expect(find.widgetWithText(OutlinedButton, 'Service types'), findsOneWidget);
     });
 
     testWidgets("a venue's Roles & permissions fits a $at", (tester) async {

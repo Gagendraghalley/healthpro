@@ -1,7 +1,8 @@
 # Health Pro
 
-Gym membership platform for Bhutan (renamed from SportsHub; the repo folder is still `sporthubs`).
-Flutter app for web, Android and iOS. Supabase is the only backend. Gym is the only module.
+One platform for every kind of health business in Bhutan (renamed from SportsHub; the repo folder is still `sporthubs`).
+Flutter app for web, Android and iOS. Supabase is the only backend. Gym membership is the only module, and it runs
+every organisation type (gym, pool, cycling, wellness...): the `venue_types` master, Admin → Service types.
 
 Dart pub workspace (`flutter pub get` once, at the root):
 - `apps/health_pro_app`: thin shell; `lib/main.dart` lists the modules.
@@ -40,26 +41,31 @@ packages/health_pro_core/lib/src/
   router/         app_router, core_routes, route_guard
   auth/           sign-in (email + own 6-digit code), install_app_button
   access/         roles, permissions (access.can), users, organisations
-  venues/         venue model/repository/screens, profile fields, OSM map, opening hours
+  venues/         venue model/repository/screens, venue_type (Service types master), profile fields, OSM map,
+                  opening hours
+  masters/        locations (Master data), service_type_screens (Service types: each card's colour, photo,
+                  Coming soon)
   people/         my_qr_screen (My dashboard, /my-qr), person_qr
   theme/          brand.dart (BrandColors, LightColors, Brand.pick), app_theme, theme_mode, phone_size
   widgets/        dashboard_kit, motion (Motion, reduceMotion), common (AsyncValueView), feedback (runAction),
                   data_grid, app_page, form_fields, searchable_dropdown, art3d (Art3D: the menu's 3D icons,
                   assets/icons3d/, Fluent Emoji 3D, MIT; every menu entry, ServiceAction and SearchHit gets an `art:`)
-  assistant/ push/ pwa/ masters/ notifications/ payments/ admin/ profiles/ utils/
+  assistant/ push/ pwa/ notifications/ payments/ admin/ profiles/ utils/
 packages/gym_membership/lib/src/
   gym_routes.dart (every /gyms path), gym_module.dart, gym_permissions.dart
   data/           gym_repository (all Supabase calls), gym_models, member_qr, registered_member (packageEnd,
-                  renewalStart), joining, online_payments, trainers, inventory, reports/dashboard/ask data,
+                  renewalStart), joining, online_payments, trainers, suppliers, reports/dashboard/ask data,
                   coaching (measurements, readings, plans), nutrition (goals, daily calories, meals, foods, templates)
   screens/        members_screens (Members, RegisterMember, GymMember), check_in, staff_screens (Plans, Income),
                   payment_screens, join_screens (JoinRequests, GymQr), my_gyms_screen (MyGym), trainer_screens,
-                  gym_trainer_screens, public_screens (GymList, GymDetails), reports, ask_screen,
-                  inventory_screens (Inventory, Suppliers: shown only, bought in the supplier's own system)
+                  gym_trainer_screens, public_screens (GymList = Find services: type first, then places; GymDetails),
+                  reports, ask_screen, supplier_screens (shown only, bought in the supplier's own system; the gym's
+                  own inventory was removed, its tables kept)
   shell/          gym_navigation (the gym's menu section), current_gym
   dashboard/ welcome/ (public landing page) widgets/
 docs/                   features.md (features by role) → Health_Pro_Features.docx (scripts/build_features_doc.py)
 supabase/migrations/    YYYYMMDDNNNNNN_name.sql, one per change
+supabase/sample_services.sql  sample places of every type, run by hand on a test project (never a migration)
 supabase/functions/     admin-users, ask-ai, ask-health-pro, delete-account, draft-plan, send-email (class emails, SMTP), send-push,
                         supplier-catalog, _shared/
 tests/database/         *_test.sql, run by scripts/test_database.sh
@@ -77,6 +83,8 @@ tests/functions/        Deno tests for the Edge Functions
   Supabase `project_id`, `@sportshub.bt` test emails. The website is the Cloudflare Pages project `myhealthpro`
   (https://myhealthpro.pages.dev).
 - User-facing name is "Health Pro". Ground booking was removed: don't mention grounds or tournaments.
+- Never tie gym-module code to the 'gym' type: use `gymModuleRuns(venue)` in Dart and `venues.module_key =
+  'gym_membership'` in SQL, so every organisation type works. New types come from the master, not code.
 - The menu is service-driven: gym pages go in `gym_navigation.dart`, never straight into the core sidebar.
   Gate pages and actions with `access.can(...)`.
 - Keep the top bar clear: a page's own buttons go in `PageActions` at the top of its content, never

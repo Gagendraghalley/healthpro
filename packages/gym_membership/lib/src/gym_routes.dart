@@ -73,11 +73,10 @@ abstract final class GymRoutes {
   /// The gym adds a trainer itself, with all their details.
   static const addTrainer = '/gyms/:id/manage/trainers/new';
 
-  /// The gym's stock (owner and managers), and what connected suppliers
-  /// have: shown only, bought in the supplier's own system.
-  static const inventory = '/gyms/:id/manage/inventory';
+  /// What connected suppliers have (owner and managers): shown only, bought
+  /// in the supplier's own system. Its address is from when it sat under
+  /// the gym's inventory, since taken out.
   static const suppliers = '/gyms/:id/manage/inventory/suppliers';
-  static String inventoryFor(String id, {String? open}) => withOpen('/gyms/$id/manage/inventory', open);
   static String suppliersFor(String id, {String? open}) => withOpen('/gyms/$id/manage/inventory/suppliers', open);
 
   /// People who asked about the gym, on a free trial or to follow up.

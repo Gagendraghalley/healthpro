@@ -274,10 +274,10 @@ class AuthLayout extends StatelessWidget {
                         padding: const EdgeInsets.only(right: 8),
                         child: _Pitch(
                           eyebrow: 'Gyms across Bhutan',
-                          lines: join ? ('Join', 'Health Pro.') : ('Your Health.', 'Our Priority.'),
+                          lines: join ? ('Join', 'Health Pro.') : ('All your well-being,', 'all in one place.'),
                           body: join
                               ? 'Be part of our fitness community'
-                              : 'Find a gym, join in minutes and check in with your phone.',
+                              : 'Choose a service, join in minutes and check in with your phone.',
                           size: 36,
                           compact: true,
                         ),
@@ -587,8 +587,8 @@ class _Showcase extends StatelessWidget {
 
   const _Showcase({required this.side, required this.backButton});
 
-  static const _signIn = ['Find a gym', 'Membership management', 'QR check-in', 'Analytics & reports'];
-  static const _join = ['Find gyms across Bhutan', 'Your membership card on your phone', 'One account, on the web and in the app'];
+  static const _signIn = ['Services', 'Membership management', 'QR check-in', 'Analytics & reports'];
+  static const _join = ['Services across Bhutan', 'Your membership card on your phone', 'One account, on the web and in the app'];
 
   @override
   Widget build(BuildContext context) {
@@ -620,8 +620,8 @@ class _Showcase extends StatelessWidget {
               const Spacer(flex: 2),
               _Pitch(
                 eyebrow: 'Gyms across Bhutan',
-                lines: join ? ('Join', 'Health Pro.') : ('Your Health.', 'Our Priority.'),
-                body: join ? 'Be part of our fitness community' : 'Find a gym, join in minutes and check in with your phone.',
+                lines: join ? ('Join', 'Health Pro.') : ('All your well-being,', 'all in one place.'),
+                body: join ? 'Be part of our fitness community' : 'Choose a service, join in minutes and check in with your phone.',
                 size: (box.maxWidth * 0.062).clamp(36.0, 64.0),
               ),
               const Spacer(flex: 3),
@@ -671,19 +671,24 @@ class _Pitch extends StatelessWidget {
         ),
         Padding(
           padding: EdgeInsets.only(top: compact ? 12 : 18),
-          child: Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(text: '${lines.$1}\n'),
-                TextSpan(text: lines.$2, style: TextStyle(color: context.brand.highlight)),
-              ],
-            ),
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: size,
-              height: 1.04,
-              letterSpacing: -0.035 * size,
-              fontWeight: FontWeight.w800,
+          // Always the two lines: a touch smaller where a line won't fit.
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(text: '${lines.$1}\n'),
+                  TextSpan(text: lines.$2, style: TextStyle(color: context.brand.highlight)),
+                ],
+              ),
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: size,
+                height: 1.04,
+                letterSpacing: -0.035 * size,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ),

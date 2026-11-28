@@ -45,7 +45,19 @@
       "Bash(ls -la \"/var/folders/cb/g2w_18w10lz7krb_40krb2h00000gn/T/Runner_2026-10-30_11-49-30.780.xcdistributionlogs\")",
       "Read(//private/var/folders/cb/g2w_18w10lz7krb_40krb2h00000gn/T/Runner_2026-10-30_11-49-30.780.xcdistributionlogs/**)",
       "Bash(cd \"/var/folders/cb/g2w_18w10lz7krb_40krb2h00000gn/T/Runner_2026-10-30_11-49-30.780.xcdistributionlogs\" && grep -iE \"PLA|agreement|account|teamID|team id|forbidden|403|isFreeProvisioning|Apple ID\" IDEDistributionProvisioning.log | head -60)",
-      "Bash(defaults read *)"
+      "Bash(defaults read *)",
+      "Bash(awk -F: '$1>230 && $1<280')",
+      "WebFetch(domain:bhutanesports.org)",
+      "Bash(python3 -I - \"/private/tmp/claude-501/-Users-user-Documents-Personal-Project-SportsHub---Innovates-myHealthPro/230daaa7-51bf-4ae5-b7bf-62017affd933/scratchpad/public_head.dart\")",
+      "Bash(awk 'NR>=765 && NR<=825 {printf \"%d|%s\\\\n\", NR, $0}' lib/src/screens/public_screens.dart)",
+      "Bash(xargs sed -i '' 's/Organisation types/Service types/g')",
+      "Bash(sips -g pixelWidth -g pixelHeight packages/health_pro_core/assets/images/system_logo.jpeg)",
+      "Bash(awk 'NR>=3560 && NR<=3712 && /class |Widget build|compact =|AspectRatio|width:|Stack\\\\\\(|clipBehavior|ClipRRect|LayoutBuilder|maxWidth/ {print NR\": \"$0}' packages/gym_membership/lib/src/welcome/gym_welcome_page.dart)",
+      "Bash(PREVIEW=__TRACKED_VAR__ flutter test -r failures-only tool/brand_images.dart)",
+      "Bash(awk -F: '$1>2980')",
+      "Bash(awk 'NR>=2541 && NR<=2630 && /^    \\\\\\);|^  }$|child: _Frame|Padding\\\\\\(/ {print NR\": \"$0}' gym_membership/lib/src/welcome/gym_welcome_page.dart)",
+      "Bash(curl -sL -A \"Mozilla/5.0\" -o main.js \"https://bhutanesports.org/assets/js/main.js?v=1.0\")",
+      "Bash(curl -sL -A \"Mozilla/5.0\" -o main.css https://bhutanesports.org/assets/css/main.css)"
     ]
   }
 }

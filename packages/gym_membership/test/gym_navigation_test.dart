@@ -68,7 +68,7 @@ Future<GoRouter> showApp(WidgetTester tester, Size size, List<Override> who,
         routes: [
           for (final (path, name) in [
             (CoreRoutes.home, 'Overview'),
-            (CoreRoutes.services, 'My services'),
+            (CoreRoutes.services, 'Modules'),
             (CoreRoutes.account, 'Account'),
             (CoreRoutes.notifications, 'Notifications'),
             (CoreRoutes.admin, 'Admin'),
@@ -84,7 +84,6 @@ Future<GoRouter> showApp(WidgetTester tester, Size size, List<Override> who,
             (GymRoutes.plans, 'Packages'),
             (GymRoutes.income, 'Income'),
             (GymRoutes.reports, 'Reports'),
-            (GymRoutes.inventory, 'Inventory'),
             (GymRoutes.suppliers, 'Suppliers'),
           ])
             GoRoute(path: path, builder: (_, __) => page(name)),
@@ -135,11 +134,11 @@ void main() {
     for (final label in ['Gym management', 'Druk Fitness Club']) {
       expect(inMenu(label), findsOneWidget, reason: label);
     }
-    for (final label in ['Overview', 'My services']) {
+    for (final label in ['Overview', 'Modules']) {
       expect(inMenu(label), findsNothing, reason: "$label: the super admin's");
     }
     expect(inMenu('My dashboard'), findsOneWidget, reason: "everyone's own: their QR code and their gyms");
-    expect(inMenu('My gym'), findsOneWidget, reason: 'the gym they belong to, in full');
+    expect(inMenu('My services'), findsOneWidget, reason: "every service they've joined, in full");
     for (final label in ['My QR code', 'My gyms', 'Notifications']) {
       expect(inMenu(label), findsNothing, reason: '$label: on the dashboard, or the bell at the top');
     }
@@ -152,7 +151,7 @@ void main() {
       'Requests': ['Join requests', 'Payments to confirm'],
       'Training': ['Classes', 'Trainers'],
       'Sales & money': ['Memberships & packages', 'Payments & income'],
-      'Stock': ['Inventory', 'Suppliers'],
+      'Stock': ['Suppliers'],
       'Team & settings': ['Staff', 'Roles & permissions', 'Gym settings'],
     };
     // One open at a time, as with the services: opening one closes the last.
@@ -202,18 +201,11 @@ void main() {
     expect(inMenu('Paro Power Gym'), findsOneWidget, reason: 'the gym in the address');
   });
 
-  testWidgets('Suppliers is its own entry, though its page is under Inventory', (tester) async {
+  testWidgets('Suppliers is in the menu; Inventory is gone', (tester) async {
     await showApp(tester, computer, person(gyms: owner), at: GymRoutes.suppliersFor(gymId));
     await openGym(tester);
     expect(selected(tester, 'Suppliers'), isTrue);
-    expect(selected(tester, 'Inventory'), isFalse);
-    // Below the fold of the menu on this screen, as on a laptop.
-    await tester.ensureVisible(inMenu('Inventory'));
-    await tester.pumpAndSettle();
-    await tester.tap(inMenu('Inventory'));
-    await tester.pumpAndSettle();
-    expect(find.text('Page: Inventory'), findsOneWidget);
-    expect(selected(tester, 'Inventory'), isTrue);
+    expect(inMenu('Inventory'), findsNothing);
   });
 
   testWidgets("its organisation's roles are the gym's page too", (tester) async {
@@ -233,7 +225,7 @@ void main() {
       expect(inMenu(label), findsOneWidget, reason: label);
     }
     for (final hidden in [
-      'Memberships & packages', 'Payments & income', 'Inventory', 'Suppliers', 'Staff', 'Roles & permissions', 'Gym settings',
+      'Memberships & packages', 'Payments & income', 'Suppliers', 'Staff', 'Roles & permissions', 'Gym settings',
       'Manage',
     ]) {
       expect(inMenu(hidden), findsNothing, reason: hidden);
@@ -253,11 +245,11 @@ void main() {
 
   testWidgets("no gym, and not the super admin: nothing they haven't been given", (tester) async {
     await showApp(tester, computer, person(), at: CoreRoutes.account);
-    for (final label in ['Overview', 'My services', 'Gym management', 'Set up your gym', 'ADMINISTRATION']) {
+    for (final label in ['Overview', 'Modules', 'Gym management', 'Set up your gym', 'ADMINISTRATION']) {
       expect(inMenu(label), findsNothing, reason: label);
     }
     expect(inMenu('My dashboard'), findsOneWidget, reason: "a member's own");
-    expect(inMenu('My gym'), findsOneWidget, reason: "a member's own");
+    expect(inMenu('My services'), findsOneWidget, reason: "a member's own");
     for (final label in ['My QR code', 'My gyms', 'Notifications']) {
       expect(inMenu(label), findsNothing, reason: '$label: on the dashboard, or the bell at the top');
     }
@@ -287,7 +279,7 @@ void main() {
   testWidgets('the top bar never has New: not on Members or Check-in either', (tester) async {
     for (final at in [
       GymRoutes.membersFor(gymId), GymRoutes.registerMemberFor(gymId), GymRoutes.checkInFor(gymId),
-      GymRoutes.dashboardFor(gymId), GymRoutes.plansFor(gymId), GymRoutes.inventoryFor(gymId),
+      GymRoutes.dashboardFor(gymId), GymRoutes.plansFor(gymId), GymRoutes.suppliersFor(gymId),
     ]) {
       await showApp(tester, computer, person(gyms: owner), at: at, withNewMenu: true);
       expect(find.descendant(of: find.byType(GlassAppBar), matching: find.text('New')), findsNothing, reason: at);

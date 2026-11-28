@@ -1,6 +1,6 @@
 # Health Pro
 
-Your Health. Our Priority. One app for sport in Bhutan, on the web, Android and iOS, built from a shared **core** and one package per **module**:
+All your well-being, all in one place. One app for sport in Bhutan, on the web, Android and iOS, built from a shared **core** and one package per **module**:
 
 | Module | Status | What it does |
 |---|---|---|
@@ -439,7 +439,7 @@ Without them, both chats still work: the suggestions answer, and typed questions
 
 ### Logo, splash and loader
 
-- **Logo** (`HealthProLogo`): the Health Pro logo, blue lettering for light backgrounds (`logo.webp`), and white lettering for dark ones (`logo_on_dark.webp`); `markOnly` is the cross with the runner (`mark.webp`, `mark_on_dark.webp`). They're WebP (a quarter of the PNGs' size), made by `tool/brand_images.dart`, which needs `cwebp` (`brew install webp`). It follows the theme. Places that are navy in both themes (the side menu, the welcome page's footer, the splash) pass `onDark: true`.
+- **Logo** (`HealthProLogo`): the Health Pro logo as it is in the brand file, no card behind it (`logo.webp`); on dark backgrounds "Health" and the tagline are white, the heart and the green "Pro" unchanged (`logo_on_dark.webp`). `markOnly` is the heart with the cross, the same on light and dark (`mark.webp`). Each is one still picture, the tagline included. They're WebP (a quarter of the PNGs' size), made by `tool/brand_images.dart`, which needs `cwebp` (`brew install webp`). It follows the theme. Places that are navy in both themes (the side menu, the welcome page's footer, the splash) pass `onDark: true`.
 - **Splash** (`HealthProSplash`): the white logo in the middle of the navy, 240 wide on a phone and 320 on anything bigger, with a green bar (the logo's green) under it. It shows while the modules load at start (`SplashGate` fades it into the page). The launch screens draw the same logo at the same size and place, so the handover doesn't jump. If you change one, change them all: `web/index.html` and `web/splash/`, Android's `res/drawable*/launch_background.xml`, `splash_logo.png`, `splash_icon.png` and `values*-v31/styles.xml` (Android 12+ shows the mark in a circle), and iOS's `LaunchScreen.storyboard`, `LaunchImage` and `LaunchBackground`. iOS caches its launch screen, so delete the app and reinstall it to see a change.
 - **Loader** (`HealthProLoader`): the orange-and-blue spinner, for the few places that wait without a shape to show. Pages and lists waiting on data show `LoadingSkeleton` (through `AsyncValueView`). Spinners inside buttons stay Flutter's plain one.
 
@@ -480,7 +480,7 @@ When it moves to its own domain, add the domain to the Pages project (Custom dom
 - **Website**: see [Website on Cloudflare](#website-on-cloudflare). `scripts/build_web.sh` builds `apps/health_pro_app/build/web`, which any static host can serve; URLs use `/#/`, so no rewrites are needed.
 - **Android**: application id `bt.healthpro.app`. Add a release signing key before uploading to Google Play.
 - **iOS**: bundle id `bt.healthpro.app`. Set your team in Xcode (`ios/Runner.xcworkspace`).
-- App icons, launch screens and in-app logos are all made from the brand files in `packages/health_pro_core/tool/brand/` (kept out of `assets/` so they don't ship in the app): `logo-dark-new.png`, the transparent logo, and `logo-white-small.png`, the app icon (the mark on a white tile); `logo-white-new.png`, the logo on white, is for reference. To change the logo, replace those files and run `cd packages/health_pro_core && flutter test tool/brand_images.dart`; it makes the white-lettered version, lifts the mark off the icon's tile, and writes every image. If the logo's shape changes, update `HealthProLogo.aspectRatio`, `web/index.html` and `LaunchScreen.storyboard` to the size it prints.
+- App icons, launch screens and in-app logos are all made from the brand files in `packages/health_pro_core/tool/brand/` (kept out of `assets/` so they don't ship in the app): `health-pro-logo.jpeg`, the logo on white (the heart, the name and the tagline). To change the logo, replace that file and run `cd packages/health_pro_core && flutter test tool/brand_images.dart`; it lifts the logo off the white (dropping the shadow under the heart and the white inside the letters), makes "Health" and the tagline white for dark backgrounds, takes the heart alone as the mark and app icon, and writes every image. If the logo's shape changes, update `HealthProLogo.aspectRatio`, `web/index.html` and `LaunchScreen.storyboard` to the size it prints.
 
 ## Tests
 

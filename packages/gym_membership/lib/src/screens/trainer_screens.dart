@@ -244,8 +244,7 @@ class TrainerHomeScreen extends ConsumerWidget {
   }
 
   Future<void> _askGym(BuildContext context, WidgetRef ref, MyTraining mine) async {
-    const query = (type: gymVenueType, dzongkhag: null);
-    final gyms = await ref.read(publicVenuesProvider(query).future);
+    final gyms = await ref.read(moduleVenuesProvider(gymModuleKey).future);
     if (!context.mounted) return;
     final mineIds = {for (final g in mine.gyms) g.venueId};
     final choices = gyms.where((g) => !mineIds.contains(g.id)).toList();

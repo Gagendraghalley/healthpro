@@ -40,8 +40,15 @@ select public.set_user_platform_roles('00000000-0000-0000-0000-000000000404', ar
 
 select t.as_user('00000000-0000-0000-0000-000000000404');
 select t.fails($$select public.save_organisation(null, 'X', null)$$, '2 to 100');
-select public.save_organisation(null, '  Chain   Fitness ', 'Two gyms') as chain \gset
-select t.eq((select name from public.organisations where id = :'chain'), 'Chain Fitness', 'a new organisation, its name tidied');
+select t.fails($$select public.save_organisation(null, 'Chain Fitness', 'Two gyms')$$, 'Choose its service type');
+select t.fails($$select public.save_organisation(null, 'Chain Fitness', 'Two gyms', 'bowling')$$, 'service types in use');
+select public.save_organisation(null, '  Chain   Fitness ', 'Two gyms', 'gym') as chain \gset
+select t.eq((select name || ':' || venue_type from public.organisations where id = :'chain'), 'Chain Fitness:gym',
+            'a new organisation, its name tidied, with its service type');
+select public.save_organisation(:'chain', 'Chain Fitness', 'Two gyms');
+select t.eq((select venue_type from public.organisations where id = :'chain'), 'gym', 'renamed: it keeps its type');
+select t.eq((select o.venue_type from public.organisations o join public.venues v on v.organisation_id = o.id where v.id = :'b1'),
+            'gym', 'one made for a new venue takes its type');
 select t.eq((select count(*) from public.venues where name like 'Chain Gym%')::int, 2,
             'organisation managers see every venue, verified or not');
 select organisation_id as b2_own from public.venues where id = :'b2' \gset

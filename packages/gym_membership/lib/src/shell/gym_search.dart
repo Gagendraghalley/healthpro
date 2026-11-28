@@ -6,9 +6,9 @@ import '../data/classes.dart';
 import '../data/coaching.dart';
 import '../data/follow_ups.dart';
 import '../data/gym_repository.dart';
-import '../data/inventory.dart';
 import '../data/money.dart';
 import '../data/online_payments.dart';
+import '../data/suppliers.dart';
 import '../data/trainers.dart';
 import '../gym_permissions.dart';
 import '../gym_routes.dart';
@@ -28,10 +28,9 @@ const gymSearchGroups = [
   'Packages',
   'Offers',
   'Expenses',
-  'Stock',
   'Suppliers',
   'Members you train',
-  'My gyms',
+  'My services',
   'My classes',
   'Gyms',
 ];
@@ -40,9 +39,10 @@ const gymSearchGroups = [
 /// gyms they work at and as their role there allows (the same as the menu):
 /// members (by name, phone, card code or email), requests to join, enquiries
 /// and trials, online payments (by name, card code or JRN), classes,
-/// trainers, packages, offers, expenses, stock and suppliers. A trainer finds
-/// the members they train; anyone signed in, their own gyms and classes; and
-/// everyone, the gyms on Health Pro. Every result opens the page that shows
+/// trainers, packages, offers, expenses and suppliers. A trainer finds the
+/// members they train; anyone signed in, their own gyms and classes; and
+/// everyone, the organisations on Health Pro (gyms, pools, wellness centres...,
+/// by name, place or type). Every result opens the page that shows
 /// it; with several gyms, each says which gym. [color] is the service's.
 Future<List<SearchHit>> searchGyms(Ref ref, String query, {required Color color}) async {
   final words = searchWords(query);
@@ -62,7 +62,7 @@ Future<List<SearchHit>> searchGyms(Ref ref, String query, {required Color color}
 
   List<MyVenue> mine = const [];
   try {
-    mine = [for (final v in await ref.watch(myVenuesProvider.future)) if (v.venue.type == gymVenueType) v];
+    mine = [for (final v in await ref.watch(myVenuesProvider.future)) if (gymModuleRuns(v.venue)) v];
   } catch (_) {}
   final byId = {for (final g in mine) g.venue.id: g};
   String line(String venueId, Iterable<String?> parts) => [
@@ -184,20 +184,6 @@ Future<List<SearchHit>> searchGyms(Ref ref, String query, {required Color color}
     ];
   }
 
-  Future<List<SearchHit>> stock(MyVenue gym) async {
-    final id = gym.venue.id;
-    if (!gym.access.can(GymPermission.inventory)) return const [];
-    return [
-      for (final i in await ref.watch(gymInventoryProvider(id).future))
-        if (has([i.name, i.category, i.notes]))
-          hit(i.name, [
-            '${i.quantity} ${i.unit}',
-            switch (i.level) { StockLevel.out => 'Out of stock', StockLevel.low => 'Running low', StockLevel.ok => null },
-            i.category,
-          ], id, icon: Icons.inventory_2_outlined, art: Art3D.clipboard, route: GymRoutes.inventoryFor(id, open: i.id), group: 'Stock'),
-    ];
-  }
-
   // The suppliers are the same for every gym: one result each, opening the
   // first gym's Suppliers whose role shows them.
   final stockGyms = [for (final g in mine) if (g.access.can(GymPermission.inventory)) g.venue.id];
@@ -248,7 +234,7 @@ Future<List<SearchHit>> searchGyms(Ref ref, String query, {required Color color}
             icon: Icons.fitness_center_rounded,
             art: Art3D.liftingWeights,
             route: GymRoutes.myGymFor(g.venueId),
-            group: 'My gyms',
+            group: 'My services',
             color: color,
           ),
     ];
@@ -268,19 +254,22 @@ Future<List<SearchHit>> searchGyms(Ref ref, String query, {required Color color}
             ),
       ];
 
-  Future<List<SearchHit>> gyms() async => [
-        for (final v in await ref.watch(publicVenuesProvider((type: gymVenueType, dzongkhag: null)).future))
-          if (has([v.name, v.place, v.address, v.description]))
-            SearchHit(
-              title: v.name,
-              subtitle: v.place,
-              icon: Icons.fitness_center_outlined,
-              art: Art3D.officeBuilding,
-              route: GymRoutes.gymFor(v.id),
-              group: 'Gyms',
-              color: color,
-            ),
-      ];
+  Future<List<SearchHit>> gyms() async {
+    final types = await ref.watch(venueTypesProvider.future).catchError((_) => const <VenueType>[]);
+    return [
+      for (final v in await ref.watch(moduleVenuesProvider(gymModuleKey).future))
+        if (has([v.name, v.place, v.address, v.description, venueTypeName(types, v.type)]))
+          SearchHit(
+            title: v.name,
+            subtitle: v.type == gymVenueType ? v.place : '${venueTypeName(types, v.type)} · ${v.place}',
+            icon: venueTypeOf(types, v.type)?.iconData ?? Icons.fitness_center_outlined,
+            art: Art3D.officeBuilding,
+            route: GymRoutes.gymFor(v.id),
+            group: 'Gyms',
+            color: color,
+          ),
+    ];
+  }
 
   final signedIn = ref.watch(currentUserIdProvider) != null;
   final found = await Future.wait([
@@ -294,7 +283,6 @@ Future<List<SearchHit>> searchGyms(Ref ref, String query, {required Color color}
       part(() => packages(g)),
       part(() => offers(g)),
       part(() => expenses(g)),
-      part(() => stock(g)),
     ],
     if (stockGyms.isNotEmpty) part(suppliers),
     if (signedIn) ...[part(trained), part(myGyms), part(myClasses)],

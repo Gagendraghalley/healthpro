@@ -59,6 +59,7 @@ export 'src/venues/venue_map.dart';
 export 'src/venues/venue_profile_fields.dart' show isVideoLink;
 export 'src/venues/venue_profile_widgets.dart';
 export 'src/venues/venue_repository.dart';
+export 'src/venues/venue_type.dart';
 export 'src/venues/venue_widgets.dart';
 export 'src/widgets/app_page.dart';
 export 'src/widgets/art3d.dart';

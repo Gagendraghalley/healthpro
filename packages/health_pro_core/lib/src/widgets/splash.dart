@@ -6,9 +6,9 @@ import 'package:flutter/services.dart';
 import '../theme/brand.dart';
 import 'logo.dart';
 
-/// The splash screen, in the app's theme: in light, the blue-lettered logo
-/// on white; in dark, the white-lettered logo on the side menu's navy. Its
-/// heartbeat traces, and a slim green bar (the logo's green) runs under it.
+/// The splash screen, in the app's theme: the logo on white in light; in
+/// dark, its white-lettered version on the side menu's navy. A slim
+/// green bar (the logo's green) runs under it.
 /// Shown while the app gets ready (the modules load at start).
 ///
 /// Before Flutter starts, the launch screens show the same logo at the same
@@ -31,14 +31,14 @@ class HealthProSplash extends StatelessWidget {
   /// The light splash's background (the launch screens' too).
   static const lightBackground = Colors.white;
 
-  /// Reads the logo's pictures for the theme it opens in ([dark] or light)
+  /// Reads the logo's picture for the theme it opens in ([dark] or light)
   /// ahead of the first frame (main, before runApp), so the splash shows it
   /// at once rather than blinking in after the launch screen. Never takes
   /// more than a few seconds, and never fails.
   static Future<void> precacheLogo({required bool dark}) {
-    Future<void> read(String part) {
+    Future<void> read(String path) {
       final done = Completer<void>();
-      final image = AssetImage(HealthProLogo.assetFor(part, onDark: dark), package: HealthProLogo.package);
+      final image = AssetImage(path, package: HealthProLogo.package);
       final stream = image.resolve(ImageConfiguration.empty);
       late final ImageStreamListener listener;
       void finish() {
@@ -51,8 +51,7 @@ class HealthProSplash extends StatelessWidget {
       return done.future;
     }
 
-    return Future.wait([read('logo_base'), read('logo_heartbeat')])
-        .timeout(const Duration(seconds: 3), onTimeout: () => const []);
+    return read(HealthProLogo.logoFor(onDark: dark)).timeout(const Duration(seconds: 3), onTimeout: () => const []);
   }
 
   @override
@@ -76,8 +75,7 @@ class HealthProSplash extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, box) => Stack(
             children: [
-              // The heartbeat starts tracing at once: the splash is short.
-              Center(child: HealthProLogo(height: height, onDark: dark, delay: Duration.zero)),
+              Center(child: HealthProLogo(height: height, onDark: dark)),
               Positioned(
                 left: 0,
                 right: 0,

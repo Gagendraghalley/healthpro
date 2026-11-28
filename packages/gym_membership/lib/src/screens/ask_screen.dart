@@ -69,7 +69,7 @@ class GymAssistantPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final access = ref.watch(venueAccessProvider(venueId));
     final a = access.valueOrNull;
-    if (access.hasValue && (a == null || a.venue.type != gymVenueType)) return const HealthProAssistantPanel();
+    if (access.hasValue && (a == null || !gymModuleRuns(a.venue))) return const HealthProAssistantPanel();
     final chat = ref.watch(askChatProvider(venueId));
     return AssistantPanel(
       title: 'Ask AI',

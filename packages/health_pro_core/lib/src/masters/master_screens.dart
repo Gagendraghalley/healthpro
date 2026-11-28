@@ -2,22 +2,26 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../access/access.dart';
 import '../access/permission_gate.dart';
+import '../router/core_routes.dart';
 import '../theme/brand.dart';
 import '../widgets/app_page.dart';
 import '../widgets/common.dart';
 import '../widgets/data_grid.dart';
 import '../widgets/feedback.dart';
 import '../widgets/form_fields.dart';
+import '../widgets/page_actions.dart';
 import '../widgets/searchable_dropdown.dart';
 import 'location.dart';
 import 'master_repository.dart';
 
 /// Admin -> Master data: dzongkhags, gewogs and thromdes, and villages.
 /// Rows are turned off rather than deleted, so addresses keep pointing at
-/// them.
+/// them. The kinds of service have their own page (Service types), linked
+/// from here.
 class AdminMastersScreen extends ConsumerStatefulWidget {
   const AdminMastersScreen({super.key});
 
@@ -75,6 +79,17 @@ class _AdminMastersScreenState extends ConsumerState<AdminMastersScreen> {
             child: ListView(
               padding: pagePadding(context, bottom: 96),
               children: [
+                PageActions(
+                  text: 'Places in Bhutan. The kinds of service (Gym, Swimming Pool...) are kept in Service types.',
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => context.push(CoreRoutes.adminServiceTypes),
+                      style: OutlinedButton.styleFrom(minimumSize: PageActions.buttonSize),
+                      icon: const Icon(Icons.category_outlined, size: 20),
+                      label: const Text('Service types'),
+                    ),
+                  ],
+                ),
                 _filterBar(),
                 const SizedBox(height: 4),
                 AsyncValueView<List<LocationItem>>(

@@ -905,7 +905,7 @@ class PayOnlineScreen extends ConsumerWidget {
               title: 'Your payment is waiting',
               message:
                   '${gym.venueName} is checking JRN ${gym.claim!.jrn}. You\'ll be told when it\'s confirmed.',
-              actionLabel: 'Back to My gym',
+              actionLabel: 'Back to My services',
               onAction: () => context.go(GymRoutes.my),
             );
           }

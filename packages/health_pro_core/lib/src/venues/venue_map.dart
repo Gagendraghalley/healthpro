@@ -48,6 +48,22 @@ Future<LatLng> currentLocation() async {
 /// of gyms doesn't ask again.
 final myLocationProvider = StateProvider<LatLng?>((ref) => null);
 
+/// Whether Find services has looked for the person's location this session
+/// on its own (it starts from where they are), so it doesn't again.
+final locationLookedUpProvider = StateProvider<bool>((ref) => false);
+
+/// Where the person is, for a default rather than a request: asks once when
+/// they haven't answered yet, never after a no; null on any problem.
+Future<LatLng?> locationIfAllowed() async {
+  try {
+    if (!await Geolocator.isLocationServiceEnabled()) return null;
+    if (await Geolocator.checkPermission() == LocationPermission.deniedForever) return null;
+    return await currentLocation();
+  } catch (_) {
+    return null;
+  }
+}
+
 /// OpenStreetMap's tiles, with the app's name as their policy asks. Tests
 /// switch them off ([showTiles]): they can't reach the internet.
 abstract final class MapTiles {

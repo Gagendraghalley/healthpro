@@ -10,6 +10,7 @@ import '../access/user_screens.dart';
 import '../admin/admin_screens.dart';
 import '../admin/app_errors_screen.dart';
 import '../masters/master_screens.dart';
+import '../masters/service_type_screens.dart';
 import '../auth/auth_repository.dart';
 import '../auth/auth_screens.dart';
 import '../auth/sign_in_return.dart';
@@ -156,6 +157,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 RoleEditorScreen(roleId: s.pathParameters['id'], organisationId: s.uri.queryParameters['org']),
           ),
           GoRoute(path: CoreRoutes.adminMasters, builder: (_, __) => const AdminMastersScreen()),
+          GoRoute(path: CoreRoutes.adminServiceTypes, builder: (_, __) => const ServiceTypesScreen()),
           GoRoute(path: CoreRoutes.adminOrganisations, builder: (_, __) => const AdminOrganisationsScreen()),
           GoRoute(
             path: CoreRoutes.adminOrganisation,

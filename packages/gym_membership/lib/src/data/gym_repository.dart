@@ -20,6 +20,11 @@ const gymVenueType = 'gym';
 /// app_modules.key and payments.module_key.
 const gymModuleKey = 'gym_membership';
 
+/// Whether this module runs [venue]: a gym, or any other organisation type
+/// it runs (a pool, a wellness centre...), with the same packages, members,
+/// check-in and classes.
+bool gymModuleRuns(Venue venue) => venue.moduleKey == gymModuleKey || venue.type == gymVenueType;
+
 final gymRepositoryProvider = Provider<GymRepository>(
     (ref) => GymRepository(ref.watch(supabaseProvider)));
 
@@ -134,6 +139,12 @@ const gymFacilities = [
 final gymPriceRangesProvider =
     FutureProvider<Map<String, ({int low, int high})>>(
   (ref) => ref.watch(gymRepositoryProvider).priceRanges(),
+);
+
+/// Each verified venue's packages and classes by name (gym_venue_services),
+/// for finding a service: Find services searches them.
+final gymVenueServicesProvider = FutureProvider<Map<String, List<String>>>(
+  (ref) => ref.watch(gymRepositoryProvider).venueServices(),
 );
 
 /// 'Nu. 2,000 – 10,000', 'Nu. 1,500'.
@@ -551,6 +562,13 @@ class GymRepository {
           low: (r['lowest'] as num).toInt(),
           high: (r['highest'] as num).toInt()
         ),
+    };
+  }
+
+  Future<Map<String, List<String>>> venueServices() async {
+    final rows = await _client.rpc('gym_venue_services') as List;
+    return {
+      for (final r in rows.cast<Map>()) r['venue_id'] as String: (r['services'] as List? ?? const []).cast<String>(),
     };
   }
 

@@ -234,7 +234,7 @@ void main() {
         myMembershipsProvider.overrideWith((ref) async => _mine(member: true, waiting: true)),
       ]);
       await tester.pumpAndSettle();
-      for (final label in ['My gyms', 'Active packages', 'Days left', 'Visits in 7 days']) {
+      for (final label in ['My services', 'Active packages', 'Days left', 'Visits in 7 days']) {
         expect(find.text(label), findsWidgets, reason: label);
       }
       expect(find.text('1 request waiting'), findsOneWidget);
@@ -252,7 +252,7 @@ void main() {
       myMembershipsProvider.overrideWith((ref) async => MyMemberships.none),
     ]);
     await tester.pumpAndSettle();
-    expect(find.text("You're not a member of a gym yet"), findsOneWidget);
+    expect(find.text("You haven't joined a service yet"), findsOneWidget);
     expect(find.text('No active package'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -271,6 +271,41 @@ void main() {
         await tester.scrollUntilVisible(find.text(label), 200, scrollable: find.byType(Scrollable).first);
         expect(find.text(label), findsOneWidget, reason: label);
       }
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets("My services: every service they've joined as a card, the one chosen in full", (tester) async {
+    final pool = Venue.fromJson({
+      'id': 'p1', 'type': 'swimming', 'name': 'Blue Lane Pool', 'dzongkhag': 'Thimphu',
+      'verification_status': 'verified', 'created_at': '2026-11-01T00:00:00Z',
+    });
+    final both = MyMemberships(gyms: [
+      MyGym(venueId: 'g1', venueName: 'Peak Fitness', place: 'Thimphu', planName: 'Gym', startDate: day(-5), endDate: day(24)),
+      MyGym(venueId: 'p1', venueName: 'Blue Lane Pool', place: 'Thimphu', planName: 'Monthly swim', startDate: day(-1), endDate: day(28)),
+    ], requests: const []);
+    for (final size in [const Size(1440, 1000), const Size(390, 844)]) {
+      await show(tester, const MyGymScreen(), size: size, with_: [
+        ...overrides(),
+        venueProvider.overrideWith((ref, id) async => id == 'p1' ? pool : gym),
+        venueTypesProvider.overrideWith((ref) async => const [
+              VenueType(key: 'gym', moduleKey: 'gym_membership', name: 'Gym', color: 'orange'),
+              VenueType(key: 'swimming', moduleKey: 'gym_membership', name: 'Swimming Pool', icon: 'pool', color: 'blue'),
+            ]),
+        gymVerifiedTrainersProvider.overrideWith((ref, id) async => const <TrainerProfile>[]),
+        myMembershipsProvider.overrideWith((ref) async => both),
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.text('My services'), findsWidgets, reason: 'the page');
+      expect(find.text("Services you've joined (2)"), findsOneWidget);
+      expect(find.text('Gym · Thimphu'), findsOneWidget);
+      expect(find.text('Swimming Pool · Thimphu'), findsOneWidget);
+      expect(find.text('25 days left · Gym'), findsOneWidget);
+      expect(find.text('29 days left · Monthly swim'), findsOneWidget);
+      expect(find.text('Blue Lane Pool'), findsOneWidget, reason: 'the first one is shown in full; the pool only as its card');
+      await tester.tap(find.text('Blue Lane Pool'));
+      await tester.pumpAndSettle();
+      expect(find.text('Blue Lane Pool').evaluate().length, greaterThan(1), reason: 'now the pool in full too');
       expect(tester.takeException(), isNull);
     }
   });
@@ -356,7 +391,7 @@ void main() {
       myMembershipsProvider.overrideWith((ref) async => MyMemberships.none),
     ]);
     await tester.pumpAndSettle();
-    expect(find.text("You're not a member of a gym yet"), findsOneWidget);
-    expect(find.text('Find a gym'), findsWidgets, reason: 'the first step, and the button');
+    expect(find.text("You haven't joined a service yet"), findsOneWidget);
+    expect(find.text('Services'), findsWidgets, reason: 'the first step, and the button');
   });
 }

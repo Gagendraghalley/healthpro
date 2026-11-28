@@ -668,9 +668,9 @@ class GymPhotoPlaceholder extends StatelessWidget {
 
 // ─── The list of gyms ──────────────────────────────────────────────────────
 
-/// The top of the list of gyms, on navy over the gym photo: what the page is
-/// for, how many gyms (in how many dzongkhags, how many open now), and
-/// [filters] on a card under them.
+/// The top of the list of gyms (or pools, or every service), on navy over
+/// the gym photo: what the page is for, how many there are (in how many
+/// dzongkhags, how many open now), and [filters] on a card under them.
 class GymListHeader extends StatelessWidget {
   final int gyms;
   final int places;
@@ -679,7 +679,24 @@ class GymListHeader extends StatelessWidget {
   final int? openNow;
   final Widget filters;
 
-  const GymListHeader({super.key, required this.gyms, required this.places, required this.openNow, required this.filters});
+  /// 'Find your ' + [accent], over [blurb]; [badge] above in capitals;
+  /// [noun] counts them ('gym', 'gyms').
+  final String badge;
+  final String accent;
+  final String blurb;
+  final (String, String) noun;
+
+  const GymListHeader({
+    super.key,
+    required this.gyms,
+    required this.places,
+    required this.openNow,
+    required this.filters,
+    this.badge = 'VERIFIED GYMS',
+    this.accent = 'gym',
+    this.blurb = 'Compare packages, prices and opening hours, then join in the app or at the front desk.',
+    this.noun = ('gym', 'gyms'),
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -696,7 +713,7 @@ class GymListHeader extends StatelessWidget {
       color: Colors.white,
     );
     final stats = [
-      (gyms, gyms == 1 ? 'gym' : 'gyms'),
+      (gyms, gyms == 1 ? noun.$1 : noun.$2),
       (places, places == 1 ? 'dzongkhag' : 'dzongkhags'),
       if (openNow != null) (openNow!, 'open now'),
     ];
@@ -741,9 +758,9 @@ class GymListHeader extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                rise(0, const _Badge(icon: Icons.verified_rounded, text: 'VERIFIED GYMS')),
+                rise(0, _Badge(icon: Icons.verified_rounded, text: badge)),
                 const SizedBox(height: 16),
-                rise(1, Wrap(children: [Text('Find your ', style: title), _Accent('gym', style: title)])),
+                rise(1, Wrap(children: [Text('Find your ', style: title), _Accent(accent, style: title)])),
                 const SizedBox(height: 12),
                 rise(
                   2,
@@ -834,9 +851,13 @@ class _Badge extends StatelessWidget {
         children: [
           Icon(icon, size: 15, color: context.brand.highlight),
           const SizedBox(width: 6),
-          Text(
-            text,
-            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 1.3, color: Colors.white),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 1.3, color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -853,7 +874,13 @@ class GymListCard extends StatefulWidget {
   final double? km;
   final VoidCallback onTap;
 
-  const GymListCard({super.key, required this.gym, required this.price, required this.km, required this.onTap});
+  /// What kind of organisation it is (Swimming Pool...), before its place;
+  /// null to show the place alone.
+  final String? typeLabel;
+  final IconData? typeIcon;
+
+  const GymListCard(
+      {super.key, required this.gym, required this.price, required this.km, required this.onTap, this.typeLabel, this.typeIcon});
 
   @override
   State<GymListCard> createState() => _GymListCardState();
@@ -973,11 +1000,11 @@ class _GymListCardState extends State<GymListCard> {
           const SizedBox(height: 4),
           Row(
             children: [
-              Icon(Icons.place_outlined, size: 15, color: brand.muted),
+              Icon(widget.typeIcon ?? Icons.place_outlined, size: 15, color: brand.muted),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
-                  gym.place,
+                  widget.typeLabel == null ? gym.place : '${widget.typeLabel} · ${gym.place}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 13.5, color: brand.muted),

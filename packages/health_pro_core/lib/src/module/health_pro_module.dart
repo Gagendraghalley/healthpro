@@ -128,20 +128,26 @@ abstract class HealthProModule {
   /// Whether [path] is one of this module's pages.
   bool ownsPath(String path) => basePaths.any((base) => path == base || path.startsWith('$base/'));
 
-  /// Whether this module runs venues of [venueType].
+  /// Whether this module runs venues of [venueType], by its own [venueKinds].
+  /// The Service types master can give it more ([servesVenue]).
   bool servesVenueType(String venueType) => venueKinds.any((k) => k.key == venueType);
+
+  /// Whether this module runs [venue]: its type is one the module runs
+  /// (venues.module_key, from the Service types master).
+  bool servesVenue(Venue venue) => venue.moduleKey == key || servesVenueType(venue.type);
 }
 
 /// Where someone running [venue] lands: the console of the module that runs
 /// it ([HealthProModule.managerHomeRoute]), or else the venue's Manage page.
 String venueHomeRoute(Iterable<HealthProModule> modules, Venue venue) {
   for (final m in modules) {
-    if (m.servesVenueType(venue.type)) return m.managerHomeRoute(venue) ?? CoreRoutes.venueManageFor(venue.id);
+    if (m.servesVenue(venue)) return m.managerHomeRoute(venue) ?? CoreRoutes.venueManageFor(venue.id);
   }
   return CoreRoutes.venueManageFor(venue.id);
 }
 
-/// A kind of venue a module serves (venue_types.key), e.g. 'gym'.
+/// A kind of venue a module brings with it (venue_types.key), e.g. 'gym'.
+/// The rest come from the Service types master ([VenueType]).
 class VenueKind {
   final String key;
   final String label;

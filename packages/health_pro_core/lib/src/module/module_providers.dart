@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../access/access.dart';
 import '../access/access_repository.dart';
 import '../supabase/supabase_provider.dart';
+import '../venues/venue_type.dart';
 import 'app_module_row.dart';
 import 'health_pro_module.dart';
 
@@ -33,11 +34,13 @@ final trainerSignUpRouteProvider = Provider<String?>((ref) {
   return modules.map((m) => m.trainerSignUpRoute).nonNulls.firstOrNull;
 });
 
-/// The module that runs venues of [type], among the enabled ones.
+/// The module that runs venues of [type] (the Service types master
+/// says which), among the enabled ones.
 final moduleForVenueTypeProvider = Provider.family<HealthProModule?, String>((ref, type) {
   final modules = ref.watch(enabledModulesProvider).valueOrNull ?? const [];
+  final moduleKey = venueTypeOf(ref.watch(venueTypesProvider).valueOrNull ?? const [], type)?.moduleKey;
   for (final m in modules) {
-    if (m.servesVenueType(type)) return m;
+    if (m.key == moduleKey || m.servesVenueType(type)) return m;
   }
   return null;
 });

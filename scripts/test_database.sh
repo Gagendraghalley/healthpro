@@ -15,11 +15,12 @@
 # errors the app reports through app_errors_test.sql, and pausing memberships and
 # numbered receipts through pauses_receipts_test.sql, and the activity log,
 # enquiries, WhatsApp reminders and birthday wishes through follow_ups_test.sql, and
-# the gym's inventory and connected suppliers through inventory_test.sql, and
+# the stock tables and connected suppliers through inventory_test.sql, and
 # discounts, offers and expenses through money_test.sql, and body progress,
 # workout and diet plans and group classes through coaching_test.sql, and the
 # emails about classes through class_emails_test.sql, and one date of a class changed or
-# cancelled on its own through class_days_test.sql.
+# cancelled on its own through class_days_test.sql, and organisation types (a pool or a
+# yoga studio run like a gym) through organisation_types_test.sql.
 # Needs PostgreSQL 14+ installed (brew install postgresql). Touches nothing else.
 #
 #   scripts/test_database.sh
@@ -64,5 +65,12 @@ db -f tests/database/coaching_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" |
 db -f tests/database/class_emails_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 db -f tests/database/class_days_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 db -f tests/database/delete_member_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
+db -f tests/database/organisation_types_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 echo "Applying supabase/seed.sql (local test data)"
 db -f supabase/seed.sql
+echo "Applying supabase/sample_services.sql twice (sample organisations of every type)"
+db -f supabase/sample_services.sql && db -f supabase/sample_services.sql
+db -t -A -c "select 'SAMPLE SERVICES: ' || count(*) || ' places, ' || count(distinct type) || ' types, '
+             || (select count(*) from public.gym_plans where venue_id::text like '5a000000-%') || ' packages, '
+             || (select count(*) from public.gym_classes where venue_id::text like '5a000000-%') || ' classes'
+             from public.venues where id::text like '5a000000-%' and module_key = 'gym_membership' and is_verified"

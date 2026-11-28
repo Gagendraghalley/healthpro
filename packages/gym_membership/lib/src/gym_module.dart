@@ -16,7 +16,7 @@ import 'screens/expenses_screen.dart';
 import 'screens/offers_screen.dart';
 import 'screens/check_in_screen.dart';
 import 'screens/gym_trainer_screens.dart';
-import 'screens/inventory_screens.dart';
+import 'screens/supplier_screens.dart';
 import 'screens/join_screens.dart';
 import 'screens/member_registered_screen.dart';
 import 'screens/members_screens.dart';
@@ -81,7 +81,9 @@ class GymModule extends HealthProModule {
   /// ':memberId', so it isn't taken for a member.
   @override
   List<RouteBase> get routes => [
-        GoRoute(path: GymRoutes.gyms, builder: (_, s) => GymListScreen(nearMe: s.uri.queryParameters['near'] == '1')),
+        GoRoute(
+            path: GymRoutes.gyms,
+            builder: (_, s) => GymListScreen(nearMe: s.uri.queryParameters['near'] == '1', type: s.uri.queryParameters['type'])),
         GoRoute(path: GymRoutes.my, builder: (_, s) => MyGymScreen(gymId: s.uri.queryParameters['gym'])),
         GoRoute(path: GymRoutes.trainerHome, builder: (_, __) => const TrainerHomeScreen()),
         GoRoute(
@@ -141,7 +143,6 @@ class GymModule extends HealthProModule {
         GoRoute(path: GymRoutes.addTrainer, builder: (_, s) => AddTrainerScreen(venueId: s.pathParameters['id']!)),
         GoRoute(path: GymRoutes.gymTrainers, builder: (_, s) => GymTrainersScreen(venueId: s.pathParameters['id']!, openId: s.uri.queryParameters[openParam])),
         GoRoute(path: GymRoutes.settings, builder: (_, s) => MembershipSettingsScreen(venueId: s.pathParameters['id']!)),
-        GoRoute(path: GymRoutes.inventory, builder: (_, s) => GymInventoryScreen(venueId: s.pathParameters['id']!, openId: s.uri.queryParameters[openParam])),
         GoRoute(path: GymRoutes.suppliers, builder: (_, s) => SuppliersScreen(venueId: s.pathParameters['id']!, openId: s.uri.queryParameters[openParam])),
         GoRoute(path: GymRoutes.enquiries, builder: (_, s) => EnquiriesScreen(venueId: s.pathParameters['id']!, openId: s.uri.queryParameters[openParam])),
         GoRoute(path: GymRoutes.activity, builder: (_, s) => ActivityLogScreen(venueId: s.pathParameters['id']!)),
@@ -155,15 +156,24 @@ class GymModule extends HealthProModule {
   @override
   Widget? buildMemberDashboard(BuildContext context) => const MyGymsDashboard();
 
-  /// A person's own pages, in the side menu under their dashboard: My gym
-  /// (their gyms in full), and a trainer's page.
+  /// A person's own pages, in the side menu under their dashboard: Find
+  /// services (every organisation on Health Pro, to join with their one
+  /// account), My gym (the places they've joined, in full), and a trainer's
+  /// page.
   @override
   List<ModuleMenuItem> playerMenuItems([WidgetRef? ref]) {
     final training = ref?.watch(myTrainingProvider).valueOrNull;
     return [
       const ModuleMenuItem(
-        title: 'My gym',
-        subtitle: 'Your gym: photos, facilities, where it is and its trainers',
+        title: 'Services',
+        subtitle: 'Gyms, pools, cycling, wellness and more near you: join any with your one account',
+        icon: Icons.travel_explore_rounded,
+        art: Art3D.magnifier,
+        route: GymRoutes.gyms,
+      ),
+      const ModuleMenuItem(
+        title: 'My services',
+        subtitle: "Every service you've joined: your package and days left, photos, where it is and its trainers",
         icon: Icons.fitness_center_rounded,
         art: Art3D.liftingWeights,
         route: GymRoutes.my,
@@ -290,10 +300,10 @@ class GymModule extends HealthProModule {
           ),
         if (access.can(GymPermission.inventory))
           ModuleMenuItem(
-            title: 'Inventory',
-            subtitle: 'What the gym keeps and how many; items from connected suppliers',
-            icon: Icons.inventory_2_rounded,
-            route: GymRoutes.inventoryFor(venue.id),
+            title: 'Suppliers',
+            subtitle: 'Items, stock and prices from connected suppliers',
+            icon: Icons.storefront_outlined,
+            route: GymRoutes.suppliersFor(venue.id),
           ),
         if (access.can(GymPermission.register))
           ModuleMenuItem(
@@ -357,7 +367,7 @@ class GymModule extends HealthProModule {
       };
 
   @override
-  String? publicVenueRoute(Venue venue) => venue.type == gymVenueType ? GymRoutes.gymFor(venue.id) : null;
+  String? publicVenueRoute(Venue venue) => gymModuleRuns(venue) ? GymRoutes.gymFor(venue.id) : null;
 
   @override
   Widget? buildWelcome(BuildContext context) => const GymWelcomePage();

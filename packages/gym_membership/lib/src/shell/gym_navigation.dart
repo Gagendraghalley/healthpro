@@ -5,7 +5,6 @@ import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/follow_ups.dart';
 import '../data/gym_repository.dart';
-import '../data/inventory.dart';
 import '../data/online_payments.dart';
 import '../data/trainers.dart';
 import '../gym_permissions.dart';
@@ -36,7 +35,8 @@ ServiceNav gymNavigation(WidgetRef ref, String location,
     {required String name, required IconData icon, required Color color}) {
   final gyms = ref.watch(myGymsProvider).valueOrNull ?? const <MyVenue>[];
   final gym = currentGym(gyms, pathGymId: gymIdInPath(location), remembered: ref.watch(rememberedGymProvider));
-  final setUp = CoreRoutes.registerVenueFor(gymVenueType);
+  // What they run first (a gym, a pool...), then its form.
+  const setUp = CoreRoutes.registerVenue;
   if (gym == null) {
     return ServiceNav(
       key: gymModuleKey,
@@ -71,11 +71,6 @@ ServiceNav gymNavigation(WidgetRef ref, String location,
   final trainersWaiting = a.can(GymPermission.trainers)
       ? (ref.watch(gymTrainersProvider(id)).valueOrNull ?? const []).where((t) => t.status == TrainerStatus.pending).length
       : 0;
-  // Items low or out of stock.
-  final lowStock = a.can(GymPermission.inventory)
-      ? (ref.watch(gymInventoryProvider(id)).valueOrNull ?? const []).where((i) => i.level != StockLevel.ok).length
-      : 0;
-  final suppliers = GymRoutes.suppliersFor(id);
   // Enquiries to follow up today (or missed), and trials that have ended.
   final today = BhutanTime.today();
   final followUps = a.can(GymPermission.register)
@@ -150,15 +145,7 @@ ServiceNav gymNavigation(WidgetRef ref, String location,
     ]),
     NavSection(title: 'Stock', icon: Icons.inventory_2_rounded, art: Art3D.package, color: _teal, items: [
       if (a.can(GymPermission.inventory))
-        NavDestination(
-            label: 'Inventory',
-            icon: Icons.inventory_2_outlined,
-            art: Art3D.clipboard,
-            route: GymRoutes.inventoryFor(id),
-            notUnder: [suppliers],
-            badge: lowStock),
-      if (a.can(GymPermission.inventory))
-        NavDestination(label: 'Suppliers', icon: Icons.storefront_outlined, art: Art3D.truck, route: suppliers),
+        NavDestination(label: 'Suppliers', icon: Icons.storefront_outlined, art: Art3D.truck, route: GymRoutes.suppliersFor(id)),
     ]),
     NavSection(title: 'Team & settings', icon: Icons.settings_rounded, art: Art3D.gear, color: BrandColors.blue, items: [
       if (a.can(VenuePermission.staff))
@@ -326,10 +313,10 @@ class GymOverviewCard extends ConsumerWidget {
       name: name,
       subtitle: 'Run your gym on Health Pro',
       status: StatusChip(label: 'Not set up', color: context.colors.tertiary),
-      onOpen: () => context.go(CoreRoutes.registerVenueFor(gymVenueType)),
+      onOpen: () => context.go(CoreRoutes.registerVenue),
       actions: [
         FilledButton.icon(
-          onPressed: () => context.go(CoreRoutes.registerVenueFor(gymVenueType)),
+          onPressed: () => context.go(CoreRoutes.registerVenue),
           style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
           icon: const Icon(Icons.rocket_launch_outlined, size: 18),
           label: const Text('Set up your gym'),

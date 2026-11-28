@@ -18,11 +18,12 @@ import '../widgets/class_widgets.dart';
 import '../widgets/coaching_widgets.dart';
 import '../widgets/trainer_widgets.dart';
 
-/// My gym, in a member's menu: the gym they belong to, in full. Its photos,
+/// My services, in a member's menu: every service they've joined (a gym, a
+/// pool, a cycling club...) as a card at the top, with what kind it is and
+/// how their package stands; the one chosen in full under them. Its photos,
 /// what it has (facilities), how to reach it, where it is, when it's open
 /// and its trainers, beside their own membership there (package, days left,
-/// member code, trainer, paying). With several gyms, one at a time, chosen
-/// at the top; [gymId] opens on that one.
+/// member code, trainer, paying). [gymId] opens on that one.
 class MyGymScreen extends ConsumerStatefulWidget {
   final String? gymId;
 
@@ -44,7 +45,7 @@ class _MyGymScreenState extends ConsumerState<MyGymScreen> {
   @override
   Widget build(BuildContext context) {
     return AppPage(
-      title: 'My gym',
+      title: 'My services',
       body: AsyncValueView<MyMemberships>(
         value: ref.watch(myMembershipsProvider),
         onRetry: () => ref.invalidate(myMembershipsProvider),
@@ -62,27 +63,151 @@ class _MyGymScreenState extends ConsumerState<MyGymScreen> {
             child: ListView(
               padding: pagePadding(context),
               children: [
-                if (mine.gyms.length > 1)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final g in mine.gyms)
-                          ChoiceChip(
-                            label: Text(g.venueName),
-                            selected: g.venueId == gym.venueId,
-                            onSelected: (_) => setState(() => _chosen = g.venueId),
-                          ),
-                      ],
-                    ),
-                  ),
+                _JoinedServices(gyms: mine.gyms, chosen: gym.venueId, onChoose: (id) => setState(() => _chosen = id)),
                 _MyGymDetails(key: ValueKey(gym.venueId), mine: gym),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// Every service they've joined, side by side: what kind it is (its icon
+/// and colour from Service types), its name and place, and how their
+/// package there stands. The one shown in full below is marked; tap another
+/// to show it.
+class _JoinedServices extends ConsumerWidget {
+  final List<MyGym> gyms;
+  final String chosen;
+  final ValueChanged<String> onChoose;
+
+  const _JoinedServices({required this.gyms, required this.chosen, required this.onChoose});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final types = ref.watch(venueTypesProvider).valueOrNull ?? const <VenueType>[];
+    final today = BhutanTime.today();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+            child: Text(
+              "Services you've joined (${gyms.length})",
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: -0.2, color: context.brand.ink),
+            ),
+          ),
+          ResponsiveGrid(
+            minItemWidth: 240,
+            maxColumns: 4,
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (final g in gyms)
+                _JoinedCard(
+                  gym: g,
+                  type: venueTypeOf(types, ref.watch(venueProvider(g.venueId)).valueOrNull?.type ?? ''),
+                  today: today,
+                  selected: g.venueId == chosen,
+                  onTap: () => onChoose(g.venueId),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One service they've joined: its kind, name, place and their package
+/// there (days left, paused, ended...); marked while it's the one shown.
+class _JoinedCard extends StatelessWidget {
+  final MyGym gym;
+  final VenueType? type;
+  final DateTime today;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _JoinedCard({required this.gym, required this.type, required this.today, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final accent = type?.colorOr(context.colors.primary) ?? context.colors.primary;
+    final (String status, Color color) = gym.endDate == null
+        ? ('No package yet', brand.muted)
+        : gym.isPausedOn(today)
+            ? ('Paused', brand.warning)
+            : gym.isActiveOn(today)
+                ? switch (_daysLeft(gym.endDate!, today)) {
+                    1 => ('Last day', brand.warning),
+                    final left => ('$left days left', brand.success),
+                  }
+                : gym.hasEndedBy(today)
+                    ? ('Ended ${formatShortDate(gym.endDate!)}', brand.danger)
+                    : ('Starts ${formatShortDate(gym.startDate!)}', brand.warning);
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? accent.withValues(alpha: 0.06) : brand.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: selected ? accent : brand.glassBorder, width: selected ? 2 : 1),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(color: accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),
+                  child: Icon(type?.iconData ?? Icons.fitness_center_rounded, size: 24, color: accent),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        gym.venueName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: brand.ink),
+                      ),
+                      Text(
+                        [if (type != null) type!.name, gym.place].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12.5, color: brand.muted),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        [status, if (gym.planName != null) gym.planName!].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: color),
+                      ),
+                    ],
+                  ),
+                ),
+                if (selected) ...[
+                  const SizedBox(width: 8),
+                  Icon(Icons.check_circle_rounded, size: 20, color: accent),
+                ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -362,8 +487,8 @@ class _MyGymsBody extends StatelessWidget {
         color: BrandColors.blue,
         value: '${mine.gyms.length}',
         count: mine.gyms.length,
-        label: 'My gyms',
-        note: waiting == 0 ? 'Gyms you belong to' : '$waiting ${waiting == 1 ? 'request' : 'requests'} waiting',
+        label: 'My services',
+        note: waiting == 0 ? "Services you've joined" : '$waiting ${waiting == 1 ? 'request' : 'requests'} waiting',
       ),
       ConsoleKpi(
         icon: Icons.verified_rounded,
@@ -481,11 +606,11 @@ class _MyGymsBody extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'My gyms',
+                  'My services',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: ink.heading, letterSpacing: -0.2),
                 ),
               ),
-              ConsoleLink(label: 'Find a gym', onPressed: () => context.go(GymRoutes.gyms)),
+              ConsoleLink(label: 'Services', onPressed: () => context.go(GymRoutes.gyms)),
             ],
           ),
         ),
@@ -562,13 +687,13 @@ class _HowToJoin extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const steps = [
-      (Icons.search_rounded, 'Find a gym', 'See gyms near you, their packages, prices and trainers.'),
+      (Icons.search_rounded, 'Services', 'Gyms, pools, cycling, wellness and more near you: packages, prices and trainers.'),
       (Icons.how_to_reg_rounded, 'Ask to join', 'Send a request, or show your QR code at its front desk.'),
       (Icons.verified_rounded, 'Pay and check in', 'Pay at the desk or online. Your package shows here.'),
     ];
     return ConsoleCard(
       icon: Icons.fitness_center_rounded,
-      title: "You're not a member of a gym yet",
+      title: "You haven't joined a service yet",
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -582,7 +707,7 @@ class _HowToJoin extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           IntrinsicWidth(
-            child: ConsoleGlowButton(label: 'Find a gym', onPressed: () => context.go(GymRoutes.gyms)),
+            child: ConsoleGlowButton(label: 'Services', onPressed: () => context.go(GymRoutes.gyms)),
           ),
         ],
       ),

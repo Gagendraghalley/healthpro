@@ -3,11 +3,12 @@ import 'package:health_pro_core/health_pro_core.dart';
 
 import '../data/gym_repository.dart';
 
-/// The gyms the signed-in person works at, by name.
+/// The gyms the signed-in person works at, by name: every organisation this
+/// module runs (a pool or a wellness centre is run like a gym).
 final myGymsProvider = Provider<AsyncValue<List<MyVenue>>>(
   (ref) => ref.watch(myVenuesProvider).whenData((all) => [
         for (final v in all)
-          if (v.venue.type == gymVenueType) v,
+          if (gymModuleRuns(v.venue)) v,
       ]),
 );
 

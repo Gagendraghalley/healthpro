@@ -52,16 +52,26 @@ class FakeVenues extends Fake implements VenueRepository {
   @override
   Future<List<MyVenue>> myVenues() async => const [];
 
+  static final peak = Venue.fromJson({
+    'id': 'g1',
+    'type': 'gym',
+    'module_key': 'gym_membership',
+    'name': 'Peak Fitness',
+    'dzongkhag': 'Thimphu',
+    'verification_status': 'verified',
+    'created_at': '2026-11-07T10:00:00Z',
+  });
+
   @override
-  Future<List<Venue>> listPublic({required String type, String? dzongkhag}) async => [
-        Venue.fromJson({
-          'id': 'g1',
-          'type': 'gym',
-          'name': 'Peak Fitness',
-          'dzongkhag': 'Thimphu',
-          'verification_status': 'verified',
-          'created_at': '2026-11-07T10:00:00Z',
-        }),
+  Future<List<Venue>> listPublic({required String type, String? dzongkhag}) async => [peak];
+
+  @override
+  Future<List<Venue>> listForModule(String moduleKey) async => [peak];
+
+  @override
+  Future<List<VenueType>> types() async => const [
+        VenueType(key: 'gym', moduleKey: 'gym_membership', name: 'Gym', sortOrder: 10),
+        VenueType(key: 'swimming', moduleKey: 'gym_membership', name: 'Swimming Pool', icon: 'pool', sortOrder: 30),
       ];
 }
 
@@ -113,12 +123,16 @@ void main() {
   testWidgets('visitors land on the public Welcome page', (tester) async {
     final container = await pumpApp(tester);
     expect(container.read(appRouterProvider).routerDelegate.currentConfiguration.uri.path, CoreRoutes.welcome);
-    expect(find.text('Find a gym'), findsWidgets);
+    expect(find.text('Services'), findsWidgets);
   });
 
-  testWidgets("visitors browse the gyms' public pages", (tester) async {
+  testWidgets('visitors choose a kind of service, then browse its public pages', (tester) async {
     final container = await pumpApp(tester);
     container.read(appRouterProvider).go(GymRoutes.gyms);
+    await tester.pumpAndSettle();
+    expect(find.text('What are you looking for?'), findsOneWidget);
+    expect(find.text('Swimming Pool'), findsOneWidget);
+    await tester.tap(find.text('Gym'));
     await tester.pumpAndSettle();
     expect(find.text('Peak Fitness'), findsOneWidget);
   });

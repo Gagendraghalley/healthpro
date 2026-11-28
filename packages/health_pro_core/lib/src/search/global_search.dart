@@ -105,7 +105,7 @@ List<SearchHit> searchablePages({
 
   if (platformPages) {
     page('Overview', Icons.space_dashboard_rounded, CoreRoutes.home, art: Art3D.house, keywords: 'home platform');
-    page('My services', Icons.apps_rounded, CoreRoutes.services, art: Art3D.puzzle, keywords: 'services modules');
+    page('Modules', Icons.apps_rounded, CoreRoutes.services, art: Art3D.puzzle, keywords: 'services modules');
   }
   for (final nav in [...services, if (admin != null) admin]) {
     final where = nav.scope == null ? nav.name : '${nav.name} · ${nav.scope!.label}';

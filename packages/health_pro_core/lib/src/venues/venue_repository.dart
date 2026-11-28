@@ -7,12 +7,19 @@ import '../auth/auth_repository.dart';
 import '../profiles/profile_repository.dart';
 import '../supabase/supabase_provider.dart';
 import 'venue.dart';
+import 'venue_type.dart';
 
 final venueRepositoryProvider = Provider<VenueRepository>((ref) => VenueRepository(ref.watch(supabaseProvider)));
 
 /// Verified venues of one type, for everyone (visitors too).
 final publicVenuesProvider = FutureProvider.family<List<Venue>, ({String type, String? dzongkhag})>(
   (ref, q) => ref.watch(venueRepositoryProvider).listPublic(type: q.type, dzongkhag: q.dzongkhag),
+);
+
+/// Every verified venue one module runs ([moduleKey]), of any type: a gym, a
+/// pool, a wellness centre... For everyone (visitors too).
+final moduleVenuesProvider = FutureProvider.family<List<Venue>, String>(
+  (ref, moduleKey) => ref.watch(venueRepositoryProvider).listForModule(moduleKey),
 );
 
 /// One venue: verified ones for everyone; any status for its staff and admins.
@@ -67,6 +74,43 @@ class VenueRepository {
     if (dzongkhag != null) query = query.eq('dzongkhag', dzongkhag);
     final rows = await query.order('name');
     return rows.map(Venue.fromJson).toList();
+  }
+
+  Future<List<Venue>> listForModule(String moduleKey) async {
+    final rows = await _client
+        .from('venues')
+        .select()
+        .eq('module_key', moduleKey)
+        .eq('verification_status', VerificationStatus.verified)
+        .order('name');
+    return rows.map(Venue.fromJson).toList();
+  }
+
+  /// The organisation types, in the team's order, then by name.
+  Future<List<VenueType>> types() async {
+    final rows = await _client.from('venue_types').select().order('sort_order').order('name');
+    return rows.map(VenueType.fromJson).toList();
+  }
+
+  /// Adds a type ([key] null) or changes one; returns its key.
+  Future<String> saveType(String? key, VenueTypeDraft draft) async =>
+      await _client.rpc('save_venue_type', params: {'type_key': key, 'details': draft.toJson()}) as String;
+
+  /// Deletes a type no organisation has (one in use is turned off instead).
+  Future<void> deleteType(String key) => _client.rpc('delete_venue_type', params: {'type_key': key});
+
+  /// Service types' cover photos: public, a folder per type.
+  static const typePhotoBucket = 'service-type-photos';
+
+  /// Uploads a cover photo for type [key] ('new' while it has none yet);
+  /// returns its public address, for [saveType].
+  Future<String> uploadTypePhoto(String? key, Uint8List bytes, {String contentType = 'image/jpeg'}) async {
+    final ext = switch (contentType) { 'image/png' => 'png', 'image/webp' => 'webp', _ => 'jpg' };
+    final path = '${key ?? 'new'}/${DateTime.now().millisecondsSinceEpoch}.$ext';
+    await _client.storage
+        .from(typePhotoBucket)
+        .uploadBinary(path, bytes, fileOptions: FileOptions(contentType: contentType, upsert: false));
+    return _client.storage.from(typePhotoBucket).getPublicUrl(path);
   }
 
   Future<Venue?> get(String id) async {

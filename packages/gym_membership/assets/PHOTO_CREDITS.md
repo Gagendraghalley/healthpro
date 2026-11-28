@@ -7,11 +7,9 @@ permission needed): https://unsplash.com/license
 |---|---|
 | hero.jpg | https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e |
 | gym.jpg | https://images.unsplash.com/photo-1534438327276-14e5300c3a48 |
-| strength.jpg | https://images.unsplash.com/photo-1517836357463-d25dfeac3438 |
 | cardio.jpg | https://images.unsplash.com/photo-1571902943202-507ec2618e8f |
 | training.jpg | https://images.unsplash.com/photo-1534258936925-c58bed479fcb |
 | classes.jpg | https://images.unsplash.com/photo-1518611012118-696072aa579a |
-| eating.jpg | https://images.unsplash.com/photo-1490645935967-10de6ba17061 |
 | active.jpg | https://images.unsplash.com/photo-1476480862126-209bfaa8edc8 |
 | about.jpg | https://images.unsplash.com/photo-1540497077202-7c8a3999166f |
 | mountains.jpg | https://images.unsplash.com/photo-1544735716-392fe2489ffa (Himalaya, Nepal) |

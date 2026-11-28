@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_membership/gym_membership.dart';
 import 'package:gym_membership/src/data/classes.dart';
 import 'package:gym_membership/src/data/follow_ups.dart';
-import 'package:gym_membership/src/data/inventory.dart';
+import 'package:gym_membership/src/data/suppliers.dart';
 import 'package:gym_membership/src/data/joining.dart';
 import 'package:gym_membership/src/data/money.dart';
 import 'package:gym_membership/src/data/online_payments.dart';
@@ -56,7 +56,8 @@ Future<List<SearchHit>> _search(List<MyVenue> gyms, _Repo repo, String query,
     myMembershipsProvider.overrideWith((ref) async => MyMemberships(gyms: memberOf)),
     myClassBookingsProvider.overrideWith((ref) async => const []),
     myTrainingProvider.overrideWith((ref) async => const MyTraining()),
-    publicVenuesProvider.overrideWith((ref, q) async => [venue(gymId, 'Druk Fitness Club'), venue(pemaGymId, 'Pema Gym')]),
+    moduleVenuesProvider.overrideWith((ref, m) async => [venue(gymId, 'Druk Fitness Club'), venue(pemaGymId, 'Pema Gym')]),
+    venueTypesProvider.overrideWith((ref) async => const []),
     gymEnquiriesProvider.overrideWith((ref, id) async => [
           GymEnquiry(id: 'e-$id', venueId: id, fullName: 'Pema Choden', phone: '17000001', createdAt: DateTime(2026, 11, 1)),
         ]),
@@ -80,9 +81,6 @@ Future<List<SearchHit>> _search(List<MyVenue> gyms, _Repo repo, String query,
           GymOffer(id: 'o-$id', venueId: id, name: 'Pema festival', kind: OfferKind.percent, value: 10),
         ]),
     gymExpensesProvider.overrideWith((ref, id) async => const []),
-    gymInventoryProvider.overrideWith((ref, id) async => [
-          InventoryItem(id: 'i-$id', venueId: id, name: 'Pema towels', quantity: 2, reorderLevel: 5, updatedAt: DateTime(2026, 11, 1)),
-        ]),
     connectedSuppliersProvider.overrideWith((ref) async => const []),
     venueStaffProvider.overrideWith((ref, id) async => const []),
     currentUserIdProvider.overrideWithValue('u1'),
@@ -160,12 +158,10 @@ void main() {
     expect(titles(hits, 'Payments'), ['Pema Dorji']);
     expect(titles(hits, 'Classes'), ['Morning yoga'], reason: 'found by its trainer');
     expect(titles(hits, 'Offers'), ['Pema festival']);
-    expect(titles(hits, 'Stock'), ['Pema towels']);
-    expect(hits.firstWhere((h) => h.group == 'Stock').subtitle, contains('Running low'));
+    expect(titles(hits, 'Stock'), isEmpty, reason: 'the inventory was taken out');
     // Each opens that record on its page.
     expect(hits.firstWhere((h) => h.group == 'Classes').route, GymRoutes.classesFor(gymId, open: 'k-$gymId'));
     expect(hits.firstWhere((h) => h.group == 'Offers').route, GymRoutes.offersFor(gymId, open: 'o-$gymId'));
-    expect(hits.firstWhere((h) => h.group == 'Stock').route, GymRoutes.inventoryFor(gymId, open: 'i-$gymId'));
     expect(hits.firstWhere((h) => h.group == 'Enquiries & trials').route, GymRoutes.enquiriesFor(gymId, open: 'e-$gymId'));
     expect(hits.firstWhere((h) => h.group == 'Join requests').route, GymRoutes.requestsFor(gymId, open: 'r-$gymId'));
     expect(titles(hits, 'Gyms'), ['Pema Gym'], reason: 'their own gym is not found again');
@@ -189,8 +185,8 @@ void main() {
   test('a member finds their own gym, opening My gym', () async {
     final hits = await _search(const [], _Repo(), 'pema',
         memberOf: const [MyGym(venueId: pemaGymId, venueName: 'Pema Gym', place: 'Thimphu', memberCode: 'HP-0042')]);
-    expect(titles(hits, 'My gyms'), ['Pema Gym']);
-    expect(hits.firstWhere((h) => h.group == 'My gyms').route, GymRoutes.myGymFor(pemaGymId));
+    expect(titles(hits, 'My services'), ['Pema Gym']);
+    expect(hits.firstWhere((h) => h.group == 'My services').route, GymRoutes.myGymFor(pemaGymId));
     expect(titles(hits, 'Gyms'), isEmpty, reason: 'already found as theirs');
   });
 }

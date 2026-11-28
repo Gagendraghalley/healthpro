@@ -28,8 +28,8 @@ abstract final class GymPermission {
   /// (20261115000004_trainers.sql).
   static const trainers = 'gym.trainers';
 
-  /// The gym's stock, and items from connected suppliers
-  /// (20261118000009_gym_inventory.sql).
+  /// Suppliers: items from connected suppliers
+  /// (20261118000009_gym_inventory.sql; the gym's own stock was taken out).
   static const inventory = 'gym.inventory';
 
   /// The activity log: who registered, sold, took payments, paused or

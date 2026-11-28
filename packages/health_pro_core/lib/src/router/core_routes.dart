@@ -53,6 +53,9 @@ abstract final class CoreRoutes {
   static const adminRoleNew = '/admin/roles/new';
   static const adminRole = '/admin/roles/:id';
   static const adminMasters = '/admin/masters';
+
+  /// The kinds of service on Health Pro (Gym, Swimming Pool...).
+  static const adminServiceTypes = '/admin/service-types';
   static const adminOrganisations = '/admin/organisations';
   static const adminOrganisation = '/admin/organisations/:id';
 

@@ -196,16 +196,20 @@ class Organisation {
   final String name;
   final String? description;
 
+  /// What kind of service it is: a Service types key (venue_types).
+  final String? serviceType;
+
   /// How many venues belong to it (when read with them).
   final int venueCount;
 
-  const Organisation({required this.id, required this.name, this.description, this.venueCount = 0});
+  const Organisation({required this.id, required this.name, this.description, this.serviceType, this.venueCount = 0});
 
   /// A row of organisations, with `venues(count)` when counted.
   factory Organisation.fromJson(Map<String, dynamic> json) => Organisation(
         id: json['id'] as String,
         name: json['name'] as String,
         description: json['description'] as String?,
+        serviceType: json['venue_type'] as String?,
         venueCount: switch (json['venues']) {
           [Map<String, dynamic> c, ...] => (c['count'] as num?)?.toInt() ?? 0,
           _ => 0,

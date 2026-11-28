@@ -225,6 +225,9 @@ ServiceNav? adminNav(PlatformAccess access, {int pending = 0}) {
         if (access.can(PlatformPermission.masters))
           const NavDestination(
               label: 'Master data', icon: Icons.account_tree_outlined, art: Art3D.cardFileBox, route: CoreRoutes.adminMasters),
+        if (access.can(PlatformPermission.masters))
+          const NavDestination(
+              label: 'Service types', icon: Icons.category_outlined, art: Art3D.puzzle, route: CoreRoutes.adminServiceTypes),
         if (access.can(PlatformPermission.modules))
           const NavDestination(
               label: 'Services on/off', icon: Icons.toggle_on_outlined, art: Art3D.plug, route: CoreRoutes.adminModules),
@@ -419,7 +422,7 @@ class _PlatformSidebarState extends ConsumerState<PlatformSidebar> {
                             SideNavTile(
                               icon: Icons.apps_rounded,
                               art: Art3D.puzzle,
-                              label: 'My services',
+                              label: 'Modules',
                               selected: location == CoreRoutes.services,
                               onTap: () => _open(CoreRoutes.services),
                             ),

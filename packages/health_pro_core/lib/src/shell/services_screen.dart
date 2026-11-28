@@ -26,7 +26,7 @@ class ServicesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final access = ref.watch(myAccessProvider).valueOrNull ?? PlatformAccess.none;
     return AppPage(
-      title: 'My services',
+      title: 'Modules',
       body: AsyncValueView<List<HealthProModule>>(
         value: ref.watch(enabledModulesProvider),
         onRetry: () => ref.invalidate(appModulesProvider),

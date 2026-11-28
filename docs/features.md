@@ -1,14 +1,14 @@
 # Health Pro: features by role
 
-Health Pro is a gym membership platform for Bhutan, on the website (installable on a phone) and the Android and iOS apps. This document lists every feature that is built today, grouped by who uses it. For each feature: where to find it, what it does, and what to check when testing.
+Health Pro is one platform for every kind of health and wellness business in Bhutan (gyms, swimming pools, cycling, fitness centres, sports facilities, wellness centres and more), on the website (installable on a phone) and the Android and iOS apps. People sign up once and join any of them with the same account. Every type of organisation is run the same way: packages, members, check-in, classes and trainers, so wherever this document says "gym", it also means a pool, a cycling club or any other type. This document lists every feature that is built today, grouped by who uses it. For each feature: where to find it, what it does, and what to check when testing.
 
 Gym roles below show the default rights. An organisation can change what each role allows, and the Owner always has everything.
 
-Last updated: 23 November 2026
+Last updated: 28 November 2026 by Gagen
 
 ## Before you start testing
 - **Website:** https://myhealthpro.pages.dev (works on a computer and in a phone's browser).
-- **Test accounts** (sign in with the email and its 6-digit code; they exist once `supabase/test_users.sql` has been run):
+- **Test accounts** (sign in with the email and its 6-digit code):
   - **Super admin** (can do everything): test.superadmin@example.com, code **123456**
   - **Health Pro administrator:** test.admin@example.com, code **123456**
   - **Owner** of "Health Pro Test Gym": test.owner@example.com, code **123456**
@@ -17,6 +17,7 @@ Last updated: 23 November 2026
   - **Trainer:** test.trainer@example.com, code **123456**
   - **Member** with 3 months of the Monthly package: test.member@example.com, code **123456**
 - **Gym membership switch:** while the gym service is turned off (Admin → Services on/off), only the super admin and the administrator see the gym pages.
+- **Sample services:** to have pools, cycling clubs, a spa and more to find, run `supabase/sample_services.sql` once on the test project (8 verified places in Thimphu, Paro and Punakha, with packages and classes; each says "Sample data"). The same file says how to remove them.
 - **Needs setting up first:** Continue with Google, push notifications, emails and Ask AI only work once they're switched on for the project. A missing Google button, or "Ask AI isn't set up yet", isn't a bug.
 - **Dates** are Bhutan time. A package that ends on a day still lets the member in on that day.
 - **Reporting a problem:** say which account, which page, the steps, what you expected and what happened, phone or computer, and add a screenshot.
@@ -25,17 +26,23 @@ Last updated: 23 November 2026
 
 ### Welcome page
 **Where:** open the website.
-- What Health Pro is, Gyms near me, Find a gym, Sign in and Sign up.
+- **Top bar:** the logo, search, Ask AI, light or dark, **Register as a professional** (on a tablet, an icon; on a phone, in the footer) and **Log in / Sign up**.
+- **Where are you based:** each time the page opens it asks for your location (your browser or phone shows the question, unless you already answered). Once allowed, it says "Where are you based in Thimphu?" with the dzongkhag you are actually in, and chooses the area nearest you (marked with an arrow) among that dzongkhag's areas (All of Thimphu, Changzamtog, Olakha...); other areas and dzongkhags are under More places. Until then, or if you say no, it says "in Bhutan?" with the dzongkhags to choose from, and Use my location. Your location stays on your device.
+- **What are you looking for:** under it, a card for every type of service (Gym, Swimming Pool, Massage...), with how many places there are in the area chosen ("2 places in Olakha", "None in Olakha · 1 elsewhere") or all told. Tapping one opens that type's places, already in that area. Beside the title, how many places, kinds of service and dzongkhags Health Pro has, counting up as you scroll to them.
+- **Motion:** the types of service glide along a band under the top, one every two seconds; cards rise into place one after another as you scroll; the dot in the top's badge pulses. All of it stands still with Reduce motion.
+- Then About, How it works, Plans, FAQs and the footer.
+- **Check:** in Thimphu it says Thimphu, in Paro it says Paro; saying no to location shows "in Bhutan?"; choosing an area changes every card's count; the area carries over to Services; a type with no places says "Coming soon".
 
-### Find a gym
-**Where:** Welcome page → Find a gym.
-- Each gym with its cover photo, price range (from its packages), Open now (Bhutan time) and, with Near me, how far it is.
-- Near me asks for your location and puts the nearest gym first.
-- Sort by price, set a budget (only gyms with a package at or under it), or choose a dzongkhag.
-- **Check:** only verified gyms are listed; Open now matches the gym's hours.
+### Services
+**Where:** Welcome page → a type's card, All services, or search; for members, menu → Services.
+- **First, the kind of service:** a card for each type (Gym, Fitness Centre, Swimming Pool, Cycling, Sports Facility, Wellness Centre...) with how many places there are and the nearest. A type with none yet says "Coming soon". "See all places" lists every type together.
+- **Your location:** the page asks for it when it opens (once). Once allowed, it shows only places within 25 km of you, nearest first; change that to 5, 10 or 50 km or Anywhere. If there are none that near, it says how many are further away, with "Look anywhere". Without your location, every place is shown.
+- **Then the places of that type:** each with its cover photo, price range (from its packages), Open now (Bhutan time) and how far it is. Chips at the top switch to another type.
+- **Narrow it down:** search (a name, a place, or a service such as yoga, sauna or swimming lessons), a service (from what the places offer: their facilities, packages and classes), a dzongkhag and then an area in it, a budget (only places with a package at or under it), and sort by price or name.
+- **Check:** only verified places are listed; a turned-off type isn't offered; Open now matches the place's hours; searching from the first screen finds places of every type, each saying what it is.
 
 ### A gym's page
-**Where:** tap any gym in the list.
+**Where:** tap any place in the list (a gym, a pool, a cycling club...).
 - Photos, video links and a promotional video, facilities, opening hours for the week, contact person, phone, WhatsApp and email.
 - Packages and prices, trainers, classes with places left, and reviews.
 - A map with Directions (opens Google Maps) and Bigger map.
@@ -71,46 +78,46 @@ Last updated: 23 November 2026
 ### My dashboard
 **Where:** menu → My Health Pro → My dashboard (where members start).
 - Your personal QR code, which works at every gym: Enlarge (for the scanner), Copy, Share, Save picture.
-- My details (with Edit), Latest updates, and your gyms: package, days left, visits in the last 7 days, requests.
+- My details (with Edit), Latest updates, and My services: each place you've joined with its package, days left, visits in the last 7 days, requests.
 - What needs your attention: a package ended or ending within a week, a payment waiting or not found.
 - **Get a new QR code** makes the old one stop working at every gym.
 
 ### Join a gym
-**Where:** scan the gym's QR code, or open the gym's page → Ask to join.
+**Where:** scan the gym's QR code, or open the gym's page → Ask to join. The same for a pool, a cycling club or any other place: one account joins as many as you like.
 - Choose the package you'd like and add a note. The gym is told and the request waits for them.
 - You're told when they add you or decline (with their note). Requests left for 30 days close by themselves.
 - If the desk registered you with the same email, your account picks up that membership once your email is confirmed.
 
-### My gym
-**Where:** menu → My gym.
-- The gym in full (photos, contact, facilities, trainers, videos, hours, map) beside your membership: package, days left, member code, trainer.
-- With several gyms, chips at the top choose one.
+### My services
+**Where:** menu → My services.
+- **Services you've joined:** a card for every place you belong to (a gym, a pool, a cycling club...), each with its kind (icon and colour), name, place, and how your package stands there (days left, last day, paused, ended, or no package yet).
+- Tap a card to see that place in full below: photos, contact, facilities, trainers, videos, hours and map, beside your membership there (package, days left, member code, trainer).
 - When paused: "Paused until …", when you can check in again and until when your package runs.
-
+- **Check:** every place you've joined has a card; the one shown in full is marked.
 ### Pay online
-**Where:** My dashboard → My gyms → Pay online.
+**Where:** My dashboard → My services → Pay online.
 - Choose the package and months, scan the gym's bank QR code in your bank app, pay, then enter the journal number (JRN).
 - The gym confirms it (the package starts) or marks it Not found with a note. You're told either way.
 - **Check:** only one payment can wait at a time; the same journal number is refused a second time at a gym.
 
 ### Receipts
-**Where:** My gym → Receipts.
+**Where:** My services → Receipts.
 - Your last 10 receipts, to print or share.
 
 ### Classes
-**Where:** My gym → classes; or a gym's page.
+**Where:** My services → classes; or a gym's page.
 - Book a class up to two weeks ahead, before it starts. Cancel your own place before it starts.
 - Members-only classes need a package that covers that day and no pause. Classes open to everyone can be booked by anyone signed in.
 - You get an email and a notification when you book, when the class changes, and when the gym cancels your place.
 - **Check:** a full class can't be booked; a cancelled date shows "Cancelled" and can't be booked.
 
 ### My trainer
-**Where:** My dashboard → My gyms → Choose / Change trainer.
+**Where:** My dashboard → My services → Choose / Change trainer.
 - Choose a trainer at each gym. The old and new trainer are told.
 - Review a trainer (stars and a comment) once they've been your trainer.
 
 ### Progress, goals and plans
-**Where:** My gym.
+**Where:** My services.
 - **Log my weight** and other measurements (height, body fat, chest, waist, hips, arm, thigh).
 - **My progress:** weight now, change since the first entry, BMI with its band, and a weight chart.
 - **Goal:** what you're after, target weight and day, how active you are; it works out daily calories and protein.
@@ -217,7 +224,7 @@ Everything the front desk does, plus:
 
 ### Memberships & packages
 **Where:** Sales & money → Memberships & packages.
-- Make and change packages and prices; members on each and times sold. The gym's price range on Find a gym follows them.
+- Make and change packages and prices; members on each and times sold. The gym's price range on Services follows them.
 
 ### Offers & discounts
 **Where:** Sales & money → Offers & discounts.
@@ -234,10 +241,10 @@ Everything the front desk does, plus:
 - **Payments & income:** 12 months, by payment method, every payment with its receipt; Export to Excel.
 - **Expenses & profit:** rent, salaries, equipment, repairs, utilities, supplies, marketing, other; the month's money in, money out and profit, the last 12 months; Export to Excel.
 
-### Inventory and suppliers
-**Where:** Stock.
-- **Inventory:** items, counts, low-stock level and cost. Counts change only by Stock in, Take out or Recount, each kept in the item's History. The menu shows how many items are low or out.
-- **Suppliers:** items and stock from connected suppliers (for now a test supplier); View in the supplier's own system. Nothing is bought here.
+### Suppliers
+**Where:** Stock → Suppliers.
+- Items, stock and prices from connected suppliers (for now a test supplier); View in the supplier's own system. Nothing is bought here.
+- The gym's own inventory (counting its stock) has been taken out. In Roles & permissions the right is called Suppliers.
 
 ### Team and settings
 - **Staff:** Add staff, choose their role, Make their account.
@@ -248,18 +255,20 @@ Everything the front desk does, plus:
 
 ## Owner
 Everything above, always, plus:
-- **Set up your gym / Register another gym:** register the gym; it shows "Being verified" until Health Pro approves it. A new gym gets a getting-started checklist on its dashboard.
+- **Set up your gym / Register another gym:** first choose what you run (Gym, Swimming Pool, Cycling, Wellness Centre... from Service types), then register it; the form suggests that type's facilities. It shows "Being verified" until Health Pro approves it. A new one gets a getting-started checklist on its dashboard.
 - **Roles & permissions** (Team & settings): change what each role allows at the organisation's gyms, turn a role off, or make the organisation's own roles.
 - **Check:** nobody can give a permission they don't have themselves; a gym always keeps an owner.
 
 ## Health Pro admin
 **Where:** menu → Administration.
-- **Admin home**, plus Overview and My services (every service and its numbers).
+- **Admin home**, plus Overview and Modules (every module of the app and its numbers).
 - **Users:** New user, give team roles, turn an account off (it can't sign in until turned on again).
 - **Roles & permissions:** Health Pro-wide roles and, under "Whose roles", each organisation's.
-- **Organisations:** rename, make new, move gyms between organisations (branches of one business).
-- **Venues to verify:** approve new gyms or send them back.
+- **Organisations:** make new (its name and its **service type**, which has to be chosen), edit, move gyms between organisations (branches of one business). The list shows each one's service type. One made for a newly registered place takes that place's type.
+- **Venues to verify:** approve new organisations of every type, or send them back.
 - **Master data:** dzongkhags, gewogs and villages: add, rename, turn off.
+- **Service types** (also linked from Master data): the kinds of service that can join (six to start: Gym, Fitness Centre, Swimming Pool, Cycling, Sports Facility, Wellness Centre). Each one is a card on the Services page. Add a type, or change its name, description, icon, colour, cover photo, the facilities its form suggests and its order on Services. "Show before there are any" decides whether its card says Coming soon or stays hidden until the first one is verified. Turn a type off (no new ones; those registered keep it). A type nobody has can be deleted. Changes show on Services straight away: no app update needed.
+- **Check:** a turned-off type isn't offered when registering, on Services or for a new organisation; a new organisation can't be made without a service type; deleting a type in use is refused; a type with "Show before there are any" off has no card until one of its places is verified.
 - **Services on/off:** turn the gym membership service on or off.
 - **App errors:** errors people hit, with the page, how many times and when last seen.
 - **Check:** only a super admin can make another super admin; nobody can remove their own super admin.

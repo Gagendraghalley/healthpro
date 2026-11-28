@@ -56,11 +56,14 @@ class VenueAccess {
   bool can(String permission) => VenueRole.hasEverything(role) || permissions.contains(permission);
 }
 
-/// A place on Health Pro: a gym today; more types as modules add them
-/// (venue_types).
+/// An organisation on Health Pro: a gym, a pool, a wellness centre... (its
+/// [type], from the Service types master).
 class Venue {
   final String id;
   final String type;
+
+  /// The module that runs it (from its type): its pages are that module's.
+  final String? moduleKey;
   final String name;
   final String? description;
   final String dzongkhag;
@@ -103,6 +106,7 @@ class Venue {
     required this.dzongkhag,
     required this.verificationStatus,
     required this.createdAt,
+    this.moduleKey,
     this.description,
     this.town,
     this.address,
@@ -136,6 +140,7 @@ class Venue {
   factory Venue.fromJson(Map<String, dynamic> json) => Venue(
         id: json['id'] as String,
         type: json['type'] as String,
+        moduleKey: json['module_key'] as String?,
         name: json['name'] as String,
         description: json['description'] as String?,
         dzongkhag: json['dzongkhag'] as String,

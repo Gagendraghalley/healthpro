@@ -18,13 +18,22 @@ import '../widgets/form_fields.dart';
 import '../widgets/loader.dart';
 import 'venue.dart';
 import 'venue_repository.dart';
+import 'venue_type.dart';
 import 'venue_widgets.dart';
 import 'opening_hours.dart';
 import 'venue_map.dart';
 import 'venue_profile_fields.dart';
 import 'venue_profile_widgets.dart';
 
-/// 'Register your venue': the kinds the enabled modules serve.
+/// The organisation types someone can register now: in use, run by one of
+/// [modules] (the enabled ones), in the team's order.
+List<VenueType> registrableTypes(List<VenueType> types, List<HealthProModule> modules) => [
+      for (final t in types)
+        if (t.isActive && modules.any((m) => m.key == t.moduleKey || m.servesVenueType(t.key))) t,
+    ];
+
+/// 'Register your organisation': the types in the Service types master
+/// that the enabled modules run (a gym, a pool, a wellness centre...).
 class RegisterVenueScreen extends ConsumerWidget {
   const RegisterVenueScreen({super.key});
 
@@ -32,41 +41,45 @@ class RegisterVenueScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final signedIn = ref.watch(currentUserIdProvider) != null;
     return AppPage(
-      title: 'Register your venue',
+      title: 'Register your organisation',
       body: AsyncValueView<List<HealthProModule>>(
         value: ref.watch(enabledModulesProvider),
         onRetry: () => ref.invalidate(appModulesProvider),
-        data: (modules) {
-          final kinds = [for (final m in modules) ...m.venueKinds];
-          return ListView(
-            padding: pagePadding(context),
-            children: [
-              Text('What do you run?', style: context.text.headlineSmall),
-              const SizedBox(height: 6),
-              Text(
-                'The Health Pro team checks every venue before it goes live. You can add photos and '
-                'prices while you wait.',
-                style: TextStyle(color: context.brand.muted),
-              ),
-              const SizedBox(height: 16),
-              if (kinds.isEmpty)
-                const EmptyState(icon: Icons.storefront_rounded, title: 'Registration opens soon'),
-              for (final kind in kinds)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: MenuTile(
-                    icon: kind.icon,
-                    title: kind.label,
-                    subtitle: kind.description,
-                    onTap: () {
-                      final form = CoreRoutes.registerVenueFor(kind.key);
-                      context.push(signedIn ? form : CoreRoutes.signInFor(form));
-                    },
-                  ),
+        data: (modules) => AsyncValueView<List<VenueType>>(
+          value: ref.watch(venueTypesProvider),
+          onRetry: () => ref.invalidate(venueTypesProvider),
+          data: (types) {
+            final kinds = registrableTypes(types, modules);
+            return ListView(
+              padding: pagePadding(context),
+              children: [
+                Text('What kind of organisation do you run?', style: context.text.headlineSmall),
+                const SizedBox(height: 6),
+                Text(
+                  'The Health Pro team checks every organisation before it goes live. You can add photos and '
+                  'prices while you wait. Members join with the Health Pro account they already have.',
+                  style: TextStyle(color: context.brand.muted),
                 ),
-            ],
-          );
-        },
+                const SizedBox(height: 16),
+                if (kinds.isEmpty)
+                  const EmptyState(icon: Icons.storefront_rounded, title: 'Registration opens soon'),
+                for (final kind in kinds)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: MenuTile(
+                      icon: kind.iconData,
+                      title: kind.name,
+                      subtitle: kind.description,
+                      onTap: () {
+                        final form = CoreRoutes.registerVenueFor(kind.key);
+                        context.push(signedIn ? form : CoreRoutes.signInFor(form));
+                      },
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -206,7 +219,9 @@ class _VenueFormScreenState extends ConsumerState<VenueFormScreen> {
   Widget _page(BuildContext context, {required String type, required Venue? venue}) {
     final modules = ref.watch(enabledModulesProvider).valueOrNull ?? const <HealthProModule>[];
     final kind = [for (final m in modules) ...m.venueKinds].where((k) => k.key == type).firstOrNull;
-    final label = kind?.label.toLowerCase() ?? 'venue';
+    final master = venueTypeOf(ref.watch(venueTypesProvider).valueOrNull ?? const [], type);
+    final label = (master?.name ?? kind?.label)?.toLowerCase() ?? 'organisation';
+    final suggestions = master != null && master.facilities.isNotEmpty ? master.facilities : kind?.facilities ?? const <String>[];
     return AppPage(
       title: _editing ? 'Edit $label' : 'Register your $label',
       body: Form(
@@ -275,7 +290,7 @@ class _VenueFormScreenState extends ConsumerState<VenueFormScreen> {
             const SectionTitle('Facilities'),
             FacilitiesEditor(
               value: _facilities,
-              suggestions: kind?.facilities ?? const [],
+              suggestions: suggestions,
               onChanged: (v) => setState(() => _facilities = v),
             ),
             const SectionTitle('Videos'),

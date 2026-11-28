@@ -8,7 +8,9 @@ import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:health_pro_core/health_pro_core.dart';
 
+import '../data/gym_repository.dart';
 import '../gym_routes.dart';
+import '../screens/public_screens.dart';
 import '../widgets/gym_art.dart';
 import '../widgets/gym_type.dart';
 
@@ -126,15 +128,12 @@ class _GymWelcomePageState extends ConsumerState<GymWelcomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _Hero(
-                    layout: layout,
-                    scroll: _scroll,
-                    onGetStarted: _signUp,
-                    onExplore: () => _scrollTo(_servicesKey),
-                  ),
-                  _Highlights(layout: layout),
+                  // The user's layout: the photo and Where are you based,
+                  // then every kind of service, then the rest.
+                  _Hero(layout: layout, scroll: _scroll, onExplore: () => _scrollTo(_servicesKey)),
+                  _ServiceMarquee(layout: layout),
                   _Reveal(
-                    child: _Services(
+                    child: _ServiceTypes(
                       key: _servicesKey,
                       layout: layout,
                       serviceLinks: serviceLinks,
@@ -149,8 +148,8 @@ class _GymWelcomePageState extends ConsumerState<GymWelcomePage> {
                   _Footer(
                     layout: layout,
                     links: [
-                      ('Find a gym', _findGym),
-                      ('Register your gym', _registerGym),
+                      ('Services', _findGym),
+                      ('Register as a professional', _registerGym),
                       ('How it works', () => _scrollTo(_stepsKey)),
                       ('FAQs', () => _scrollTo(_faqKey)),
                       ('Log in', _logIn),
@@ -171,16 +170,9 @@ class _GymWelcomePageState extends ConsumerState<GymWelcomePage> {
               layout: layout,
               scrolled: _scrolled,
               onLogo: _toTop,
-              links: [
-                ('Services', () => _scrollTo(_servicesKey)),
-                ('About', () => _scrollTo(_aboutKey)),
-                ('Plans', () => _scrollTo(_plansKey)),
-                ('FAQs', () => _scrollTo(_faqKey)),
-                ('Find a gym', _findGym),
-              ],
               onSearch: _findGym,
+              onRegister: _registerGym,
               onLogIn: _logIn,
-              onSignUp: _signUp,
             ),
           ),
         ],
@@ -269,29 +261,30 @@ class _Frame extends StatelessWidget {
 
 // ─── The bar ───────────────────────────────────────────────────────────────
 
-/// The logo, the sections (in a wide window), search, Ask AI, light or dark,
-/// Log in and Sign up, on frosted glass.
+/// The logo, search, Ask AI, light or dark, Register as a professional (a
+/// button on a computer, an icon on a tablet; the footer has it on a phone)
+/// and Log in / Sign up, on frosted glass.
 class _NavBar extends StatelessWidget {
   static const height = 72.0;
 
   final _Layout layout;
   final bool scrolled;
   final VoidCallback onLogo;
-  final List<(String, VoidCallback)> links;
 
-  /// Searches gyms (Find a gym has the search).
+  /// Searches services (Find services has the search).
   final VoidCallback onSearch;
+  final VoidCallback onRegister;
+
+  /// Log in, which offers Sign up.
   final VoidCallback onLogIn;
-  final VoidCallback onSignUp;
 
   const _NavBar({
     required this.layout,
     required this.scrolled,
     required this.onLogo,
-    required this.links,
     required this.onSearch,
+    required this.onRegister,
     required this.onLogIn,
-    required this.onSignUp,
   });
 
   @override
@@ -339,25 +332,9 @@ class _NavBar extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (layout.wide) ...[
-                    for (final (label, onTap) in links)
-                      TextButton(
-                        onPressed: onTap,
-                        style: TextButton.styleFrom(
-                          foregroundColor: ink.heading,
-                          textStyle: Theme.of(context)
-                              .textTheme
-                              .labelLarge
-                              ?.copyWith(fontWeight: FontWeight.w600, fontSize: 15),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        ),
-                        child: Text(label),
-                      ),
-                    const SizedBox(width: 8),
-                  ],
                   if (layout.medium) ...[
                     IconButton(
-                      tooltip: 'Search gyms',
+                      tooltip: 'Search services',
                       onPressed: onSearch,
                       color: ink.heading,
                       icon: const Icon(Icons.search_rounded),
@@ -382,9 +359,19 @@ class _NavBar extends StatelessWidget {
                     ),
                   ),
                   SizedBox(width: layout.medium ? 8 : 4),
-                  _PillButton(label: 'Log in', outlined: true, compact: true, onPressed: onLogIn),
-                  const SizedBox(width: 10),
-                  _PillButton(label: 'Sign up', compact: true, onPressed: onSignUp),
+                  if (layout.wide) ...[
+                    _PillButton(label: 'Register as a professional', outlined: true, compact: true, onPressed: onRegister),
+                    const SizedBox(width: 10),
+                  ] else if (layout.medium) ...[
+                    IconButton(
+                      tooltip: 'Register as a professional',
+                      onPressed: onRegister,
+                      color: ink.heading,
+                      icon: const Icon(Icons.add_business_outlined),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  _PillButton(label: 'Log in / Sign up', compact: true, onPressed: onLogIn),
                 ],
               ),
             ),
@@ -397,25 +384,25 @@ class _NavBar extends StatelessWidget {
 
 // ─── The top ───────────────────────────────────────────────────────────────
 
-/// The headline, what Health Pro is, Get Started and Explore Services, and
-/// three things that are true of it, beside a slide show of gym training
-/// filling the right of the window (a card under them on a phone); a
-/// membership card and a check-in float over it, and a wave runs along the
-/// foot.
+/// The user's layout: a slide show of training filling the left of the
+/// window (a card on top on a phone), with a membership card and a check-in
+/// floating over it, and Where are you based beside it (_WhereAreYou); a
+/// wave runs along the foot.
 ///
-/// The slides move like 108.bt's opening scene: each photo sweeps in from
-/// the right behind the page's navy and orange bands, drifts slowly closer
-/// while it shows, then gives way to the next.
+/// The slides move like 108.bt's opening scene: each photo sweeps in behind
+/// the page's navy and orange bands, drifts slowly closer while it shows,
+/// then gives way to the next.
 class _Hero extends StatefulWidget {
   final _Layout layout;
-  final VoidCallback onGetStarted;
+
+  /// To every kind of service, under the top.
   final VoidCallback onExplore;
 
   /// The page's scroll: the photos drift up a little slower than the page
   /// and lean in (a gentle depth), and rest once the top is out of sight.
   final ScrollController scroll;
 
-  const _Hero({required this.layout, required this.onGetStarted, required this.onExplore, required this.scroll});
+  const _Hero({required this.layout, required this.onExplore, required this.scroll});
 
   @override
   State<_Hero> createState() => _HeroState();
@@ -515,64 +502,7 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
       letterSpacing: -headlineSize * 0.03,
       color: ink.heading,
     );
-    final accent = context.brand.accentText;
-    final buttons = [
-      _PillButton(label: 'Get Started', icon: Icons.arrow_forward_rounded, onPressed: widget.onGetStarted),
-      _PillButton(label: 'Explore Services', outlined: true, onPressed: widget.onExplore),
-    ];
-    // The headline arrives a line at a time, then what it is, the buttons and
-    // the facts: one short cascade on arrival, then still.
-    final words = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: staggered(step: const Duration(milliseconds: 90), offset: 18, [
-        const Padding(padding: EdgeInsets.only(bottom: 24), child: _HeroBadge('GYM & FITNESS PLATFORM')),
-        Text('One Platform.', style: headline),
-        Text('Every Gym.', style: headline),
-        _AccentText('A Healthier You.', style: headline),
-        Padding(
-          padding: EdgeInsets.only(top: layout.wide ? 26 : 20, bottom: layout.wide ? 36 : 30),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 470),
-            child: Text(
-              'Discover gyms, manage memberships and track visits in Health Pro. '
-              'Train with a gym near you and build healthy habits that last.',
-              style: TextStyle(fontSize: layout.wide ? 18 : 16, height: 1.65, color: ink.body),
-            ),
-          ),
-        ),
-        // Side by side; one over the other, the width of a phone.
-        if (layout.medium)
-          Wrap(spacing: 14, runSpacing: 12, children: buttons)
-        else
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [buttons[0], const SizedBox(height: 12), buttons[1]],
-          ),
-        Padding(
-          padding: EdgeInsets.only(top: layout.wide ? 34 : 28),
-          child: Wrap(
-            spacing: 22,
-            runSpacing: 12,
-            children: [
-              for (final point in const ['Made for Bhutan', 'Gym memberships live', 'QR check-in at the desk'])
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(color: context.brand.accent.withValues(alpha: 0.14), shape: BoxShape.circle),
-                      child: Icon(Icons.check_rounded, size: 13, color: accent),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(point, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: ink.body)),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      ]),
-    );
+    final words = _WhereAreYou(layout: layout, headline: headline, onExplore: widget.onExplore);
     final top = MediaQuery.paddingOf(context).top + _NavBar.height;
     return ClipPath(
       clipper: _WaveClipper(),
@@ -583,47 +513,51 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
     );
   }
 
-  /// The slides fill the right of the window behind a clean slanted edge
-  /// (leaning like the page's stripes, an orange rule along it), graded
-  /// towards navy so every slide sits in the brand's colours, with the way
-  /// between them on glass under the cards. The whole window, like a stage
-  /// (never shorter than what's on it).
+  /// The slides fill the left of the window behind a clean slanted edge (an
+  /// orange rule along it), graded towards navy so every slide sits in the
+  /// brand's colours, with the way between them on glass under the cards.
+  /// The whole window, like a stage (never shorter than what's on it).
   Widget _wide(BuildContext context, Widget words, Color bg, double top) {
     // The edge's foot sits just inside the words' column; it leans away from
     // them going up, where the headline is widest.
     final inner = math.min(layout.width - layout.gutter * 2, _Layout.maxContent);
-    final photoLeft = (layout.width - inner) / 2 + (inner - 40) * 11 / 21 - 30;
+    final photoRight = (layout.width - inner) / 2 + (inner - 40) * 11 / 21 - 30;
     return ConstrainedBox(
       constraints: BoxConstraints(minHeight: MediaQuery.sizeOf(context).height.clamp(0.0, 1080.0)),
       child: Stack(
         alignment: Alignment.center,
         children: [
           Positioned(
-              left: -200,
+              right: -200,
               top: 40,
               child: GymGlow(color: BrandColors.blue.withValues(alpha: _Ink.of(context).dark ? 0.16 : 0.08), size: 560)),
           Positioned(
-            left: photoLeft,
+            left: 0,
             top: 0,
-            right: 0,
+            right: photoRight,
             bottom: 0,
             child: _swipe(
-              Stack(
-                fit: StackFit.expand,
-                children: [
-                  ClipPath(
-                    clipper: const _SlantClipper(),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        _parallax(context, _SlideStage(show: _show), zoom: 0.06),
-                        const IgnorePointer(child: _PhotoGrade()),
-                        IgnorePointer(child: CustomPaint(painter: GymStripesPainter.of(context))),
-                      ],
+              // The edge, its rule and the grade drawn for a photo on the
+              // right, turned round; the photos turned back, so they read true.
+              Transform.flip(
+                flipX: true,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipPath(
+                      clipper: const _SlantClipper(),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          _parallax(context, Transform.flip(flipX: true, child: _SlideStage(show: _show)), zoom: 0.06),
+                          const IgnorePointer(child: _PhotoGrade()),
+                          IgnorePointer(child: CustomPaint(painter: GymStripesPainter.of(context))),
+                        ],
+                      ),
                     ),
-                  ),
-                  IgnorePointer(child: CustomPaint(painter: _SlantRulePainter(context.brand.highlight))),
-                ],
+                    IgnorePointer(child: CustomPaint(painter: _SlantRulePainter(context.brand.highlight))),
+                  ],
+                ),
               ),
             ),
           ),
@@ -633,8 +567,6 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
               layout: layout,
               child: Row(
                 children: [
-                  Expanded(flex: 11, child: words),
-                  const SizedBox(width: 40),
                   Expanded(
                     flex: 10,
                     child: SizedBox(
@@ -642,10 +574,10 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          // Across the photo's edge, half on the page.
-                          Positioned(left: -44, bottom: 10, child: _card(const _MiniCard(), order: 0)),
+                          // Across the photo's edge, clear of the words beside it.
+                          Positioned(right: 0, bottom: 10, child: _card(const _MiniCard(), order: 0)),
                           Positioned(
-                            right: 10,
+                            left: 10,
                             bottom: 30,
                             child: _card(
                               const _FloatingNote(
@@ -661,6 +593,8 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 40),
+                  Expanded(flex: 11, child: words),
                 ],
               ),
             ),
@@ -673,18 +607,18 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
               layout: layout,
               child: Row(
                 children: [
-                  const Spacer(flex: 11),
-                  const SizedBox(width: 40),
                   Expanded(
                     flex: 10,
                     child: Align(
-                      alignment: Alignment.centerLeft,
+                      alignment: Alignment.centerRight,
                       child: FadeSlideIn(
                         delay: const Duration(milliseconds: 900),
                         child: _SlideControls(show: _show),
                       ),
                     ),
                   ),
+                  const SizedBox(width: 40),
+                  const Spacer(flex: 11),
                 ],
               ),
             ),
@@ -694,9 +628,9 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
     );
   }
 
-  /// The words, then the slides as a rounded card (swiped between, the way
-  /// between them over its top) with the membership card and the check-in
-  /// over it.
+  /// The slides as a rounded card (swiped between, the way between them over
+  /// its top) with the membership card and the check-in over it, then the
+  /// words: the user's left-to-right, top to bottom.
   Widget _narrow(BuildContext context, Widget words, Color bg, double top) {
     return Stack(
       children: [
@@ -708,8 +642,6 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                words,
-                const SizedBox(height: 36),
                 SizedBox(
                   height: layout.medium ? 460 : 380,
                   child: Stack(
@@ -773,11 +705,231 @@ class _HeroState extends State<_Hero> with TickerProviderStateMixin {
                     ],
                   ),
                 ),
+                const SizedBox(height: 28),
+                words,
               ],
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─── Where are you based ───────────────────────────────────────────────────
+
+/// Whether [venue] is in [area].
+bool _inArea(ServicesArea area, Venue venue) =>
+    venue.dzongkhag == area.dzongkhag && (area.town == null || venueArea(venue) == area.town);
+
+/// The area the welcome page shows: the one the visitor chose, else where
+/// they are (once their location is known): their dzongkhag, from where
+/// they stand (dzongkhagAt), and in it the area of the place nearest them,
+/// when one is within [nearbyKm]. Null for everywhere (not known yet, or
+/// outside Bhutan).
+final _shownAreaProvider = Provider<ServicesArea?>((ref) {
+  final chosen = ref.watch(servicesAreaProvider);
+  if (chosen != null) return chosen;
+  final here = ref.watch(myLocationProvider);
+  if (here == null) return null;
+  final dzongkhag = dzongkhagAt(here.latitude, here.longitude);
+  if (dzongkhag == null) return null;
+  String? town;
+  var best = nearbyKm.toDouble();
+  for (final v in ref.watch(moduleVenuesProvider(gymModuleKey)).valueOrNull ?? const <Venue>[]) {
+    if (v.dzongkhag != dzongkhag || !v.hasLocation) continue;
+    final km = distanceKm(here.latitude, here.longitude, v.latitude!, v.longitude!);
+    if (km <= best) {
+      best = km;
+      town = venueArea(v);
+    }
+  }
+  return (dzongkhag: dzongkhag, town: town);
+});
+
+/// Where are you based (the user's layout, beside the photo): "in Thimphu?",
+/// the dzongkhag they are in, from their location, which the page asks for
+/// each time it opens; with that dzongkhag's areas (the towns its places are
+/// in) to choose from, the one nearest them chosen. Until it is known (or if
+/// they say no), "in Bhutan?" and the dzongkhags to choose from, and Use my
+/// location. Every kind of service under the top counts its places in the
+/// area shown, and Find services starts there.
+class _WhereAreYou extends ConsumerStatefulWidget {
+  final _Layout layout;
+  final TextStyle headline;
+  final VoidCallback onExplore;
+
+  const _WhereAreYou({required this.layout, required this.headline, required this.onExplore});
+
+  @override
+  ConsumerState<_WhereAreYou> createState() => _WhereAreYouState();
+}
+
+class _WhereAreYouState extends ConsumerState<_WhereAreYou> {
+  /// How many areas show as buttons, those with the most places; the rest,
+  /// and the other dzongkhags, are under More places.
+  static const _shownAreas = 6;
+
+  bool _locating = false;
+
+  /// Asks for their location as the page opens (the browser or phone asks
+  /// them, unless they have already answered); nothing said on a no.
+  @override
+  void initState() {
+    super.initState();
+    if (ref.read(myLocationProvider) != null) return;
+    _locating = true;
+    locationIfAllowed().then((here) {
+      if (!mounted) return;
+      setState(() => _locating = false);
+      // Find services needn't ask again this visit.
+      ref.read(locationLookedUpProvider.notifier).state = true;
+      if (here != null && ref.read(myLocationProvider) == null) ref.read(myLocationProvider.notifier).state = here;
+    });
+  }
+
+  Future<void> _useMyLocation() async {
+    setState(() => _locating = true);
+    final ok = await runAction(context, () async {
+      ref.read(myLocationProvider.notifier).state = await currentLocation();
+    });
+    if (!mounted) return;
+    setState(() => _locating = false);
+    // Where they are, rather than an area picked before.
+    if (ok) ref.read(servicesAreaProvider.notifier).state = null;
+  }
+
+  void _choose(ServicesArea area) => ref.read(servicesAreaProvider.notifier).state = area;
+
+  @override
+  Widget build(BuildContext context) {
+    final layout = widget.layout;
+    final headline = widget.headline;
+    final ink = _Ink.of(context);
+    final venues = ref.watch(moduleVenuesProvider(gymModuleKey)).valueOrNull ?? const <Venue>[];
+    final here = ref.watch(myLocationProvider);
+    final shown = ref.watch(_shownAreaProvider);
+    final fromLocation = ref.watch(servicesAreaProvider) == null;
+
+    // Their dzongkhag, once known (from where they are, or chosen).
+    final dzongkhag = shown?.dzongkhag;
+    // [counts]' names, the most places first.
+    List<String> mostFirst(Map<String, int> counts) => counts.keys.toList()
+      ..sort((a, b) {
+        final most = counts[b]!.compareTo(counts[a]!);
+        return most != 0 ? most : a.compareTo(b);
+      });
+    final perDzongkhag = <String, int>{};
+    for (final v in venues) {
+      perDzongkhag[v.dzongkhag] = (perDzongkhag[v.dzongkhag] ?? 0) + 1;
+    }
+
+    // Known: all of it, and its areas (the one shown always in view); the
+    // rest, and the other dzongkhags, under More places. Not known: the
+    // dzongkhags with places.
+    final List<(String, ServicesArea)> inView;
+    final List<(String, ServicesArea)> more;
+    if (dzongkhag != null) {
+      final perArea = <String, int>{};
+      for (final v in venues) {
+        final town = venueArea(v);
+        if (v.dzongkhag == dzongkhag && town != null) perArea[town] = (perArea[town] ?? 0) + 1;
+      }
+      final areas = mostFirst(perArea);
+      final shownAreas = [
+        ...areas.take(_shownAreas),
+        if (shown?.town != null && areas.indexOf(shown!.town!) >= _shownAreas) shown.town!,
+      ];
+      inView = [
+        ('All of $dzongkhag', (dzongkhag: dzongkhag, town: null)),
+        for (final a in shownAreas) (a, (dzongkhag: dzongkhag, town: a)),
+      ];
+      more = [
+        for (final a in areas)
+          if (!shownAreas.contains(a)) (a, (dzongkhag: dzongkhag, town: a)),
+        for (final d in mostFirst(perDzongkhag))
+          if (d != dzongkhag) ('All of $d', (dzongkhag: d, town: null)),
+      ];
+    } else {
+      final withPlaces = mostFirst(perDzongkhag);
+      inView = [for (final d in withPlaces.take(_shownAreas)) (d, (dzongkhag: d, town: null))];
+      more = [for (final d in withPlaces.skip(_shownAreas)) (d, (dzongkhag: d, town: null))];
+    }
+
+    Widget areaButton(String label, ServicesArea area) {
+      final on = shown == area;
+      return _PillButton(
+        label: label,
+        compact: true,
+        outlined: !on,
+        // The one nearest them, marked.
+        icon: on && fromLocation ? Icons.near_me_rounded : null,
+        onPressed: () => _choose(area),
+      );
+    }
+
+    final choices = [
+      for (final (label, area) in inView) areaButton(label, area),
+      if (more.isNotEmpty)
+        MenuAnchor(
+          builder: (context, menu, _) => _PillButton(
+            label: 'More places',
+            icon: Icons.expand_more_rounded,
+            compact: true,
+            outlined: true,
+            onPressed: () => menu.isOpen ? menu.close() : menu.open(),
+          ),
+          menuChildren: [
+            for (final (label, area) in more) MenuItemButton(onPressed: () => _choose(area), child: Text(label)),
+          ],
+        ),
+    ];
+    final buttons = [
+      _PillButton(label: 'Explore services', icon: Icons.arrow_forward_rounded, onPressed: widget.onExplore),
+      if (here == null)
+        _PillButton(
+          label: _locating ? 'Finding you…' : 'Use my location',
+          icon: Icons.my_location_rounded,
+          outlined: true,
+          onPressed: _locating ? () {} : _useMyLocation,
+        ),
+    ];
+
+    // The headline arrives a line at a time, then the rest: one short
+    // cascade on arrival, then still.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: staggered(step: const Duration(milliseconds: 90), offset: 18, [
+        const Padding(padding: EdgeInsets.only(bottom: 24), child: _HeroBadge('HEALTH & WELLNESS IN BHUTAN')),
+        Text('Where are you', style: headline),
+        Text('based in', style: headline),
+        _AccentText('${dzongkhag ?? 'Bhutan'}?', style: headline),
+        Padding(
+          padding: EdgeInsets.only(top: layout.wide ? 24 : 18, bottom: layout.wide ? 28 : 22),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 470),
+            child: Text(
+              'Choose your area and see every service near you. Join any of them with one Health Pro account.',
+              style: TextStyle(fontSize: layout.wide ? 18 : 16, height: 1.65, color: ink.body),
+            ),
+          ),
+        ),
+        if (choices.isEmpty)
+          const SizedBox.shrink()
+        else
+          Padding(
+            padding: EdgeInsets.only(bottom: layout.wide ? 30 : 26),
+            child: Wrap(spacing: 10, runSpacing: 10, children: choices),
+          ),
+        // Side by side; one over the other, the width of a phone.
+        if (layout.medium)
+          Wrap(spacing: 14, runSpacing: 12, children: buttons)
+        else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [for (final (i, b) in buttons.indexed) ...[if (i > 0) const SizedBox(height: 12), b]],
+          ),
+      ]),
     );
   }
 }
@@ -1954,13 +2106,15 @@ class _HeroBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: dot,
-              shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: dot.withValues(alpha: 0.28), spreadRadius: 3)],
+          _Pulse(
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: dot,
+                shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: dot.withValues(alpha: 0.28), spreadRadius: 3)],
+              ),
             ),
           ),
           const SizedBox(width: 11),
@@ -2257,7 +2411,8 @@ class _Beat extends InheritedNotifier<ValueNotifier<int>> {
 }
 
 /// One of a section's cards: it rises into place [order] beats after the
-/// section comes into view, so a row of cards arrives one after another.
+/// section comes into view, so a row of cards arrives one after another
+/// (bhutanesports.org's fade-in-up, a fifth of a second apart).
 class _RevealItem extends StatefulWidget {
   final int order;
   final Widget child;
@@ -2269,7 +2424,7 @@ class _RevealItem extends StatefulWidget {
 }
 
 class _RevealItemState extends State<_RevealItem> with SingleTickerProviderStateMixin {
-  static const _beat = Duration(milliseconds: 80);
+  static const _beat = Duration(milliseconds: 200);
   late final Duration _delay = _beat * widget.order.clamp(0, 8) + const Duration(milliseconds: 150);
   late final AnimationController _c = AnimationController(vsync: this, duration: _delay + Motion.card);
   late final Animation<double> _t = CurvedAnimation(
@@ -2300,730 +2455,43 @@ class _RevealItemState extends State<_RevealItem> with SingleTickerProviderState
       child: widget.child,
       builder: (context, child) => Opacity(
         opacity: _t.value,
-        child: Transform.translate(offset: Offset(0, 24 * (1 - _t.value)), child: child),
+        child: Transform.translate(offset: Offset(0, 40 * (1 - _t.value)), child: child),
       ),
-    );
-  }
-}
-
-// ─── What Health Pro does ───────────────────────────────────────────────────
-
-class _Highlight {
-  final IconData icon;
-  final String title;
-  final String text;
-
-  const _Highlight(this.icon, this.title, this.text);
-}
-
-/// What it does, on one card rising into the top's wave: numbered like an
-/// index, a thin orange light along its top edge. Side by side on a computer,
-/// a list on a tablet or a phone.
-///
-/// On every beat of the page (_Beat) the light moves on to the next item: a
-/// soft orange panel glides over to it, stretching as it goes (its leading
-/// edge first, the other catching up), the light along the top edge riding
-/// with it on a computer. As it arrives the item lights up: its tile fills
-/// with orange, sends out a ripple and breathes, its name turns orange, and a
-/// thin bar along the panel's foot fills while it stays, and a sheen of light
-/// sweeps once across the panel.
-///
-/// The mouse takes the light: the panel glides to the item under it, from
-/// wherever it is (even mid-glide), and stays there until the mouse leaves
-/// the card, when it glides back to where the beat has got to. A soft orange
-/// light follows the mouse over the card, warming the border nearest it.
-/// With less motion nothing moves; the mouse still lights an item.
-class _Highlights extends StatefulWidget {
-  final _Layout layout;
-
-  const _Highlights({required this.layout});
-
-  static const items = [
-    _Highlight(Icons.card_membership_rounded, 'Membership Management', 'Join, renew and see days left'),
-    _Highlight(Icons.qr_code_scanner_rounded, 'Attendance Tracking', 'QR check-in at the desk'),
-    _Highlight(Icons.payments_outlined, 'Easy Payments', 'Cash, mBoB or bank transfer'),
-    _Highlight(Icons.badge_outlined, 'Staff & Roles', 'Owners, managers and front desk'),
-    _Highlight(Icons.insights_rounded, 'Business Insights', 'Income and members by month'),
-  ];
-
-  @override
-  State<_Highlights> createState() => _HighlightsState();
-}
-
-class _HighlightsState extends State<_Highlights> with TickerProviderStateMixin {
-  /// How the panel's leading edge moves, and how the other catches up.
-  static const _lead = Interval(0, 0.7, curve: Curves.easeOutCubic);
-  static const _trail = Interval(0.3, 1, curve: Curves.easeInOutCubic);
-
-  /// The lit item; none when the device asks for less motion.
-  int? _active;
-
-  /// Where the panel set off from, when it's gliding to the lit item.
-  Rect? _from;
-
-  /// Back round to the first: the panel pops in there, rather than gliding
-  /// back across the whole card.
-  bool _popIn = false;
-
-  /// The item the mouse lit, and where the beat has got to meanwhile.
-  int? _hovered;
-  int _beatAt = 0;
-
-  /// Where each item sits on the card, measured once it's laid out.
-  List<Rect>? _rects;
-  final _card = GlobalKey();
-  final _items = [for (final _ in _Highlights.items) GlobalKey()];
-
-  late final AnimationController _breath = AnimationController(vsync: this, duration: _Beat.settle);
-
-  /// The panel's glide from where it was to the lit item.
-  late final AnimationController _glide = AnimationController(vsync: this, duration: Motion.card, value: 1);
-
-  /// The light following the mouse: where it is, and how far it's faded in.
-  final _pointer = ValueNotifier<Offset?>(null);
-  late final AnimationController _spot = AnimationController(vsync: this, duration: Motion.theme);
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final beat = _Beat.of(context);
-    if (reduceMotion(context)) {
-      _active = _from = _hovered = null;
-      _popIn = false;
-      _breath.value = 0;
-      _glide.value = 1;
-      _spot.value = 0;
-      return;
-    }
-    _beatAt = beat % _Highlights.items.length;
-    if (_hovered == null) _light(_beatAt, wrap: true);
-  }
-
-  @override
-  void dispose() {
-    _breath.dispose();
-    _glide.dispose();
-    _spot.dispose();
-    _pointer.dispose();
-    super.dispose();
-  }
-
-  /// Lights [index]: the panel glides over from wherever it is now, or pops
-  /// in when the beat has come back round to the first ([wrap]).
-  void _light(int index, {bool wrap = false}) {
-    final was = _active;
-    if (index == was) return;
-    final rects = _rects;
-    _popIn = wrap && was != null && index < was;
-    _from = _popIn || was == null || rects == null ? null : _panel(rects, was, _glide.value);
-    _active = index;
-    _breath.forward(from: 0);
-    if (_from == null && !_popIn) {
-      _glide.value = 1;
-    } else {
-      _glide.forward(from: 0);
-    }
-  }
-
-  void _enter(int index) {
-    if (reduceMotion(context) || index == _hovered) return;
-    setState(() {
-      _hovered = index;
-      _light(index);
-    });
-  }
-
-  /// The mouse has left the card: the light goes back to the beat.
-  void _leave() {
-    if (!mounted) return;
-    _spot.reverse();
-    if (_hovered == null) return;
-    setState(() {
-      _hovered = null;
-      _light(_beatAt);
-    });
-  }
-
-  void _follow(Offset at) {
-    if (reduceMotion(context)) return;
-    _pointer.value = at;
-    _spot.forward();
-  }
-
-  /// Measures where the items sit on the card, for the panel to glide between.
-  void _measure() {
-    if (!mounted) return;
-    final card = _card.currentContext?.findRenderObject();
-    if (card is! RenderBox || !card.hasSize) return;
-    final rects = <Rect>[];
-    for (final key in _items) {
-      final box = key.currentContext?.findRenderObject();
-      if (box is! RenderBox || !box.hasSize) return;
-      rects.add(box.localToGlobal(Offset.zero, ancestor: card) & box.size);
-    }
-    final old = _rects;
-    if (old != null && old.length == rects.length && [for (var i = 0; i < rects.length; i++) old[i] == rects[i]].every((same) => same)) {
-      return;
-    }
-    setState(() => _rects = rects);
-  }
-
-  /// Where the panel is [t] of the way through its glide: each edge moves on
-  /// its own, the leading one first, so it stretches and then catches up.
-  Rect _panel(List<Rect> rects, int active, double t) {
-    final to = rects[active].deflate(4);
-    final from = _from ?? to;
-    final forward = to.center.dx >= from.center.dx;
-    final down = to.center.dy >= from.center.dy;
-    double edge(double a, double b, bool leads) => a + (b - a) * (leads ? _lead : _trail).transform(t);
-    return Rect.fromLTRB(
-      edge(from.left, to.left, !forward),
-      edge(from.top, to.top, !down),
-      edge(from.right, to.right, forward),
-      edge(from.bottom, to.bottom, down),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
-    final layout = widget.layout;
-    const items = _Highlights.items;
-    final active = _active;
-    final rects = _rects;
-    final ink = _Ink.of(context);
-    final brand = context.brand;
-    final cells = [
-      for (final (i, item) in items.indexed)
-        SizedBox(
-          key: _items[i],
-          child: _RevealItem(
-            order: i + 2,
-            child: _HighlightCell(
-              item: item,
-              number: i + 1,
-              inRow: !layout.wide,
-              lit: i == active,
-              breath: _breath,
-              onEnter: () => _enter(i),
-            ),
-          ),
-        ),
-    ];
-    final Widget content;
-    if (layout.wide) {
-      content = IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var i = 0; i < cells.length; i++) ...[
-              if (i > 0) VerticalDivider(width: 1, color: brand.glassBorder, indent: 14, endIndent: 14),
-              Expanded(child: cells[i]),
-            ],
-          ],
-        ),
-      );
-    } else {
-      content = Column(
-        children: [
-          for (var i = 0; i < cells.length; i++) ...[
-            if (i > 0) Divider(height: 1, color: brand.glassBorder, indent: 14, endIndent: 14),
-            cells[i],
-          ],
-        ],
-      );
-    }
-    LinearGradient glow(double alpha) => LinearGradient(
-          colors: [brand.highlight.withValues(alpha: 0), brand.highlight.withValues(alpha: alpha), brand.highlight.withValues(alpha: 0)],
-        );
-    final moving = active != null && rects != null;
-    return Transform.translate(
-      offset: const Offset(0, -_Layout.overlap),
-      child: _Frame(
-        layout: layout,
-        child: FadeSlideIn(
-          delay: const Duration(milliseconds: 200),
-          child: Container(
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: ink.card,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: brand.glassBorder),
-              boxShadow: ink.shadow(light: 0.1, dark: 0.4, blur: 48, dy: 20),
-            ),
-            child: MouseRegion(
-              onHover: (event) => _follow(event.localPosition),
-              onExit: (_) => _leave(),
-              child: Stack(
-                key: _card,
-                children: [
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: CustomPaint(
-                        painter: _Spotlight(
-                          pointer: _pointer,
-                          shown: _spot,
-                          color: brand.highlight,
-                          wash: ink.dark ? 0.1 : 0.07,
-                          radius: BorderRadius.circular(24),
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (moving)
-                    AnimatedBuilder(
-                      animation: Listenable.merge([_glide, _breath]),
-                      builder: (context, _) {
-                        final t = _glide.value;
-                        final panel = _HighlightPanel(turn: _breath.value);
-                        return Positioned.fromRect(
-                          rect: _panel(rects, active, t),
-                          child: _popIn
-                              ? Opacity(
-                                  opacity: Motion.ease.transform(t),
-                                  child: Transform.scale(scale: 0.9 + 0.1 * Motion.pop.transform(t), child: panel),
-                                )
-                              : panel,
-                        );
-                      },
-                    ),
-                  Padding(padding: EdgeInsets.all(layout.medium ? 10 : 6), child: content),
-                  // A thin light of the brand's orange along the top edge,
-                  // brightest in the middle; on a computer, brightest over the
-                  // lit item and riding along with the panel.
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 0,
-                    height: 2,
-                    child: DecoratedBox(decoration: BoxDecoration(gradient: glow(moving && layout.wide ? 0.3 : 0.9))),
-                  ),
-                  if (moving && layout.wide)
-                    AnimatedBuilder(
-                      animation: _glide,
-                      builder: (context, _) {
-                        final panel = _panel(rects, active, _glide.value);
-                        final width = panel.width * 1.4;
-                        return Positioned(
-                          left: panel.center.dx - width / 2,
-                          width: width,
-                          top: 0,
-                          height: 2.5,
-                          child: DecoratedBox(decoration: BoxDecoration(gradient: glow(1))),
-                        );
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A soft light under the mouse: a faint wash of [color] round [pointer] and,
-/// brighter, along the card's border nearest it. [shown] fades it in and out.
-class _Spotlight extends CustomPainter {
-  final ValueNotifier<Offset?> pointer;
-  final Animation<double> shown;
-  final Color color;
-  final double wash;
-  final BorderRadius radius;
-
-  _Spotlight({required this.pointer, required this.shown, required this.color, required this.wash, required this.radius})
-      : super(repaint: Listenable.merge([pointer, shown]));
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final at = pointer.value;
-    final t = Motion.ease.transform(shown.value);
-    if (at == null || t == 0) return;
-    Shader light(double alpha, double reach) => RadialGradient(
-          colors: [color.withValues(alpha: alpha * t), color.withValues(alpha: 0)],
-        ).createShader(Rect.fromCircle(center: at, radius: reach));
-    final card = Offset.zero & size;
-    canvas.drawRect(card, Paint()..shader = light(wash, 280));
-    canvas.drawRRect(
-      radius.toRRect(card.deflate(0.75)),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..shader = light(0.75, 220),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_Spotlight old) =>
-      old.pointer != pointer || old.shown != shown || old.color != color || old.wash != wash || old.radius != radius;
-}
-
-/// The soft orange panel under the lit item, with a bar along its foot
-/// showing how far through its [turn] (0 to 1) the item is. Once it has
-/// landed a sheen of light sweeps across it, corner to corner.
-class _HighlightPanel extends StatelessWidget {
-  final double turn;
-
-  const _HighlightPanel({required this.turn});
-
-  /// The sheen sets off as the panel lands and is gone well within the turn.
-  static const _sheen = Interval(0.28, 0.68);
-
-  @override
-  Widget build(BuildContext context) {
-    final ink = _Ink.of(context);
-    final accent = context.brand.accent;
-    final sweep = _sheen.transform(turn.clamp(0.0, 1.0));
-    final at = -0.25 + 1.5 * Motion.easeInOut.transform(sweep);
-    final shine = Colors.white.withValues(alpha: (ink.dark ? 0.1 : 0.55) * math.sin(math.pi * sweep));
-    final bar = Align(
-      alignment: Alignment.bottomCenter,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 7),
-        child: _TurnBar(turn: turn),
-      ),
-    );
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color.alphaBlend(accent.withValues(alpha: 0.15), ink.card),
-            Color.alphaBlend(accent.withValues(alpha: 0.05), ink.card),
-          ],
-        ),
-        border: Border.all(color: accent.withValues(alpha: 0.3)),
-        boxShadow: [BoxShadow(color: accent.withValues(alpha: 0.16), blurRadius: 24, offset: const Offset(0, 10))],
-      ),
-      child: sweep == 0 || sweep == 1
-          ? bar
-          : Stack(
-              fit: StackFit.expand,
-              children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    gradient: LinearGradient(
-                      begin: const Alignment(-1, -0.6),
-                      end: const Alignment(1, 0.6),
-                      colors: [shine.withValues(alpha: 0), shine, shine.withValues(alpha: 0)],
-                      stops: [(at - 0.18).clamp(0.0, 1.0), at.clamp(0.0, 1.0), (at + 0.18).clamp(0.0, 1.0)],
-                    ),
-                  ),
-                ),
-                bar,
-              ],
-            ),
-    );
-  }
-}
-
-/// How far through its turn the lit item is: a bar filling to the right,
-/// easing in once the panel has landed and easing out as it fills, a glint of
-/// light sweeping along what's filled and a glowing bead at its head.
-class _TurnBar extends StatelessWidget {
-  final double turn;
-
-  const _TurnBar({required this.turn});
-
-  /// Waits for the panel to land, then fills by the end of the turn.
-  static const _fill = Interval(0.25, 1, curve: Curves.easeInOutCubic);
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final orange = brand.highlight;
-    final fill = _fill.transform(turn.clamp(0.0, 1.0));
-    // The glint runs along twice as fast as the bar fills.
-    final glint = (fill * 2) % 1;
-    return SizedBox(
-      width: double.infinity,
-      height: 10,
-      child: LayoutBuilder(
-        builder: (context, box) {
-          final width = box.maxWidth * fill;
-          return Stack(
-            clipBehavior: Clip.none,
-            alignment: AlignmentDirectional.centerStart,
-            children: [
-              Container(
-                height: 3,
-                decoration: BoxDecoration(color: brand.accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(3)),
-              ),
-              if (fill > 0) ...[
-                Container(
-                  width: width,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(3),
-                    gradient: LinearGradient(
-                      colors: [
-                        orange.withValues(alpha: 0.35),
-                        orange,
-                        Color.lerp(orange, Colors.white, 0.75)!,
-                        orange,
-                        orange,
-                      ],
-                      stops: [0, math.max(0, glint - 0.18), glint, math.min(1, glint + 0.18), 1],
-                    ),
-                    boxShadow: [BoxShadow(color: orange.withValues(alpha: 0.35), blurRadius: 6)],
-                  ),
-                ),
-                // The bead at its head, glowing.
-                PositionedDirectional(
-                  start: width - 4,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Color.lerp(orange, Colors.white, 0.55),
-                      border: Border.all(color: orange, width: 2),
-                      boxShadow: [BoxShadow(color: orange.withValues(alpha: 0.7), blurRadius: 10, spreadRadius: 1)],
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// What Health Pro does, one thing, numbered: its icon on a softly lit tile,
-/// then its name and what it means. Under the mouse the cell lifts onto a
-/// faint wash; lit, or under the mouse, the tile fills with the brand's
-/// orange. Lit (the panel under it), the tile sends out a ripple, breathes
-/// with a little wiggle and the name turns orange. A row on a tablet or a
-/// phone ([inRow]): the tile beside the words.
-class _HighlightCell extends StatefulWidget {
-  final _Highlight item;
-  final int number;
-  final bool inRow;
-  final bool lit;
-  final Animation<double> breath;
-
-  /// The mouse has come onto it.
-  final VoidCallback? onEnter;
-
-  const _HighlightCell({
-    required this.item,
-    required this.number,
-    required this.breath,
-    this.inRow = false,
-    this.lit = false,
-    this.onEnter,
-  });
-
-  @override
-  State<_HighlightCell> createState() => _HighlightCellState();
-}
-
-class _HighlightCellState extends State<_HighlightCell> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final still = reduceMotion(context);
-    final light = _lighting(context, widget.lit);
-    return MouseRegion(
-      onEnter: (_) {
-        setState(() => _hover = true);
-        widget.onEnter?.call();
-      },
-      onExit: (_) => setState(() => _hover = false),
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(end: widget.lit ? 1 : 0),
-        duration: light.duration,
-        curve: light.curve,
-        builder: (context, lit, _) => TweenAnimationBuilder<double>(
-          tween: Tween(end: _hover && !still ? 1 : 0),
-          duration: still ? Duration.zero : Motion.hover,
-          curve: Motion.ease,
-          builder: (context, hover, _) => AnimatedBuilder(
-            animation: widget.lit ? widget.breath : const AlwaysStoppedAnimation(0.0),
-            builder: (context, _) => _cell(
-              context,
-              lit: lit,
-              hover: widget.lit ? 0 : hover,
-              breath: widget.lit ? widget.breath.value : 1,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// The cell [lit] and under the mouse ([hover]), each 0 to 1, [breath] of
-  /// the way through its turn.
-  Widget _cell(BuildContext context, {required double lit, required double hover, required double breath}) {
-    final item = widget.item;
-    final ink = _Ink.of(context);
-    final brand = context.brand;
-    final accent = brand.accent;
-    final on = math.max(lit, hover);
-    final swell = _swell(breath);
-    // One ring spreading from the tile as the panel arrives.
-    final ripple = ((breath - 0.28) / 0.45).clamp(0.0, 1.0);
-    final tile = Stack(
-      clipBehavior: Clip.none,
-      alignment: Alignment.center,
-      children: [
-        if (widget.lit && ripple > 0 && ripple < 1)
-          Transform.scale(
-            scale: 1 + 0.65 * ripple,
-            child: Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: accent.withValues(alpha: 0.55 * (1 - ripple)), width: 2),
-              ),
-            ),
-          ),
-        Transform.scale(
-          scale: 1 + 0.07 * swell,
-          child: Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              gradient: LinearGradient.lerp(
-                LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [accent.withValues(alpha: 0.18), accent.withValues(alpha: 0.05)],
-                ),
-                LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color.lerp(accent, Colors.white, 0.15)!, accent],
-                ),
-                on,
-              ),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: accent.withValues(alpha: 0.18 * (1 - on))),
-              boxShadow: [
-                BoxShadow(
-                  color: accent.withValues(alpha: (0.3 + 0.2 * swell) * lit),
-                  blurRadius: 14 + 10 * swell,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Transform.rotate(
-              angle: _wiggle(breath),
-              child: Icon(item.icon, size: 23, color: Color.lerp(brand.accentText, BrandColors.navy, on)),
-            ),
-          ),
-        ),
-      ],
-    );
-    final number = Text(
-      widget.number.toString().padLeft(2, '0'),
-      style: TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 1.2,
-        color: Color.lerp(brand.muted.withValues(alpha: 0.55), brand.accentText, on),
-      ),
-    );
-    final title = Text(
-      item.title,
-      style: TextStyle(
-        fontSize: 15,
-        fontWeight: FontWeight.w800,
-        color: Color.lerp(ink.heading, brand.accentText, lit),
-        height: 1.25,
-        letterSpacing: -0.3,
-      ),
-    );
-    final text = Text(item.text, style: TextStyle(fontSize: 13, color: Color.lerp(brand.muted, ink.body, lit), height: 1.45));
-    return Container(
-      margin: const EdgeInsets.all(4),
-      padding: widget.inRow ? const EdgeInsets.fromLTRB(12, 14, 14, 22) : const EdgeInsets.fromLTRB(14, 16, 14, 26),
-      transform: Matrix4.translationValues(0, -2 * hover, 0),
-      decoration: BoxDecoration(
-        color: ink.tint.withValues(alpha: ink.tint.a * 0.7 * hover),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: widget.inRow
-          ? Row(
-              children: [
-                tile,
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [title, const SizedBox(height: 2), text],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                number,
-              ],
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [tile, const Spacer(), number]),
-                const SizedBox(height: 18),
-                title,
-                const SizedBox(height: 5),
-                text,
-              ],
-            ),
     );
   }
 }
 
 // ─── Services ──────────────────────────────────────────────────────────────
 
-class _Service {
-  final String name;
-  final IconData icon;
-
-  /// Its photo in assets/welcome.
-  final String photo;
-
-  /// Open now; the rest are coming.
-  final bool open;
-
-  /// A word on training or health under its name. Without one (and not
-  /// open), it's a service still to come.
-  final String? note;
-
-  const _Service(this.name, this.icon, this.photo, {this.open = false, this.note});
-
-  /// A service still to come: muted until the pointer warms it.
-  bool get coming => !open && note == null;
-}
-
-/// The gym, open now, large, with what it offers and simple healthy habits
-/// around it, and links contributed by the enabled service modules. Other
-/// services join [services] as they open.
-class _Services extends StatelessWidget {
+/// What are you looking for (the user's layout, under the top): every kind
+/// of service the team has set up in Service types (Gym, Swimming,
+/// Massage...), each with how many places there are in the area the top
+/// shows (all told when none). Each opens its places in Find services, in
+/// that area.
+class _ServiceTypes extends ConsumerWidget {
   final _Layout layout;
   final List<ModuleMenuItem> serviceLinks;
   final VoidCallback onFindGym;
 
-  const _Services({super.key, required this.layout, required this.serviceLinks, required this.onFindGym});
-
-  static const services = [
-    _Service('Gym & Fitness', Icons.fitness_center_rounded, 'gym', open: true),
-    _Service('Strength Training', Icons.sports_gymnastics_rounded, 'strength', note: 'Builds muscle and bone'),
-    _Service('Cardio', Icons.monitor_heart_outlined, 'cardio', note: 'Aim for 150 minutes a week'),
-    _Service('Classes', Icons.groups_rounded, 'classes', note: 'Train together with a coach'),
-    _Service('Healthy Eating', Icons.restaurant_rounded, 'eating', note: 'Fuel every workout'),
-    _Service('Everyday Movement', Icons.directions_walk_rounded, 'active', note: 'Walk more, sit less'),
-  ];
+  const _ServiceTypes({super.key, required this.layout, required this.serviceLinks, required this.onFindGym});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final ink = _Ink.of(context);
+    final venues = ref.watch(moduleVenuesProvider(gymModuleKey)).valueOrNull ?? const <Venue>[];
+    final master = ref.watch(venueTypesProvider).valueOrNull ?? const <VenueType>[];
+    final area = ref.watch(_shownAreaProvider);
+    final count = <String, int>{};
+    final total = <String, int>{};
+    for (final v in venues) {
+      total[v.type] = (total[v.type] ?? 0) + 1;
+      if (area == null || _inArea(area, v)) count[v.type] = (count[v.type] ?? 0) + 1;
+    }
+    // In the team's order; one with none yet only when they show it (Coming soon).
+    final types = [
+      for (final t in findableTypes(master, venues))
+        if (t.showWhenEmpty || (total[t.key] ?? 0) > 0) t,
+    ];
     final title = TextStyle(
       fontSize: layout.titleSize,
       fontWeight: FontWeight.w800,
@@ -3031,398 +2499,396 @@ class _Services extends StatelessWidget {
       letterSpacing: -layout.titleSize * 0.03,
       color: ink.heading,
     );
-    final buttons = [
-      _PillButton(label: 'Find a gym', icon: Icons.arrow_forward_rounded, onPressed: onFindGym),
-      _PillButton(
-        label: 'Gyms near me',
-        icon: Icons.near_me_outlined,
-        outlined: true,
-        onPressed: () => context.push(GymRoutes.gymsNearMe),
-      ),
-      for (final link in serviceLinks)
-        _PillButton(label: link.title, icon: link.icon, outlined: true, onPressed: () => link.open(context)),
-    ];
-    final intro = Column(
+    final buttons = Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 12,
+      runSpacing: 12,
+      children: [
+        _PillButton(label: 'All services', icon: Icons.arrow_forward_rounded, onPressed: onFindGym),
+        for (final link in serviceLinks)
+          _PillButton(label: link.title, icon: link.icon, outlined: true, onPressed: () => link.open(context)),
+      ],
+    );
+    // What Health Pro has, counted up as it comes into view: real numbers only.
+    String counted(int n, String one, String many) => n == 1 ? one : many;
+    final dzongkhagCount = {for (final v in venues) v.dzongkhag}.length;
+    final stats = venues.isEmpty
+        ? null
+        : Wrap(
+            spacing: layout.wide ? 44 : 30,
+            runSpacing: 16,
+            children: [
+              _CountUp(value: venues.length, label: counted(venues.length, 'Place', 'Places'), layout: layout),
+              _CountUp(
+                  value: total.length,
+                  label: counted(total.length, 'Kind of service', 'Kinds of service'),
+                  layout: layout),
+              _CountUp(value: dzongkhagCount, label: counted(dzongkhagCount, 'Dzongkhag', 'Dzongkhags'), layout: layout),
+            ],
+          );
+    final heading = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Eyebrow('OUR SERVICES', lineBefore: true),
         const SizedBox(height: 16),
-        Text('Train Well', style: title),
-        _AccentText('& Live Healthy', style: title),
-        const SizedBox(height: 18),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 470),
-          child: Text(
-            serviceLinks.isEmpty
-                ? 'Find a gym, join and check in with your QR in Health Pro. Strength, cardio and classes at the gym, '
-                    'and simple habits that keep you healthy every day.'
-                : 'Find a gym, join and check in with your QR in Health Pro. Its other services open from here.',
-            style: TextStyle(fontSize: layout.wide ? 17 : 16, height: 1.65, color: ink.body),
-          ),
-        ),
-        const SizedBox(height: 30),
-        // Side by side; one over the other, the width of a phone.
-        if (layout.medium)
-          Wrap(spacing: 12, runSpacing: 12, children: buttons)
-        else
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var i = 0; i < buttons.length; i++) ...[if (i > 0) const SizedBox(height: 12), buttons[i]],
-            ],
-          ),
+        Text('What are you', style: title),
+        _AccentText('looking for?', style: title),
       ],
     );
-    // The service that's open first, large; the rest around it.
-    final ordered = [...services.where((s) => s.open), ...services.where((s) => !s.open)];
-    final tiles = _ServiceBento(
-      layout: layout,
-      tiles: [
-        for (final (i, s) in ordered.indexed)
-          _RevealItem(order: i, child: _ServiceTile(service: s, featured: i == 0, onTap: s.open ? onFindGym : null)),
-      ],
-    );
+    void open(VenueType type) {
+      // The area they were shown, kept for the list.
+      if (area != null) ref.read(servicesAreaProvider.notifier).state = area;
+      context.push('${GymRoutes.gyms}?type=${Uri.encodeQueryComponent(type.key)}');
+    }
+
     return Padding(
-      padding: EdgeInsets.only(top: layout.section - _Layout.overlap, bottom: layout.section),
+      padding: EdgeInsets.only(top: layout.section * 0.5, bottom: layout.section),
       child: _Frame(
         layout: layout,
-        child: layout.wide
-            ? Row(
-                children: [
-                  Expanded(flex: 4, child: intro),
-                  const SizedBox(width: 48),
-                  Expanded(flex: 7, child: tiles),
-                ],
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [intro, const SizedBox(height: 32), tiles],
-              ),
-      ),
-    );
-  }
-}
-
-/// The services as a bento: [tiles] first (the one open now) large, the
-/// rest around it. Three columns from a tablet up; on a phone two, the open
-/// one across the top and the last across the foot.
-class _ServiceBento extends StatelessWidget {
-  final _Layout layout;
-  final List<Widget> tiles;
-
-  const _ServiceBento({required this.layout, required this.tiles});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, box) {
-        final w = box.maxWidth;
-        Widget at(int i, double width, double height) =>
-            i < tiles.length ? SizedBox(width: width, height: height, child: tiles[i]) : SizedBox(width: width);
-        if (layout.medium) {
-          const gap = 14.0;
-          final cell = ((w - gap * 2) / 3).floorToDouble();
-          final h = (cell / 1.45).floorToDouble();
-          return Column(
-            children: [
-              Row(
-                children: [
-                  at(0, cell * 2 + gap, h * 2 + gap),
-                  const SizedBox(width: gap),
-                  Column(children: [at(1, cell, h), const SizedBox(height: gap), at(2, cell, h)]),
-                ],
-              ),
-              const SizedBox(height: gap),
-              Row(
-                children: [
-                  at(3, cell, h),
-                  const SizedBox(width: gap),
-                  at(4, cell, h),
-                  const SizedBox(width: gap),
-                  at(5, cell, h),
-                ],
-              ),
-            ],
-          );
-        }
-        const gap = 12.0;
-        final cell = ((w - gap) / 2).floorToDouble();
-        final h = (cell / 1.2).floorToDouble();
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            at(0, w, (w / 1.15).floorToDouble()),
-            const SizedBox(height: gap),
-            Row(children: [at(1, cell, h), const SizedBox(width: gap), at(2, cell, h)]),
-            const SizedBox(height: gap),
-            Row(children: [at(3, cell, h), const SizedBox(width: gap), at(4, cell, h)]),
-            const SizedBox(height: gap),
-            at(5, w, h),
-          ],
-        );
-      },
-    );
-  }
-}
-
-/// A colour matrix keeping [s] of a photo's colour (1 all, 0 grey).
-List<double> _saturation(double s) {
-  const r = 0.2126, g = 0.7152, b = 0.0722;
-  final i = 1 - s;
-  return [
-    r * i + s, g * i, b * i, 0, 0, //
-    r * i, g * i + s, b * i, 0, 0,
-    r * i, g * i, b * i + s, 0, 0,
-    0, 0, 0, 1, 0,
-  ];
-}
-
-/// A service on its photo, graded to navy at the foot for its name. The one
-/// open now ([featured]) is large, with what it does and the way in; the
-/// others carry a word on training or health, and any still to come wait in
-/// muted colour, which warms under the pointer. Every photo eases in a
-/// little under the pointer.
-class _ServiceTile extends StatefulWidget {
-  final _Service service;
-  final VoidCallback? onTap;
-  final bool featured;
-
-  const _ServiceTile({required this.service, this.onTap, this.featured = false});
-
-  @override
-  State<_ServiceTile> createState() => _ServiceTileState();
-}
-
-class _ServiceTileState extends State<_ServiceTile> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final service = widget.service;
-    final featured = widget.featured;
-    final badge = service.open ? 'Open now' : service.note ?? 'Coming soon';
-    final ink = _Ink.of(context);
-    final hover = _hover && !reduceMotion(context);
-    // In the light, a navy haze under the photo rather than a grey smudge.
-    final shade = ink.pick(LightColors.navy, Colors.black);
-    final radius = BorderRadius.circular(featured ? 24 : 20);
-    Widget photo = AnimatedScale(
-      scale: hover ? 1.06 : 1,
-      duration: const Duration(milliseconds: 600),
-      curve: Motion.ease,
-      child: GymPhoto(service.photo),
-    );
-    if (service.coming) {
-      photo = TweenAnimationBuilder<double>(
-        tween: Tween(end: hover ? 1 : 0.4),
-        duration: const Duration(milliseconds: 450),
-        curve: Motion.ease,
-        child: photo,
-        builder: (context, s, child) => ColorFiltered(colorFilter: ColorFilter.matrix(_saturation(s)), child: child),
-      );
-    }
-    return Semantics(
-      button: widget.onTap != null,
-      label: '${service.name}, $badge',
-      excludeSemantics: true,
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        cursor: widget.onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
-        child: AnimatedContainer(
-          duration: Motion.hover,
-          curve: Motion.ease,
-          transform: Matrix4.translationValues(0, hover ? -4 : 0, 0),
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            boxShadow: [
-              BoxShadow(
-                color: shade.withValues(alpha: hover ? (ink.dark ? 0.32 : 0.24) : (ink.dark ? 0.16 : 0.12)),
-                blurRadius: hover ? 34 : 20,
-                spreadRadius: ink.dark ? 0 : -4,
-                offset: Offset(0, hover ? 18 : 10),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: radius,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                photo,
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        const Color(0x00050B1C),
-                        BrandColors.navy.withValues(alpha: featured ? 0.4 : 0.45),
-                        const Color(0xF0050B1C),
-                      ],
-                      stops: featured ? const [0.2, 0.55, 1] : const [0.15, 0.55, 1],
-                    ),
-                  ),
-                ),
-                if (featured)
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: [Color(0x80050B1C), Color(0x00050B1C)], stops: [0, 0.6]),
-                    ),
-                  ),
-                // A hairline of light round the edge, like glass.
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: radius,
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                  ),
-                ),
-                if (featured) ..._featured(context, hover) else ..._small(hover, badge),
-                if (widget.onTap != null) Material(type: MaterialType.transparency, child: InkWell(onTap: widget.onTap)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// The open service: its badge, then over the foot its icon, name, what it
-  /// does and the way in.
-  List<Widget> _featured(BuildContext context, bool hover) {
-    final service = widget.service;
-    return [
-      Positioned(
-        top: 18,
-        left: 18,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(10, 5, 12, 5),
-          decoration: BoxDecoration(color: context.brand.highlight, borderRadius: BorderRadius.circular(20)),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: const BoxDecoration(color: BrandColors.navy, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 7),
-              const Text(
-                'Open now',
-                style: TextStyle(color: BrandColors.navy, fontSize: 11.5, fontWeight: FontWeight.w800),
-              ),
-            ],
-          ),
-        ),
-      ),
-      Positioned(
-        left: 22,
-        right: 22,
-        bottom: 22,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.14),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
+            if (layout.medium)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [Expanded(child: heading), if (stats != null) ...[const SizedBox(width: 24), stats]],
+              )
+            else ...[
+              heading,
+              if (stats != null) ...[const SizedBox(height: 24), stats],
+            ],
+            const SizedBox(height: 32),
+            if (types.isEmpty)
+              Text('Services open soon.', style: TextStyle(fontSize: 16, color: ink.body))
+            else
+              ResponsiveGrid(
+                minItemWidth: 230,
+                maxColumns: 4,
+                spacing: 16,
+                runSpacing: 16,
+                children: [
+                  for (final (i, t) in types.indexed)
+                    _RevealItem(
+                      order: i,
+                      child: ServiceTypeCard(
+                        type: t,
+                        count: count[t.key] ?? 0,
+                        total: total[t.key] ?? 0,
+                        inArea: area == null ? null : (area.town ?? area.dzongkhag),
+                        onTap: () => open(t),
+                      ),
+                    ),
+                ],
               ),
-              child: Icon(service.icon, size: 22, color: Colors.white),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              service.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.6),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Memberships, renewals and QR check-in at the desk.',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14, height: 1.45),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 9, 13, 9),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
-              child: Row(
+            const SizedBox(height: 36),
+            Center(child: buttons),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// [value] counting up from nought the first time its section comes into
+/// view, over its [label] in small capitals (bhutanesports.org's counters).
+/// At once with Reduce motion.
+class _CountUp extends StatefulWidget {
+  final int value;
+  final String label;
+  final _Layout layout;
+
+  const _CountUp({required this.value, required this.label, required this.layout});
+
+  @override
+  State<_CountUp> createState() => _CountUpState();
+}
+
+class _CountUpState extends State<_CountUp> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600));
+  late final Animation<double> _t = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (reduceMotion(context)) {
+      _c.value = 1;
+    } else if (_Revealed.of(context) && !_c.isAnimating && !_c.isCompleted) {
+      _c.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = _Ink.of(context);
+    final size = widget.layout.wide ? 46.0 : 38.0;
+    final number = TextStyle(fontSize: size, fontWeight: FontWeight.w800, height: 1, letterSpacing: -size * 0.03);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedBuilder(
+          animation: _t,
+          builder: (context, _) => _AccentText('${(widget.value * _t.value).round()}', style: number),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          widget.label.toUpperCase(),
+          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 1.4, color: ink.body),
+        ),
+      ],
+    );
+  }
+}
+
+/// The kinds of service running along a band under the top like a ticker
+/// (bhutanesports.org's marquee): large capitals, solid and outlined in
+/// turn, a spark between them, sliding steadily left for ever. Hidden from
+/// screen readers (the cards under it name them all); still with Reduce
+/// motion; nothing until the kinds have loaded.
+class _ServiceMarquee extends ConsumerWidget {
+  final _Layout layout;
+
+  const _ServiceMarquee({required this.layout});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final venues = ref.watch(moduleVenuesProvider(gymModuleKey)).valueOrNull ?? const <Venue>[];
+    final master = ref.watch(venueTypesProvider).valueOrNull ?? const <VenueType>[];
+    final kinds = [
+      for (final t in findableTypes(master, venues))
+        if (t.showWhenEmpty || venues.any((v) => v.type == t.key)) t.name.toUpperCase(),
+    ];
+    if (kinds.isEmpty) return const SizedBox.shrink();
+    // An even run, so solid and outlined still take turns where it repeats.
+    final names = kinds.length.isOdd ? [...kinds, ...kinds] : kinds;
+    final ink = _Ink.of(context);
+    final size = layout.wide ? 46.0 : (layout.medium ? 38.0 : 28.0);
+    final solid = TextStyle(fontSize: size, fontWeight: FontWeight.w800, letterSpacing: size * 0.02, color: ink.heading);
+    final outlined = solid.copyWith(
+      color: null,
+      foreground: Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.3
+        ..color = ink.heading,
+    );
+    return ExcludeSemantics(
+      child: Padding(
+        padding: EdgeInsets.only(top: layout.section * 0.4),
+        child: _Marquee(
+          height: size * 1.6,
+          items: [
+            // Each a name and the spark after it.
+            for (final (i, name) in names.indexed)
+              Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    'Find a gym',
-                    style: TextStyle(color: BrandColors.navy, fontSize: 13.5, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(width: 6),
-                  AnimatedSlide(
-                    offset: Offset(hover ? 0.25 : 0, 0),
-                    duration: Motion.hover,
-                    curve: Motion.ease,
-                    child: const Icon(Icons.arrow_forward_rounded, size: 16, color: BrandColors.navy),
+                  Text(name, maxLines: 1, style: i.isOdd ? outlined : solid),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: size * 0.55),
+                    child: Icon(Icons.auto_awesome_rounded, size: size * 0.6, color: context.brand.highlight),
                   ),
                 ],
               ),
-            ),
           ],
         ),
       ),
-    ];
+    );
+  }
+}
+
+/// [items] in a row along a band, repeated to fill the width. On every beat
+/// of the page (_Beat) it glides one item to the left (bhutanesports.org's
+/// marquee, in the page's rhythm), then rests until the next, so it never
+/// runs on for ever. It rests while scrolled out of sight, and stands still
+/// with Reduce motion.
+class _Marquee extends StatefulWidget {
+  final double height;
+  final List<Widget> items;
+
+  const _Marquee({required this.height, required this.items});
+
+  @override
+  State<_Marquee> createState() => _MarqueeState();
+}
+
+class _MarqueeState extends State<_Marquee> with SingleTickerProviderStateMixin {
+  final _run = GlobalKey();
+  late List<GlobalKey> _keys = [for (final _ in widget.items) GlobalKey()];
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
+  late final Animation<double> _t = CurvedAnimation(parent: _c, curve: Curves.easeInOutCubic);
+
+  /// Where each item starts in a run, and the run's width, once laid out.
+  List<double>? _starts;
+  double _width = 0;
+
+  /// The item at the left edge.
+  int _step = 0;
+  int? _beat;
+
+  /// Whether any of it is in the window.
+  bool _inSight = true;
+  ScrollPosition? _position;
+
+  /// How far along the row [step] is: past the last, a whole run (the next
+  /// run is the same, so going back to the start then doesn't show).
+  double _at(int step) => step >= _starts!.length ? _width : _starts![step];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _position?.removeListener(_onScroll);
+    _position = Scrollable.maybeOf(context)?.position;
+    _position?.addListener(_onScroll);
+    final beat = _Beat.of(context);
+    if (_beat != null && beat != _beat) _glide();
+    _beat = beat;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
   }
 
-  /// A smaller tile: over the foot its icon, name, and its [note] (or that
-  /// it's coming).
-  List<Widget> _small(bool hover, String note) {
-    final service = widget.service;
-    return [
-      AnimatedPositioned(
-        duration: Motion.hover,
-        curve: Motion.ease,
-        left: 16,
-        right: 16,
-        bottom: hover ? 17 : 14,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(service.icon, size: 22, color: Colors.white),
-            const SizedBox(height: 8),
-            Text(
-              service.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: -0.2),
+  @override
+  void didUpdateWidget(_Marquee old) {
+    super.didUpdateWidget(old);
+    if (old.items.length != widget.items.length) {
+      _keys = [for (final _ in widget.items) GlobalKey()];
+      _starts = null;
+      _step = 0;
+      _c.value = 0;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
+  }
+
+  void _onScroll() {
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return;
+    final top = box.localToGlobal(Offset.zero).dy;
+    _inSight = top < MediaQuery.sizeOf(context).height && top + box.size.height > 0;
+  }
+
+  void _measure() {
+    if (!mounted) return;
+    final run = _run.currentContext?.findRenderObject();
+    if (run is! RenderBox || !run.hasSize) return;
+    final starts = <double>[];
+    for (final key in _keys) {
+      final box = key.currentContext?.findRenderObject();
+      if (box is! RenderBox || !box.hasSize) return;
+      starts.add(box.localToGlobal(Offset.zero, ancestor: run).dx);
+    }
+    final old = _starts;
+    final same = old != null && old.length == starts.length && [for (var i = 0; i < starts.length; i++) old[i] == starts[i]].every((s) => s);
+    if (!same || run.size.width != _width) {
+      setState(() {
+        _starts = starts;
+        _width = run.size.width;
+      });
+    }
+  }
+
+  /// One item on.
+  void _glide() {
+    final starts = _starts;
+    if (starts == null || starts.isEmpty || !_inSight || _c.isAnimating || reduceMotion(context)) return;
+    _c.forward(from: 0).whenComplete(() {
+      if (!mounted) return;
+      setState(() {
+        _step = (_step + 1) % starts.length;
+        _c.value = 0;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _position?.removeListener(_onScroll);
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final first = Row(
+      key: _run,
+      mainAxisSize: MainAxisSize.min,
+      children: [for (final (i, item) in widget.items.indexed) KeyedSubtree(key: _keys[i], child: item)],
+    );
+    final run = Row(mainAxisSize: MainAxisSize.min, children: widget.items);
+    // Enough runs to cover the window however far along it is.
+    final runs = _width == 0 ? 1 : (MediaQuery.sizeOf(context).width / _width).ceil() + 1;
+    return RepaintBoundary(
+      child: SizedBox(
+        height: widget.height,
+        child: ClipRect(
+          child: OverflowBox(
+            alignment: Alignment.centerLeft,
+            minWidth: 0,
+            maxWidth: double.infinity,
+            child: AnimatedBuilder(
+              animation: _t,
+              builder: (context, child) {
+                final from = _starts == null ? 0.0 : _at(_step);
+                final to = _starts == null ? 0.0 : _at(_step + 1);
+                return Transform.translate(offset: Offset(-(from + (to - from) * _t.value), 0), child: child);
+              },
+              child: Row(mainAxisSize: MainAxisSize.min, children: [first, for (var i = 1; i < runs; i++) run]),
             ),
-            const SizedBox(height: 3),
-            Row(
-              children: [
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.7), width: 1.4),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    note,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.72), fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
-    ];
+    );
+  }
+}
+
+/// [child] breathing like a live light (bhutanesports.org's "Now ongoing"
+/// dot): on every beat of the page (_Beat) a little smaller and fainter, and
+/// back, then still until the next. Still with Reduce motion.
+class _Pulse extends StatefulWidget {
+  final Widget child;
+
+  const _Pulse({required this.child});
+
+  @override
+  State<_Pulse> createState() => _PulseState();
+}
+
+class _PulseState extends State<_Pulse> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
+  int? _beat;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final beat = _Beat.of(context);
+    if (reduceMotion(context)) {
+      _c.value = 0;
+    } else if (beat != _beat) {
+      _beat = beat;
+      _c.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      child: widget.child,
+      builder: (context, child) {
+        // Down and back up in one swell.
+        final dip = math.sin(math.pi * _c.value);
+        return Opacity(opacity: 1 - 0.55 * dip, child: Transform.scale(scale: 1 - 0.15 * dip, child: child));
+      },
+    );
   }
 }
 
@@ -3711,41 +3177,50 @@ class _AboutArt extends StatelessWidget {
                 ),
               ),
             ),
+            // As wide as its words, and never past the picture's edge: the
+            // tagline wraps first.
             Positioned(
               left: compact ? 14 : 28,
+              right: compact ? 14 : 28,
               bottom: compact ? 16 : 30,
-              child: GentleFloat(
-                phase: 0.3,
-                distance: 5,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(10, 10, 18, 10),
-                  decoration: BoxDecoration(
-                    color: ink.dark ? const Color(0xF216213C) : const Color(0xF7FFFFFF),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: brand.glassBorder),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: ink.dark ? 0.4 : 0.18),
-                        blurRadius: 28,
-                        offset: const Offset(0, 12),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      HealthProLogo(markOnly: true, height: compact ? 30 : 36),
-                      const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('Health Pro',
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: ink.heading)),
-                          Text('Your Health. Our Priority.', style: TextStyle(fontSize: 12, color: brand.muted)),
-                        ],
-                      ),
-                    ],
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: GentleFloat(
+                  phase: 0.3,
+                  distance: 5,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(10, 10, 18, 10),
+                    decoration: BoxDecoration(
+                      color: ink.dark ? const Color(0xF216213C) : const Color(0xF7FFFFFF),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: brand.glassBorder),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: ink.dark ? 0.4 : 0.18),
+                          blurRadius: 28,
+                          offset: const Offset(0, 12),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        HealthProLogo(markOnly: true, height: compact ? 30 : 36),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('Health Pro',
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: ink.heading)),
+                              Text('All your well-being, all in one place.',
+                                  style: TextStyle(fontSize: 12, color: brand.muted)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -4600,8 +4075,8 @@ class _PlanCard extends StatelessWidget {
     final button = SizedBox(
       width: double.infinity,
       child: featured
-          ? _PillButton(label: 'Find a gym', compact: true, onPressed: onFindGym)
-          : _PillButton(label: 'Find a gym', compact: true, outlined: true, onPressed: onFindGym),
+          ? _PillButton(label: 'Services', compact: true, onPressed: onFindGym)
+          : _PillButton(label: 'Services', compact: true, outlined: true, onPressed: onFindGym),
     );
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -5008,7 +4483,7 @@ class _FaqHelp extends StatelessWidget {
     final ink = _Ink.of(context);
     final brand = context.brand;
     final tinted = Color.alphaBlend(brand.accent.withValues(alpha: ink.dark ? 0.08 : 0.05), ink.card);
-    final button = _PillButton(label: 'Find a gym', icon: Icons.arrow_forward_rounded, compact: true, onPressed: onFindGym);
+    final button = _PillButton(label: 'Services', icon: Icons.arrow_forward_rounded, compact: true, onPressed: onFindGym);
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(

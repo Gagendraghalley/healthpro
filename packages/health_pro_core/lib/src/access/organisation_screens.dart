@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../masters/service_type_screens.dart' show ServiceTypeIcon;
 import '../router/core_routes.dart';
 import '../theme/brand.dart';
 import '../venues/venue.dart';
 import '../venues/venue_repository.dart';
+import '../venues/venue_type.dart';
 import '../venues/venue_widgets.dart';
 import '../widgets/app_page.dart';
 import '../widgets/common.dart';
@@ -95,7 +97,9 @@ class _AdminOrganisationsScreenState extends ConsumerState<AdminOrganisationsScr
     if (draft == null || !mounted) return;
     String? id;
     final ok = await runAction(context, () async {
-      id = await ref.read(accessRepositoryProvider).saveOrganisation(name: draft.name, description: draft.description);
+      id = await ref
+          .read(accessRepositoryProvider)
+          .saveOrganisation(name: draft.name, description: draft.description, serviceType: draft.serviceType);
     }, success: 'Organisation made');
     if (!ok || !mounted) return;
     ref.invalidate(organisationsProvider);
@@ -103,17 +107,20 @@ class _AdminOrganisationsScreenState extends ConsumerState<AdminOrganisationsScr
   }
 }
 
-/// Organisations as a table: the organisation and how many venues it runs.
-class _OrganisationsTable extends StatelessWidget {
+/// Organisations as a table: the organisation, its service type and how
+/// many venues it runs.
+class _OrganisationsTable extends ConsumerWidget {
   final List<Organisation> organisations;
   final ValueChanged<Organisation> onOpen;
 
   const _OrganisationsTable({required this.organisations, required this.onOpen});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
+    final types = ref.watch(venueTypesProvider).valueOrNull ?? const <VenueType>[];
     String venues(Organisation o) => o.venueCount == 1 ? '1 venue' : '${o.venueCount} venues';
+    String? typeName(Organisation o) => o.serviceType == null ? null : venueTypeName(types, o.serviceType!);
     return DataGrid<Organisation>(
       rows: organisations,
       noun: 'organisations',
@@ -129,6 +136,7 @@ class _OrganisationsTable extends StatelessWidget {
           cell: (context, o) {
             final tint = context.colors.primary;
             final carry = [
+              if (!DataGrid.shows(context, 'type') && typeName(o) != null) typeName(o)!,
               if (!DataGrid.shows(context, 'venues')) venues(o),
               if (o.description != null) o.description!,
             ];
@@ -156,6 +164,24 @@ class _OrganisationsTable extends StatelessWidget {
                     ],
                   ),
                 ),
+              ],
+            );
+          },
+        ),
+        GridColumn(
+          key: 'type',
+          label: 'Service type',
+          flex: 2,
+          showFrom: 760,
+          sortBy: (o) => (typeName(o) ?? '').toLowerCase(),
+          cell: (context, o) {
+            final type = o.serviceType == null ? null : venueTypeOf(types, o.serviceType!);
+            if (type == null) return Text(typeName(o) ?? '—', style: TextStyle(color: brand.muted));
+            return Row(
+              children: [
+                ServiceTypeIcon(type: type, size: 28),
+                const SizedBox(width: 8),
+                Expanded(child: Text(type.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: brand.body))),
               ],
             );
           },
@@ -215,7 +241,7 @@ class AdminOrganisationScreen extends ConsumerWidget {
                         onPressed: () => _edit(context, ref, org),
                         style: OutlinedButton.styleFrom(minimumSize: PageActions.buttonSize),
                         icon: const Icon(Icons.edit_outlined, size: 20),
-                        label: const Text('Rename'),
+                        label: const Text('Edit'),
                       ),
                       if (org.venueCount == 0)
                         OutlinedButton.icon(
@@ -237,6 +263,11 @@ class AdminOrganisationScreen extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(org.name, style: context.text.titleLarge),
+                              if (org.serviceType != null)
+                                Text(
+                                  venueTypeName(ref.watch(venueTypesProvider).valueOrNull ?? const [], org.serviceType!),
+                                  style: TextStyle(color: context.brand.muted, fontWeight: FontWeight.w600),
+                                ),
                               if (org.description != null) Text(org.description!, style: TextStyle(color: context.brand.body)),
                             ],
                           ),
@@ -298,7 +329,8 @@ class AdminOrganisationScreen extends ConsumerWidget {
       context,
       () => ref
           .read(accessRepositoryProvider)
-          .saveOrganisation(organisationId: org.id, name: draft.name, description: draft.description),
+          .saveOrganisation(
+              organisationId: org.id, name: draft.name, description: draft.description, serviceType: draft.serviceType),
       success: 'Saved',
     );
     if (ok) {
@@ -449,24 +481,27 @@ class _VenuesTable extends StatelessWidget {
 class _OrganisationDraft {
   final String name;
   final String? description;
+  final String serviceType;
 
-  const _OrganisationDraft(this.name, this.description);
+  const _OrganisationDraft(this.name, this.description, this.serviceType);
 }
 
-/// An organisation's name and what it is.
-class _OrganisationDialog extends StatefulWidget {
+/// An organisation's name, its service type (one has to be chosen) and
+/// what it is.
+class _OrganisationDialog extends ConsumerStatefulWidget {
   final Organisation? current;
 
   const _OrganisationDialog({this.current});
 
   @override
-  State<_OrganisationDialog> createState() => _OrganisationDialogState();
+  ConsumerState<_OrganisationDialog> createState() => _OrganisationDialogState();
 }
 
-class _OrganisationDialogState extends State<_OrganisationDialog> {
+class _OrganisationDialogState extends ConsumerState<_OrganisationDialog> {
   final _form = GlobalKey<FormState>();
   late final _name = TextEditingController(text: widget.current?.name ?? '');
   late final _description = TextEditingController(text: widget.current?.description ?? '');
+  late String? _type = widget.current?.serviceType;
 
   @override
   void dispose() {
@@ -478,7 +513,7 @@ class _OrganisationDialogState extends State<_OrganisationDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.current == null ? 'New organisation' : 'Rename organisation'),
+      title: Text(widget.current == null ? 'New organisation' : 'Edit organisation'),
       content: SizedBox(
         width: 440,
         child: Form(
@@ -496,6 +531,8 @@ class _OrganisationDialogState extends State<_OrganisationDialog> {
                 validator: (v) => (v ?? '').trim().length < 2 ? "Enter the organisation's name" : null,
               ),
               const SizedBox(height: 8),
+              _typeField(),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _description,
                 maxLength: 500,
@@ -513,11 +550,37 @@ class _OrganisationDialogState extends State<_OrganisationDialog> {
           onPressed: () {
             if (!_form.currentState!.validate()) return;
             final about = _description.text.trim();
-            Navigator.pop(context, _OrganisationDraft(_name.text.trim(), about.isEmpty ? null : about));
+            Navigator.pop(context, _OrganisationDraft(_name.text.trim(), about.isEmpty ? null : about, _type!));
           },
           child: Text(widget.current == null ? 'Make' : 'Save'),
         ),
       ],
+    );
+  }
+
+  /// Its service type: the ones in use (and its own, if turned off since).
+  Widget _typeField() {
+    final all = ref.watch(venueTypesProvider);
+    final types = [for (final t in all.valueOrNull ?? const <VenueType>[]) if (t.isActive || t.key == widget.current?.serviceType) t];
+    return DropdownButtonFormField<String>(
+      // Built again once the types arrive, to show the one it has.
+      key: ValueKey(types.length),
+      initialValue: types.any((t) => t.key == _type) ? _type : null,
+      isExpanded: true,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      decoration: InputDecoration(
+        labelText: 'Service type *',
+        helperText: all.isLoading ? 'Loading the service types…' : 'What it runs: Gym, Swimming Pool, Wellness Centre...',
+      ),
+      items: [
+        for (final t in types)
+          DropdownMenuItem(
+            value: t.key,
+            child: Row(children: [ServiceTypeIcon(type: t, size: 26), const SizedBox(width: 10), Flexible(child: Text(t.name))]),
+          ),
+      ],
+      onChanged: (v) => setState(() => _type = v),
+      validator: (v) => v == null ? 'Choose its service type' : null,
     );
   }
 }

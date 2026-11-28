@@ -108,7 +108,7 @@ class GymStaffPage extends ConsumerWidget {
       value: ref.watch(venueAccessProvider(venueId)),
       onRetry: () => ref.invalidate(myVenuesProvider),
       data: (access) {
-        final works = access != null && access.venue.type == gymVenueType;
+        final works = access != null && gymModuleRuns(access.venue);
         if (!works ||
             (permission != null && !access.can(permission!) && (orPermission == null || !access.can(orPermission!)))) {
           return AppPage(

@@ -18,20 +18,20 @@ List<String> shownImages(WidgetTester tester) =>
 
 void main() {
   group('the logo', () {
-    testWidgets('navy lettering in light, white lettering in dark, no tile', (tester) async {
+    testWidgets('as it is in light, white lettering in dark, no tile', (tester) async {
       await tester.pumpWidget(MaterialApp(theme: AppTheme.light, home: const HealthProLogo()));
-      expect(shownImages(tester), [endsWith('/logo_base.webp'), endsWith('/logo_heartbeat.webp')]);
+      expect(shownImages(tester), [endsWith('/logo.webp')]);
       expect(find.bySemanticsLabel('Health Pro'), findsOneWidget);
 
       await tester.pumpWidget(MaterialApp(theme: AppTheme.dark, home: const HealthProLogo(markOnly: true)));
       await tester.pumpAndSettle(); // the theme fades from light to dark
-      expect(shownImage(tester), endsWith('/mark_on_dark.webp'));
+      expect(shownImage(tester), endsWith('/mark.webp')); // the heart is the same on dark
       expect(find.byType(DecoratedBox), findsNothing);
     });
 
     testWidgets('places that are navy in both themes ask for the white one', (tester) async {
       await tester.pumpWidget(MaterialApp(theme: AppTheme.light, home: const HealthProLogo(onDark: true)));
-      expect(shownImages(tester), [endsWith('/logo_base_on_dark.webp'), endsWith('/logo_heartbeat_on_dark.webp')]);
+      expect(shownImages(tester), [endsWith('/logo_on_dark.webp')]);
     });
 
     testWidgets('is as wide as its shape, and shrinks to fit a narrow place', (tester) async {
@@ -43,37 +43,16 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('the heartbeat traces slowly, rests, and goes again; settling never hangs', (tester) async {
+    testWidgets('stands still, so it is never caught half-way where it is saved as a picture', (tester) async {
       await tester.pumpWidget(const MaterialApp(home: HealthProLogo(onDark: true)));
-      expect(find.byType(ShaderMask), findsNothing); // a moment's pause first
-      await tester.pump(const Duration(milliseconds: 600));
-      await tester.pump(const Duration(milliseconds: 1500));
-      expect(find.byType(ShaderMask), findsWidgets); // tracing
-      await tester.pumpAndSettle(); // the trace ends; the rest is a timer, not frames
-      expect(find.byType(ShaderMask), findsNothing);
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pump(const Duration(milliseconds: 1500));
-      expect(find.byType(ShaderMask), findsWidgets); // and again
-    });
-
-    testWidgets('stands still with Reduce motion, and where it is saved as a picture', (tester) async {
-      for (final logo in [
-        const MediaQuery(data: MediaQueryData(disableAnimations: true), child: HealthProLogo(onDark: true)),
-        const HealthProLogo(onDark: true, animate: false),
-      ]) {
-        await tester.pumpWidget(MaterialApp(home: logo));
-        await tester.pump(const Duration(seconds: 3));
-        expect(find.byType(ShaderMask), findsNothing);
-        expect(tester.binding.hasScheduledFrame, isFalse);
-      }
+      await tester.pump(const Duration(seconds: 3));
+      expect(tester.binding.hasScheduledFrame, isFalse);
     });
 
     test('every picture it can ask for is in the package', () {
       for (final part in HealthProLogo.parts) {
-        for (final onDark in [false, true]) {
-          final path = HealthProLogo.assetFor(part, onDark: onDark);
-          expect(File(path).existsSync(), isTrue, reason: path);
-        }
+        final path = HealthProLogo.assetFor(part);
+        expect(File(path).existsSync(), isTrue, reason: path);
       }
     });
   });
@@ -91,14 +70,7 @@ void main() {
       final logo = tester.getRect(find.byType(HealthProLogo));
       expect(logo.center, const Offset(195, 422));
       expect(logo.width, 240);
-      expect(logo.height, closeTo(240 * 598 / 2048, 0.01));
-    });
-
-    testWidgets('the heartbeat starts tracing at once', (tester) async {
-      await showSplash(tester, const Size(390, 844));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 1200));
-      expect(find.descendant(of: find.byType(HealthProLogo), matching: find.byType(ShaderMask)), findsWidgets);
+      expect(logo.height, closeTo(240 * 388 / 1141, 0.01));
     });
 
     testWidgets('320 wide on a computer', (tester) async {
@@ -115,14 +87,14 @@ void main() {
 
     testWidgets('in light, blue lettering on white, as the launch screens', (tester) async {
       await showSplash(tester, const Size(390, 844), theme: AppTheme.light);
-      expect(shownImages(tester), [endsWith('/logo_base.webp'), endsWith('/logo_heartbeat.webp')]);
+      expect(shownImages(tester), [endsWith('/logo.webp')]);
       expect(background(tester).color, HealthProSplash.lightBackground);
       expect(background(tester).gradient, isNull);
     });
 
-    testWidgets('in dark, white lettering on navy, as before', (tester) async {
+    testWidgets('in dark, white lettering on navy', (tester) async {
       await showSplash(tester, const Size(390, 844), theme: AppTheme.dark);
-      expect(shownImages(tester), [endsWith('/logo_base_on_dark.webp'), endsWith('/logo_heartbeat_on_dark.webp')]);
+      expect(shownImages(tester), [endsWith('/logo_on_dark.webp')]);
       expect((background(tester).gradient! as LinearGradient).colors, [BrandColors.midnight, BrandColors.night]);
     });
 

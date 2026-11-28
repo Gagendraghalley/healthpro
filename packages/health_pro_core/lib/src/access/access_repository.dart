@@ -226,7 +226,7 @@ class AccessRepository {
       });
 
   Future<List<Organisation>> organisations() async {
-    final rows = await _client.from('organisations').select('id, name, description, venues(count)').order('name');
+    final rows = await _client.from('organisations').select('id, name, description, venue_type, venues(count)').order('name');
     return rows.map(Organisation.fromJson).toList();
   }
 
@@ -236,12 +236,15 @@ class AccessRepository {
   }
 
   /// A new organisation ([organisationId] null) or changes to one. Returns
-  /// its id.
-  Future<String> saveOrganisation({String? organisationId, required String name, String? description}) async =>
+  /// its id. [serviceType] (a Service types key) is needed for a new one;
+  /// null keeps an existing one's.
+  Future<String> saveOrganisation(
+          {String? organisationId, required String name, String? description, String? serviceType}) async =>
       await _client.rpc('save_organisation', params: {
         'organisation_id': organisationId,
         'name': name.trim(),
         'description': description,
+        'service_type': serviceType,
       }) as String;
 
   /// Only an organisation with no venues.
