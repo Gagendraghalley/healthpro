@@ -57,7 +57,16 @@
       "Bash(awk -F: '$1>2980')",
       "Bash(awk 'NR>=2541 && NR<=2630 && /^    \\\\\\);|^  }$|child: _Frame|Padding\\\\\\(/ {print NR\": \"$0}' gym_membership/lib/src/welcome/gym_welcome_page.dart)",
       "Bash(curl -sL -A \"Mozilla/5.0\" -o main.js \"https://bhutanesports.org/assets/js/main.js?v=1.0\")",
-      "Bash(curl -sL -A \"Mozilla/5.0\" -o main.css https://bhutanesports.org/assets/css/main.css)"
+      "Bash(curl -sL -A \"Mozilla/5.0\" -o main.css https://bhutanesports.org/assets/css/main.css)",
+      "Bash(sips -g pixelHeight marquee_phone.png)",
+      "Bash(awk 'NR>=240 && NR<=270 && \\(/^#/ || /Last updated/\\) {print NR\": \"$0}' docs/features.md)",
+      "Bash(git reset *)",
+      "WebFetch(domain:www.firefoxtours.com)",
+      "WebFetch(domain:bhutanxplore.com)",
+      "WebFetch(domain:www.heavenlybhutan.com)",
+      "WebFetch(domain:www.windhorsetours.com)",
+      "WebFetch(domain:bhutanolympiccommittee.org)",
+      "Bash(sips -g pixelWidth -g pixelHeight packages/health_pro_core/assets/icons3d/person_running.png)"
     ]
   }
 }

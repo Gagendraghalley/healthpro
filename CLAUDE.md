@@ -65,7 +65,7 @@ packages/gym_membership/lib/src/
   dashboard/ welcome/ (public landing page) widgets/
 docs/                   features.md (features by role) → Health_Pro_Features.docx (scripts/build_features_doc.py)
 supabase/migrations/    YYYYMMDDNNNNNN_name.sql, one per change
-supabase/sample_services.sql  sample places of every type, run by hand on a test project (never a migration)
+supabase/remove_test_services.sql  removes the 39 "(Test)" places of migration 20261128000002 (live for testing), by hand
 supabase/functions/     admin-users, ask-ai, ask-health-pro, delete-account, draft-plan, send-email (class emails, SMTP), send-push,
                         supplier-catalog, _shared/
 tests/database/         *_test.sql, run by scripts/test_database.sh

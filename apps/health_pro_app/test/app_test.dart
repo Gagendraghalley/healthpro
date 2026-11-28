@@ -97,6 +97,8 @@ Future<ProviderContainer> pumpApp(WidgetTester tester, {String? userId, bool gym
   addTearDown(tester.view.reset);
   final container = ProviderContainer(overrides: [
     registeredModulesProvider.overrideWithValue(modules),
+    // Less motion: the Welcome page's ticker runs for ever otherwise, so pumpAndSettle would never settle.
+    reduceMotionProvider.overrideWith(() => ReduceMotionController(true)),
     authRepositoryProvider.overrideWithValue(FakeAuth(userId)),
     moduleRepositoryProvider.overrideWithValue(FakeModules(gymOn: gymOn)),
     profileRepositoryProvider.overrideWithValue(FakeProfiles()),

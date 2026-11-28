@@ -428,8 +428,15 @@ class GentleFloat extends StatefulWidget {
 }
 
 class _GentleFloatState extends State<GentleFloat> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: widget.period * widget.cycles);
+  // Made up front, so dispose never makes one on a widget already gone (with Reduce motion it never starts).
+  late final AnimationController _c;
   bool _started = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: widget.period * widget.cycles);
+  }
 
   @override
   void didChangeDependencies() {
@@ -476,22 +483,24 @@ class Shimmer extends StatefulWidget {
 }
 
 class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
-  late final AnimationController _sweep =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat();
+  /// Made the first time it shows moving (never with Reduce motion), so
+  /// dispose doesn't make one on a widget already gone.
+  AnimationController? _controller;
 
   @override
   void dispose() {
-    _sweep.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     if (reduceMotion(context)) return widget.child;
+    final sweep = _controller ??= AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat();
     final dark = Theme.of(context).brightness == Brightness.dark;
     final light = Colors.white.withValues(alpha: dark ? 0.10 : 0.65);
     return AnimatedBuilder(
-      animation: _sweep,
+      animation: sweep,
       child: widget.child,
       builder: (context, child) => ShaderMask(
         blendMode: BlendMode.srcATop,
@@ -500,7 +509,7 @@ class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
           end: Alignment.centerRight,
           colors: [Colors.transparent, light, Colors.transparent],
           stops: const [0.35, 0.5, 0.65],
-          transform: _Slide(_sweep.value),
+          transform: _Slide(sweep.value),
         ).createShader(bounds),
         child: child,
       ),

@@ -256,10 +256,21 @@ Future<List<SearchHit>> _platformSearch(Ref ref, String q, PlatformAccess access
   return [for (final hits in found) ...hits];
 }
 
+/// What a search looks up for what was typed (two letters or more).
+typedef SearchSource = ProviderListenable<AsyncValue<List<SearchHit>>> Function(String query);
+
 /// Opens the search over the page. [pages] are what the side menu offers
-/// ([searchablePages]); the services' records are looked up as they type.
-/// The page chosen opens.
-Future<void> showGlobalSearch(BuildContext context, {required List<SearchHit> pages}) async {
+/// ([searchablePages]); the services' records ([find]: [globalSearchProvider]
+/// when null) are looked up as they type. The page chosen opens, on top of
+/// this one when [push] (Back returns here).
+Future<void> showGlobalSearch(
+  BuildContext context, {
+  required List<SearchHit> pages,
+  SearchSource? find,
+  String? hint,
+  String? tip,
+  bool push = false,
+}) async {
   final router = GoRouter.of(context);
   final route = await showGeneralDialog<String>(
     context: context,
@@ -267,7 +278,7 @@ Future<void> showGlobalSearch(BuildContext context, {required List<SearchHit> pa
     barrierLabel: 'Close search',
     barrierColor: Colors.black.withValues(alpha: 0.35),
     transitionDuration: Motion.of(context, Motion.modal),
-    pageBuilder: (context, _, __) => GlobalSearchDialog(pages: pages),
+    pageBuilder: (context, _, __) => GlobalSearchDialog(pages: pages, find: find, hint: hint, tip: tip),
     transitionBuilder: (context, animation, _, child) {
       final curved = CurvedAnimation(parent: animation, curve: Motion.ease, reverseCurve: Motion.easeIn);
       return FadeTransition(
@@ -279,15 +290,24 @@ Future<void> showGlobalSearch(BuildContext context, {required List<SearchHit> pa
       );
     },
   );
-  if (route != null) router.go(route);
+  if (route == null) return;
+  push ? router.push(route) : router.go(route);
 }
 
 /// The search window: a box, and what it finds under headings, best first.
 /// Up and down choose, Enter opens, Esc closes.
 class GlobalSearchDialog extends ConsumerStatefulWidget {
+  /// Matched at once as they type; those in 'Shortcuts' come under their own heading.
   final List<SearchHit> pages;
 
-  const GlobalSearchDialog({super.key, required this.pages});
+  /// Looked up once typing pauses; [globalSearchProvider] when null.
+  final SearchSource? find;
+
+  /// The box's hint, and what to try when nothing is found.
+  final String? hint;
+  final String? tip;
+
+  const GlobalSearchDialog({super.key, required this.pages, this.find, this.hint, this.tip});
 
   @override
   ConsumerState<GlobalSearchDialog> createState() => _GlobalSearchDialogState();
@@ -378,19 +398,19 @@ class _GlobalSearchDialogState extends ConsumerState<GlobalSearchDialog> {
     if (q.isEmpty) {
       pages = [
         ...widget.pages.where((p) => p.group == 'Shortcuts').take(4),
-        ...widget.pages.where((p) => p.group == 'Pages').take(8),
+        ...widget.pages.where((p) => p.group != 'Shortcuts').take(8),
       ];
     } else {
       // The group of the best match first.
       final ranked = rankHits(widget.pages, q);
-      final matching = ranked.where((p) => p.group == 'Pages').take(8);
+      final matching = ranked.where((p) => p.group != 'Shortcuts').take(8);
       final quick = ranked.where((p) => p.group == 'Shortcuts').take(4);
       pages = ranked.isNotEmpty && ranked.first.group == 'Shortcuts' ? [...quick, ...matching] : [...matching, ...quick];
     }
 
     // The services' records, a moment after typing stops.
     final asked = _asked.length >= 2 ? _asked : null;
-    final answer = asked == null ? null : ref.watch(globalSearchProvider(asked));
+    final answer = asked == null ? null : ref.watch((widget.find ?? globalSearchProvider.call)(asked));
     if (answer != null && answer.hasValue && !answer.isLoading) _lastFound = answer.value!;
     final found = q.length < 2 ? const <SearchHit>[] : _lastFound;
     final looking = q.length >= 2 && (asked != q || (answer?.isLoading ?? false));
@@ -428,7 +448,8 @@ class _GlobalSearchDialogState extends ConsumerState<GlobalSearchDialog> {
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: 640, maxHeight: wide ? 560 : size.height * 0.8),
             child: Material(
-              color: brand.card,
+              // Solid, so the page under it (a bright headline) never shows through.
+              color: Color.alphaBlend(brand.card, brand.background),
               elevation: 0,
               clipBehavior: Clip.antiAlias,
               shape: RoundedRectangleBorder(
@@ -449,7 +470,7 @@ class _GlobalSearchDialogState extends ConsumerState<GlobalSearchDialog> {
                     ),
                     Flexible(
                       child: _shown.isEmpty && !looking && q.isNotEmpty
-                          ? _NothingFound(query: q, short: q.length < 2)
+                          ? _NothingFound(query: q, short: q.length < 2, tip: widget.tip)
                           : ListView(
                               controller: _scroll,
                               shrinkWrap: true,
@@ -488,7 +509,7 @@ class _GlobalSearchDialogState extends ConsumerState<GlobalSearchDialog> {
               textInputAction: TextInputAction.search,
               style: TextStyle(fontSize: 16.5, color: brand.ink, fontWeight: FontWeight.w500),
               decoration: InputDecoration(
-                hintText: 'Search pages, members, payments, classes, stock…',
+                hintText: widget.hint ?? 'Search pages, members, payments, classes, stock…',
                 hintStyle: TextStyle(color: brand.muted, fontWeight: FontWeight.w400),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
@@ -651,7 +672,10 @@ class _NothingFound extends StatelessWidget {
   /// One letter: too short to look in the services.
   final bool short;
 
-  const _NothingFound({required this.query, required this.short});
+  /// What to try instead.
+  final String? tip;
+
+  const _NothingFound({required this.query, required this.short, this.tip});
 
   @override
   Widget build(BuildContext context) {
@@ -667,7 +691,7 @@ class _NothingFound extends StatelessWidget {
               textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink, fontSize: 15)),
           const SizedBox(height: 4),
           Text(
-            short ? 'Type another letter or two.' : 'Check the spelling, or try a name, phone number, card code or JRN.',
+            short ? 'Type another letter or two.' : tip ?? 'Check the spelling, or try a name, phone number, card code or JRN.',
             textAlign: TextAlign.center,
             style: TextStyle(color: brand.muted, fontSize: 13),
           ),
@@ -691,7 +715,8 @@ class _Footer extends StatelessWidget {
         Row(mainAxisSize: MainAxisSize.min, children: [Keycap(key), const SizedBox(width: 6), Text(text, style: style)]);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: brand.surfaceAlt.withValues(alpha: 0.6),
+        // A little softer than the fill: in the dark it's already faint, so it stays faint.
+        color: brand.surfaceAlt.withValues(alpha: brand.surfaceAlt.a * 0.6),
         border: Border(top: BorderSide(color: brand.glassBorder)),
       ),
       child: Padding(
@@ -778,7 +803,10 @@ class GlobalSearchButton extends StatelessWidget {
 class GlobalSearchBox extends StatefulWidget {
   final VoidCallback onPressed;
 
-  const GlobalSearchBox({super.key, required this.onPressed});
+  /// What the field says before it's opened.
+  final String hint;
+
+  const GlobalSearchBox({super.key, required this.onPressed, this.hint = 'Search anything…'});
 
   /// Window widths from which the bar has the field rather than the icon.
   static const from = 1180.0;
@@ -861,7 +889,7 @@ class _GlobalSearchBoxState extends State<GlobalSearchBox> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Search anything…',
+                    widget.hint,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

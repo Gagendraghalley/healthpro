@@ -43,6 +43,8 @@ flutter:
     - assets/auth/
     # The menu's 3D icons: Microsoft's Fluent Emoji 3D, MIT (assets/icons3d/LICENSE.txt), at 96px.
     - assets/icons3d/
+    # A 3D picture for each service icon (VenueTypeIcons.art), same source and licence, at 160px.
+    - assets/services3d/
   fonts:
     # The platform's typeface, every service's (brandFont, used as
     # 'packages/health_pro_core/PlusJakartaSans'). Plus Jakarta Sans, SIL Open

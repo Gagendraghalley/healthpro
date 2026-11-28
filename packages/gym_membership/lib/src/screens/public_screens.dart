@@ -679,11 +679,23 @@ class _GymListScreenState extends ConsumerState<GymListScreen> {
   }
 }
 
+/// How many places of a kind there are: near them ([withinKm], when known) or
+/// in [inArea] (the area they chose), then all told; Coming soon when none yet.
+String serviceCountText({required int count, required int total, int? withinKm, String? inArea, double? nearestKm}) {
+  final where = withinKm != null ? ' within $withinKm km' : (inArea == null ? '' : ' in $inArea');
+  return switch ((count, total)) {
+    (_, 0) => 'Coming soon',
+    (0, final total) => 'None$where · $total ${withinKm != null ? 'further away' : 'elsewhere'}',
+    _ => [
+        '$count ${count == 1 ? 'place' : 'places'}$where',
+        if (nearestKm != null) 'nearest ${distanceText(nearestKm)}',
+      ].join(' · '),
+  };
+}
+
 /// One kind of service on Find services: its icon, name, what it is, and
 /// how many there are (and the nearest). Lifts under the pointer, its arrow
-/// leaning in.
-/// A kind of service (Gym, Swimming...) as a card: its photo, icon and name,
-/// and how many places there are. Here and on the welcome page.
+/// leaning in. (The welcome page has its own, numbered, with the 3D picture.)
 class ServiceTypeCard extends StatefulWidget {
   final VenueType type;
 
@@ -721,18 +733,9 @@ class _ServiceTypeCardState extends State<ServiceTypeCard> {
     final photo = widget.type.photo;
     final hover = _hover && !reduceMotion(context);
     final duration = Motion.of(context, Motion.card);
-    final count = widget.count;
-    final none = count == 0;
-    final within = widget.withinKm;
-    final where = within != null ? ' within $within km' : (widget.inArea == null ? '' : ' in ${widget.inArea}');
-    final countText = switch ((count, widget.total)) {
-      (_, 0) => 'Coming soon',
-      (0, final total) => 'None$where · $total ${within != null ? 'further away' : 'elsewhere'}',
-      _ => [
-          '$count ${count == 1 ? 'place' : 'places'}$where',
-          if (widget.nearestKm != null) 'nearest ${distanceText(widget.nearestKm!)}',
-        ].join(' · '),
-    };
+    final none = widget.count == 0;
+    final countText = serviceCountText(
+        count: widget.count, total: widget.total, withinKm: widget.withinKm, inArea: widget.inArea, nearestKm: widget.nearestKm);
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),

@@ -7,7 +7,7 @@ class Art3D {
   /// Its file in assets/icons3d/, without '.png'.
   final String name;
 
-  const Art3D._(this.name);
+  const Art3D._(this.name) : _picture = null;
 
   // The day's work.
   static const chartIncreasing = Art3D._('chart_increasing');
@@ -71,7 +71,14 @@ class Art3D {
     magnifier, cardFileBox, plug, ladybird, rocket, bell,
   ];
 
-  String get asset => 'assets/icons3d/$name.png';
+  /// A picture of its own (a service type's, in assets/services3d/).
+  const Art3D.picture(String asset)
+      : name = asset,
+        _picture = asset;
+
+  final String? _picture;
+
+  String get asset => _picture ?? 'assets/icons3d/$name.png';
 }
 
 /// An [Art3D] at [size], or [fallback] (a flat icon) if it can't be shown.

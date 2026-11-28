@@ -12,6 +12,7 @@ import '../data/suppliers.dart';
 import '../data/trainers.dart';
 import '../gym_permissions.dart';
 import '../gym_routes.dart';
+import '../screens/public_screens.dart';
 import 'gym_navigation.dart';
 
 /// The most of one kind the search shows, best first.
@@ -309,4 +310,62 @@ List<SearchHit> bestFirst(List<SearchHit> hits, String query) {
   final scored = [for (var i = 0; i < hits.length; i++) (hit: hits[i], score: searchScore(hits[i], query), at: i)]
     ..sort((a, b) => a.score != b.score ? b.score.compareTo(a.score) : a.at.compareTo(b.at));
   return [for (final s in scored) s.hit];
+}
+
+// ---- The welcome page's search, for everyone (no account needed).
+
+/// Every organisation on Health Pro that [query] finds, as Find services'
+/// search does (a name, place, type, facility, package or class), best
+/// first; each opens its own page.
+final publicSearchProvider = FutureProvider.autoDispose.family<List<SearchHit>, String>((ref, query) async {
+  final types = await ref.watch(venueTypesProvider.future).catchError((_) => const <VenueType>[]);
+  final venues = await ref.watch(moduleVenuesProvider(gymModuleKey).future);
+  final services = await ref.watch(gymVenueServicesProvider.future).catchError((_) => const <String, List<String>>{});
+  final found = arrangeGyms(venues, prices: const {}, query: query, services: services, typeNames: {for (final t in types) t.key: t.name});
+  return bestFirst([
+    for (final r in found)
+      if (venueTypeOf(types, r.gym.type) case final type)
+        SearchHit(
+          title: r.gym.name,
+          subtitle: '${venueTypeName(types, r.gym.type)} · ${r.gym.place}',
+          icon: type?.iconData ?? Icons.storefront_outlined,
+          art: Art3D.picture(VenueTypeIcons.art(type?.icon ?? '')),
+          route: GymRoutes.gymFor(r.gym.id),
+          group: 'Places',
+        ),
+  ], query)
+      .take(12)
+      .toList();
+});
+
+/// The kinds of service anyone can find ([findableTypes]) as search
+/// results: each opens Find services on that kind, and says how many there are.
+List<SearchHit> serviceTypeHits(List<VenueType> master, List<Venue> venues) => [
+      for (final t in findableTypes(master, venues))
+        if (venues.where((v) => v.type == t.key).length case final n)
+          SearchHit(
+            title: t.name,
+            subtitle: n == 0 ? 'Coming soon' : '$n ${n == 1 ? 'place' : 'places'}',
+            icon: t.iconData,
+            art: Art3D.picture(t.artAsset),
+            route: '${GymRoutes.gyms}?type=${Uri.encodeQueryComponent(t.key)}',
+            group: 'Services',
+            keywords: [t.description, ...t.facilities].whereType<String>().join(' '),
+          ),
+    ];
+
+/// The welcome page's search: the kinds of service straight away, and the
+/// places as they type. Enter, or a tap, goes straight to the one chosen.
+Future<void> showPublicSearch(BuildContext context, WidgetRef ref) async {
+  final master = await ref.read(venueTypesProvider.future).catchError((_) => const <VenueType>[]);
+  final venues = await ref.read(moduleVenuesProvider(gymModuleKey).future).catchError((_) => const <Venue>[]);
+  if (!context.mounted) return;
+  await showGlobalSearch(
+    context,
+    pages: serviceTypeHits(master, venues),
+    find: publicSearchProvider.call,
+    hint: 'Search a place, a service, yoga, sauna, a town…',
+    tip: 'Check the spelling, or try a kind of service or a town.',
+    push: true,
+  );
 }

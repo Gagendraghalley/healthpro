@@ -44,6 +44,8 @@ for migration in supabase/migrations/*.sql; do
 done
 echo "Applying them again (they must be safe to re-run)"
 for migration in supabase/migrations/*.sql; do db -f "$migration" >/dev/null 2>&1; done
+# The tests start without the live test places (20261128000002); organisation_types_test.sql adds them back.
+db -f supabase/remove_test_services.sql
 db -f tests/database/scenario_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 db -f tests/database/access_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 db -f tests/database/organisations_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
@@ -68,9 +70,3 @@ db -f tests/database/delete_member_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASS
 db -f tests/database/organisation_types_test.sql 2>&1 | grep -E "ok  |FAIL|ERROR|PASSED" | sed 's/^.*NOTICE:  //'
 echo "Applying supabase/seed.sql (local test data)"
 db -f supabase/seed.sql
-echo "Applying supabase/sample_services.sql twice (sample organisations of every type)"
-db -f supabase/sample_services.sql && db -f supabase/sample_services.sql
-db -t -A -c "select 'SAMPLE SERVICES: ' || count(*) || ' places, ' || count(distinct type) || ' types, '
-             || (select count(*) from public.gym_plans where venue_id::text like '5a000000-%') || ' packages, '
-             || (select count(*) from public.gym_classes where venue_id::text like '5a000000-%') || ' classes'
-             from public.venues where id::text like '5a000000-%' and module_key = 'gym_membership' and is_verified"

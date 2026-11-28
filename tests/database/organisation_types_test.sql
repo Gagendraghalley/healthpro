@@ -19,6 +19,13 @@ select t.eq((select bool_and(module_key = 'gym_membership' and is_active) from p
 select t.eq((select 'Sauna' = any (facilities) and description is not null from public.venue_types where key = 'gym'), true,
             'the gym has its description and facilities');
 select t.eq((select count(*) from public.venues where module_key is null)::int, 0, 'every venue knows its module');
+-- Twelve more (20261128000001), each with an icon and colour, on Services from the start.
+select t.eq((select string_agg(name, ', ' order by sort_order) from public.venue_types where sort_order between 70 and 180),
+            'Yoga & Meditation, Archery, Martial Arts, Trekking & Hiking, Climbing, Racquet Sports, Golf, Sports Academy, '
+            'Running Club, Physiotherapy & Rehab, Hot Stone Bath, Nutrition & Diet', 'twelve more kinds of health business');
+select t.eq((select count(*) from public.venue_types where sort_order between 70 and 180
+             and color is not null and show_when_empty and cardinality(facilities) > 0)::int, 12,
+            'each has a colour and facilities, and a card while empty');
 
 -- Only who keeps the master data adds or changes a type.
 set role authenticated;
@@ -102,5 +109,47 @@ select t.eq((select name from public.permissions where key = 'gym.inventory'), '
 select t.eq((select count(*) from public.role_permissions rp join public.roles r on r.id = rp.role_id
              where rp.permission_key = 'gym.inventory' and r.key in ('owner', 'manager'))::int > 0, true,
             'owners and managers keep it');
+
+-- Test services (20261128000002), run again now there's a super admin: 39 places, every type, plainly a test.
+reset role;
+\ir ../../supabase/migrations/20261128000002_test_services.sql
+select t.eq((select count(*) from public.venues where id::text like '5a000000-%' and is_verified)::int, 39,
+            'thirty-nine verified test places');
+select t.eq((select count(distinct type) from public.venues where id::text like '5a000000-%')::int, 18, 'one of every type');
+select t.eq((select count(*) from public.venues where id::text like '5a000000-%' and type = 'cycling')::int, 5, 'five for cycling');
+select t.eq((select bool_and(name like '% (Test)' and phone like '+975000000%' and payment_info like '%don''t pay%')
+             from public.venues where id::text like '5a000000-%'), true, 'named (Test), no real phone, nothing to pay');
+select t.eq((select count(*) from public.venue_staff where user_id = '00000000-0000-0000-0000-00000000000a'
+             and role = 'owner' and venue_id::text like '5a000000-%')::int, 39, 'the super admin runs them all');
+select t.eq((select count(*) from public.gym_plans where venue_id::text like '5a000000-%')::int, 83, 'packages not doubled');
+select t.eq((select count(*) from public.organisations o join public.venues v on v.organisation_id = o.id
+             where o.id::text like '5b000000-%' and v.id::text like '5a000000-%' and o.venue_type = v.type
+               and o.name = v.name and o.description like '%Sample data%')::int, 39,
+            'thirty-nine test organisations, each running its place, of its type');
+
+-- A member asks to join and pays; taking them away takes that too, and leaves the types.
+select id as test_plan from public.gym_plans where venue_id = '5a000000-0000-0000-0000-000000000003' order by sort_order limit 1 \gset
+set role authenticated;
+select t.as_user('00000000-0000-0000-0000-0000000f7002');
+select public.gym_request_to_join('5a000000-0000-0000-0000-000000000003', :'test_plan', 'Trying it out');
+reset role;
+insert into public.payments (venue_id, module_key, amount, method) values ('5a000000-0000-0000-0000-000000000003', 'gym_membership', 600, 'cash');
+\ir ../../supabase/remove_test_services.sql
+\ir ../../supabase/remove_test_services.sql
+select t.eq((select count(*) from public.venues where id::text like '5a000000-%')::int, 0, 'removed: no test places left');
+select t.eq((select count(*) from public.gym_join_requests where venue_id::text like '5a000000-%')::int
+            + (select count(*) from public.payments where venue_id::text like '5a000000-%')::int, 0, 'nor their requests or payments');
+select t.eq((select count(*) from public.organisations where name like '% (Test)')::int, 0, 'nor the organisations made for them');
+select t.eq((select count(*) from public.venue_types where key in ('cycling', 'archery', 'nutrition'))::int, 3, 'the types stay');
+
+-- Real biking organisations (20261128000003): waiting to be verified, each in its own organisation, unseen by visitors.
+select t.eq((select count(*) from public.venues v join public.organisations o on o.id = v.organisation_id
+             where v.id::text like '5c000000-%' and v.type = 'cycling' and v.verification_status = 'pending'
+               and o.venue_type = 'cycling' and not exists (select 1 from public.gym_plans p where p.venue_id = v.id))::int, 4,
+            'four biking businesses wait to be verified, with nothing made up');
+set role anon;
+select t.as_user(null);
+select t.eq((select count(*) from public.venues where id::text like '5c000000-%')::int, 0, 'visitors do not see them yet');
+reset role;
 
 do $$ begin raise notice 'ALL ORGANISATION TYPE CHECKS PASSED'; end $$;

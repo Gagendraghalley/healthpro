@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:gym_membership/gym_membership.dart';
 import 'package:gym_membership/src/screens/public_screens.dart';
 import 'package:gym_membership/src/welcome/gym_welcome_page.dart';
@@ -128,6 +129,82 @@ void main() {
       expect(counted('KINDS OF SERVICE'), '2');
       expect(counted('DZONGKHAGS'), '2');
     });
+
+    testWidgets('a name on the moving ribbons opens its places, as its card does', (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final router = GoRouter(routes: [
+        GoRoute(path: '/', builder: (_, __) => const GymWelcomePage()),
+        GoRoute(path: GymRoutes.gyms, builder: (_, state) => Text('Places: ${state.uri.queryParameters['type']}')),
+      ]);
+      addTearDown(router.dispose);
+      await tester.pumpWidget(ProviderScope(
+        overrides: withPlaces(),
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      ));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.ensureVisible(find.text('SWIMMING POOL').first);
+      await tester.pump(const Duration(milliseconds: 300));
+      // Seen through the spotlight or not, a name takes the tap while it glides.
+      final pools = find.text('SWIMMING POOL').hitTestable();
+      expect(pools, findsWidgets);
+      await tester.tap(pools.first);
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+      expect(find.text('Places: swimming'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    for (final MapEntry(key: name, value: size) in const {'phone': Size(390, 844), 'computer': Size(1440, 900)}.entries) {
+      testWidgets('on a $name the search is last in the bar, and what is typed opens that place', (tester) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final router = GoRouter(routes: [
+          GoRoute(path: '/', builder: (_, __) => const GymWelcomePage()),
+          GoRoute(path: '/gyms/:id', builder: (_, state) => Text('Place: ${state.pathParameters['id']}')),
+        ]);
+        addTearDown(router.dispose);
+        await tester.pumpWidget(ProviderScope(
+          overrides: [
+            ...withPlaces(),
+            gymVenueServicesProvider.overrideWith((ref) async => const {
+                  'p': ['Swimming lessons'],
+                }),
+          ],
+          child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+        ));
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.pump(const Duration(seconds: 1));
+
+        // After Log in / Sign up: a field on a computer, an icon on a phone.
+        final search = name == 'computer' ? find.byType(GlobalSearchBox) : find.byTooltip('Search services');
+        expect(tester.getCenter(search).dx, greaterThan(tester.getCenter(find.text('Log in / Sign up')).dx));
+        await tester.tap(search);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+
+        Finder inSearch(String text) =>
+            find.descendant(of: find.byType(GlobalSearchDialog), matching: find.text(text, findRichText: true));
+        // The kinds of service straight away.
+        expect(inSearch('Swimming Pool'), findsOneWidget);
+
+        // Found by a class it offers; Enter opens it.
+        await tester.enterText(find.descendant(of: find.byType(GlobalSearchDialog), matching: find.byType(TextField)), 'lessons');
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump();
+        expect(inSearch('Blue Lane Pool'), findsOneWidget);
+        await tester.testTextInput.receiveAction(TextInputAction.search);
+        for (var i = 0; i < 3; i++) {
+          await tester.pump(const Duration(milliseconds: 400));
+        }
+        expect(find.text('Place: p'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
 
     for (final MapEntry(key: name, value: size)
         in const {'phone': Size(390, 844), 'tablet': Size(820, 1180), 'computer': Size(1440, 900)}.entries) {

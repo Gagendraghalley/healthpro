@@ -47,6 +47,9 @@ class VenueType {
 
   IconData get iconData => VenueTypeIcons.of(icon);
 
+  /// Its icon's 3D picture ([VenueTypeIcons.art]).
+  String get artAsset => VenueTypeIcons.art(icon);
+
   /// Its colour, or [fallback] without one.
   Color colorOr(Color fallback) => VenueTypeColors.of(color) ?? fallback;
 
@@ -143,6 +146,10 @@ abstract final class VenueTypeIcons {
   };
 
   static IconData of(String key) => (all[key] ?? all[fallback]!).$1;
+
+  /// The 3D picture for an icon (Fluent Emoji 3D, in health_pro_core's
+  /// assets/services3d/, named by the key), for Image.asset(package: 'health_pro_core').
+  static String art(String key) => 'assets/services3d/${all.containsKey(key) ? key : fallback}.png';
 }
 
 /// Every service type, in the team's order (then by name); turned-off

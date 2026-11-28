@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show Ticker;
+import 'package:flutter/services.dart' show HardwareKeyboard, KeyEvent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -11,6 +13,7 @@ import 'package:health_pro_core/health_pro_core.dart';
 import '../data/gym_repository.dart';
 import '../gym_routes.dart';
 import '../screens/public_screens.dart';
+import '../shell/gym_search.dart';
 import '../widgets/gym_art.dart';
 import '../widgets/gym_type.dart';
 
@@ -47,6 +50,7 @@ class _GymWelcomePageState extends ConsumerState<GymWelcomePage> {
   @override
   void initState() {
     super.initState();
+    HardwareKeyboard.instance.addHandler(_onKey);
     _scroll.addListener(() {
       final scrolled = _scroll.offset > 8;
       if (scrolled != _scrolled) setState(() => _scrolled = scrolled);
@@ -56,9 +60,28 @@ class _GymWelcomePageState extends ConsumerState<GymWelcomePage> {
   @override
   void dispose() {
     _beat?.cancel();
+    HardwareKeyboard.instance.removeHandler(_onKey);
     _beats.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  bool _searching = false;
+
+  /// The search over the page: the kinds of service and the places; the
+  /// one chosen opens.
+  void _search() {
+    if (_searching) return;
+    _searching = true;
+    showPublicSearch(context, ref).whenComplete(() => _searching = false);
+  }
+
+  /// Ctrl K (⌘ K) opens the search, as in the app, unless something is open
+  /// over the page.
+  bool _onKey(KeyEvent event) {
+    if (!isSearchShortcut(event) || !mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return false;
+    _search();
+    return true;
   }
 
   /// Scrolls [key]'s section up to just under the bar. A section not yet
@@ -170,7 +193,7 @@ class _GymWelcomePageState extends ConsumerState<GymWelcomePage> {
               layout: layout,
               scrolled: _scrolled,
               onLogo: _toTop,
-              onSearch: _findGym,
+              onSearch: _search,
               onRegister: _registerGym,
               onLogIn: _logIn,
             ),
@@ -261,9 +284,9 @@ class _Frame extends StatelessWidget {
 
 // ─── The bar ───────────────────────────────────────────────────────────────
 
-/// The logo, search, Ask AI, light or dark, Register as a professional (a
-/// button on a computer, an icon on a tablet; the footer has it on a phone)
-/// and Log in / Sign up, on frosted glass.
+/// The logo, Ask AI, light or dark, Register as a professional (a button on
+/// a computer, an icon on a tablet; the footer has it on a phone), Log in /
+/// Sign up and, last, search, on frosted glass.
 class _NavBar extends StatelessWidget {
   static const height = 72.0;
 
@@ -271,7 +294,7 @@ class _NavBar extends StatelessWidget {
   final bool scrolled;
   final VoidCallback onLogo;
 
-  /// Searches services (Find services has the search).
+  /// Searches the kinds of service and the places; the one chosen opens.
   final VoidCallback onSearch;
   final VoidCallback onRegister;
 
@@ -310,74 +333,107 @@ class _NavBar extends StatelessWidget {
             child: _Frame(
               layout: layout,
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // The logo takes the room left, and shrinks before the
-                  // buttons would run off the edge (a small phone, large text).
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Semantics(
-                        button: true,
-                        label: 'Back to the top',
-                        child: GestureDetector(
-                          onTap: onLogo,
-                          child: MouseRegion(
-                            cursor: SystemMouseCursors.click,
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: HealthProLogo(height: layout.medium ? 46 : 38, markOnly: !layout.medium),
-                            ),
-                          ),
-                        ),
+                  Semantics(
+                    button: true,
+                    label: 'Back to the top',
+                    child: GestureDetector(
+                      onTap: onLogo,
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: HealthProLogo(height: layout.medium ? 46 : 38, markOnly: !layout.medium),
                       ),
                     ),
                   ),
-                  if (layout.medium) ...[
-                    IconButton(
-                      tooltip: 'Search services',
-                      onPressed: onSearch,
-                      color: ink.heading,
-                      icon: const Icon(Icons.search_rounded),
-                    ),
-                  ],
-                  // Ask AI (Health Pro's assistant, under this bar), then light
-                  // or dark. Their touch areas don't pad out past the buttons
-                  // (as on a computer), leaving a phone's logo room.
-                  IconButtonTheme(
-                    data: IconButtonThemeData(
-                      style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap)
-                          .merge(IconButtonTheme.of(context).style),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AskAiBarButton(
-                            onPressed: () => openAssistant(context, const HealthProAssistantPanel(), underBar: height)),
-                        if (MediaQuery.sizeOf(context).width >= 700) const SizedBox(width: 6),
-                        ThemeModeButton(color: ink.heading),
-                      ],
+                  const SizedBox(width: 12),
+                  // The buttons at their size; on a small phone or with large
+                  // text they shrink to fit rather than run off the edge.
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Ask AI (Health Pro's assistant, under this bar), then
+                          // light or dark. Their touch areas don't pad out past
+                          // the buttons (as on a computer), leaving a phone room.
+                          IconButtonTheme(
+                            data: IconButtonThemeData(
+                              style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap)
+                                  .merge(IconButtonTheme.of(context).style),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                AskAiBarButton(
+                                    onPressed: () => openAssistant(context, const HealthProAssistantPanel(), underBar: height)),
+                                if (MediaQuery.sizeOf(context).width >= 700) const SizedBox(width: 6),
+                                ThemeModeButton(color: ink.heading),
+                              ],
+                            ),
+                          ),
+                          SizedBox(width: layout.medium ? 8 : 4),
+                          if (layout.wide) ...[
+                            _PillButton(label: 'Register as a professional', outlined: true, compact: true, onPressed: onRegister),
+                            const SizedBox(width: 10),
+                          ] else if (layout.medium) ...[
+                            IconButton(
+                              tooltip: 'Register as a professional',
+                              onPressed: onRegister,
+                              color: ink.heading,
+                              icon: const Icon(Icons.add_business_outlined),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          _PillButton(label: 'Log in / Sign up', compact: true, onPressed: onLogIn),
+                          SizedBox(width: layout.medium ? 10 : 8),
+                          // Last, the search: a field with its shortcut on a
+                          // computer, its icon on a tile of the same look on
+                          // a tablet or phone.
+                          if (GlobalSearchBox.shows(context))
+                            SizedBox(
+                              width: 230,
+                              child: GlobalSearchBox(hint: 'Search services…', onPressed: onSearch),
+                            )
+                          else
+                            _SearchTile(onPressed: onSearch),
+                        ],
+                      ),
                     ),
                   ),
-                  SizedBox(width: layout.medium ? 8 : 4),
-                  if (layout.wide) ...[
-                    _PillButton(label: 'Register as a professional', outlined: true, compact: true, onPressed: onRegister),
-                    const SizedBox(width: 10),
-                  ] else if (layout.medium) ...[
-                    IconButton(
-                      tooltip: 'Register as a professional',
-                      onPressed: onRegister,
-                      color: ink.heading,
-                      icon: const Icon(Icons.add_business_outlined),
-                    ),
-                    const SizedBox(width: 4),
-                  ],
-                  _PillButton(label: 'Log in / Sign up', compact: true, onPressed: onLogIn),
                 ],
               ),
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The search on a tablet or phone: its icon on a tile like the computer's
+/// field (a soft grey well with an edge in the light theme).
+class _SearchTile extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _SearchTile({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return IconButton(
+      tooltip: 'Search services',
+      onPressed: onPressed,
+      style: IconButton.styleFrom(
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        foregroundColor: _Ink.of(context).heading,
+        backgroundColor: brand.pick(const Color(0xFFF1F4F9), brand.card),
+        side: BorderSide(color: brand.pick(LightColors.border, brand.fieldBorder)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      icon: const Icon(Icons.search_rounded, size: 21),
     );
   }
 }
@@ -2512,20 +2568,31 @@ class _ServiceTypes extends ConsumerWidget {
     // What Health Pro has, counted up as it comes into view: real numbers only.
     String counted(int n, String one, String many) => n == 1 ? one : many;
     final dzongkhagCount = {for (final v in venues) v.dzongkhag}.length;
+    final counters = [
+      _CountUp(value: venues.length, label: counted(venues.length, 'Place', 'Places'), layout: layout),
+      _CountUp(value: total.length, label: counted(total.length, 'Kind of service', 'Kinds of service'), layout: layout),
+      _CountUp(value: dzongkhagCount, label: counted(dzongkhagCount, 'Dzongkhag', 'Dzongkhags'), layout: layout),
+    ];
+    // Side by side with a fine rule between them; wrapping on a phone.
     final stats = venues.isEmpty
         ? null
-        : Wrap(
-            spacing: layout.wide ? 44 : 30,
-            runSpacing: 16,
-            children: [
-              _CountUp(value: venues.length, label: counted(venues.length, 'Place', 'Places'), layout: layout),
-              _CountUp(
-                  value: total.length,
-                  label: counted(total.length, 'Kind of service', 'Kinds of service'),
-                  layout: layout),
-              _CountUp(value: dzongkhagCount, label: counted(dzongkhagCount, 'Dzongkhag', 'Dzongkhags'), layout: layout),
-            ],
-          );
+        : layout.medium
+            ? IntrinsicHeight(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final (i, counter) in counters.indexed) ...[
+                      if (i > 0)
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: layout.wide ? 30 : 22),
+                          child: VerticalDivider(width: 1, thickness: 1, color: context.brand.glassBorder),
+                        ),
+                      counter,
+                    ],
+                  ],
+                ),
+              )
+            : Wrap(spacing: 30, runSpacing: 16, children: counters);
     final heading = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2564,17 +2631,21 @@ class _ServiceTypes extends ConsumerWidget {
               ResponsiveGrid(
                 minItemWidth: 230,
                 maxColumns: 4,
-                spacing: 16,
-                runSpacing: 16,
+                spacing: 18,
+                runSpacing: 18,
                 children: [
                   for (final (i, t) in types.indexed)
                     _RevealItem(
                       order: i,
-                      child: ServiceTypeCard(
+                      child: _ServiceCard(
+                        number: i + 1,
                         type: t,
-                        count: count[t.key] ?? 0,
-                        total: total[t.key] ?? 0,
-                        inArea: area == null ? null : (area.town ?? area.dzongkhag),
+                        none: (count[t.key] ?? 0) == 0,
+                        countText: serviceCountText(
+                          count: count[t.key] ?? 0,
+                          total: total[t.key] ?? 0,
+                          inArea: area == null ? null : (area.town ?? area.dzongkhag),
+                        ),
                         onTap: () => open(t),
                       ),
                     ),
@@ -2585,6 +2656,313 @@ class _ServiceTypes extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// One kind of service under What are you looking for, numbered in the
+/// team's order (01, 02...): a panel tinted its colour with its number drawn
+/// as a fine outline and its icon's 3D picture (or the photo the team set),
+/// floating up and back on the page's beat in a wave along each row; then
+/// its name, what it is, and how many places there are. Under the pointer the
+/// card lifts, its number fills in, the picture rises and the arrow fills.
+/// Still with Reduce motion.
+class _ServiceCard extends StatefulWidget {
+  final int number;
+  final VenueType type;
+  final String countText;
+
+  /// None in the area shown (the count is greyed).
+  final bool none;
+  final VoidCallback onTap;
+
+  const _ServiceCard({required this.number, required this.type, required this.countText, required this.none, required this.onTap});
+
+  @override
+  State<_ServiceCard> createState() => _ServiceCardState();
+}
+
+class _ServiceCardState extends State<_ServiceCard> with SingleTickerProviderStateMixin {
+  late final AnimationController _float = AnimationController(vsync: this, duration: _Beat.settle);
+
+  /// Up and back once, a little later for each card along a row of four.
+  late final Animation<double> _lift = CurvedAnimation(
+    parent: _float,
+    curve: Interval((widget.number - 1) % 4 * 0.08, (widget.number - 1) % 4 * 0.08 + 0.75, curve: Curves.easeInOut),
+  );
+  int? _beat;
+  bool _hover = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final beat = _Beat.of(context);
+    if (reduceMotion(context)) {
+      _float.value = 0;
+    } else if (beat != _beat) {
+      _beat = beat;
+      _float.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _float.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = _Ink.of(context);
+    final brand = context.brand;
+    final accent = widget.type.colorOr(context.colors.primary);
+    final photo = widget.type.photo;
+    final hover = _hover && !reduceMotion(context);
+    final duration = Motion.of(context, Motion.card);
+    final line = brand.glassBorder;
+    return AnimatedContainer(
+      duration: duration,
+      curve: Motion.ease,
+      transform: Matrix4.translationValues(0, hover ? -6 : 0, 0),
+      decoration: BoxDecoration(
+        color: ink.card,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: hover ? accent.withValues(alpha: 0.45) : line),
+        boxShadow: hover ? ink.shadow(light: 0.14, blur: 36, dy: 18) : ink.shadow(light: 0.06, blur: 20, dy: 8),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: widget.onTap,
+          onHover: (h) => setState(() => _hover = h),
+          // Its own lift shows the pointer; no grey wash over it.
+          hoverColor: Colors.transparent,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _panel(ink, accent, photo, hover, duration),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.type.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.3, color: ink.heading),
+                    ),
+                    const SizedBox(height: 6),
+                    // Always two lines' room, so the cards in a row line up.
+                    ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: MediaQuery.textScalerOf(context).scale(13.5) * 1.45 * 2),
+                      child: Text(
+                        widget.type.description ?? '',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13.5, height: 1.45, color: ink.body),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(height: 1, color: line),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: widget.none ? ink.body.withValues(alpha: 0.4) : accent,
+                            boxShadow: [
+                              if (!widget.none) BoxShadow(color: accent.withValues(alpha: 0.35), blurRadius: 0, spreadRadius: 3),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            widget.countText,
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: widget.none ? ink.body : accent),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        AnimatedContainer(
+                          duration: duration,
+                          curve: Motion.ease,
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: hover ? accent : Colors.transparent,
+                            border: Border.all(color: hover ? accent : accent.withValues(alpha: 0.3)),
+                          ),
+                          child: AnimatedRotation(
+                            turns: hover ? 0 : -0.125,
+                            duration: duration,
+                            curve: Motion.ease,
+                            child: Icon(Icons.arrow_forward_rounded, size: 18, color: hover ? Colors.white : accent),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The tinted panel at the top: the number, and the floating picture (or the photo).
+  Widget _panel(_Ink ink, Color accent, String? photo, bool hover, Duration duration) {
+    final onPhoto = photo != null;
+    final digits = widget.number.toString().padLeft(2, '0');
+    final numberStyle = TextStyle(fontSize: 58, fontWeight: FontWeight.w800, height: 1, letterSpacing: -2);
+    final numberInk = onPhoto ? Colors.white : accent;
+    return Container(
+      height: 138,
+      margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accent.withValues(alpha: ink.dark ? 0.26 : 0.16),
+            accent.withValues(alpha: ink.dark ? 0.08 : 0.04),
+          ],
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (onPhoto) ...[
+            AnimatedScale(
+              scale: hover ? 1.06 : 1,
+              duration: duration,
+              curve: Motion.ease,
+              child: Image.network(photo, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+            ),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomLeft,
+                  end: Alignment.topRight,
+                  colors: [Color(0x99000000), Color(0x00000000)],
+                ),
+              ),
+            ),
+          ] else ...[
+            // Two fine rings around where the picture floats.
+            for (final (size, alpha) in [(180.0, 0.14), (118.0, 0.2)])
+              Positioned(
+                right: 58 - size / 2,
+                top: 69 - size / 2,
+                width: size,
+                height: size,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: accent.withValues(alpha: alpha)),
+                  ),
+                ),
+              ),
+          ],
+          // Its number: a fine outline that fills in under the pointer.
+          Positioned(
+            left: 16,
+            bottom: 14,
+            child: ExcludeSemantics(
+              child: Stack(
+                children: [
+                  Text(
+                    digits,
+                    style: numberStyle.copyWith(
+                      foreground: Paint()
+                        ..style = PaintingStyle.stroke
+                        ..strokeWidth = 1.3
+                        ..color = numberInk.withValues(alpha: onPhoto ? 0.9 : 0.55),
+                    ),
+                  ),
+                  AnimatedOpacity(
+                    opacity: hover ? 1 : 0,
+                    duration: duration,
+                    child: Text(digits, style: numberStyle.copyWith(color: numberInk.withValues(alpha: onPhoto ? 1 : 0.85))),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (!onPhoto)
+            Positioned(
+              right: 14,
+              top: 14,
+              bottom: 8,
+              width: 88,
+              child: _art(accent, hover, duration),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// The 3D picture over its shadow, rising and turning a little on each
+  /// beat (its shadow shrinking), and further under the pointer.
+  Widget _art(Color accent, bool hover, Duration duration) {
+    final picture = AnimatedSlide(
+      offset: Offset(0, hover ? -0.08 : 0),
+      duration: duration,
+      curve: Motion.ease,
+      child: AnimatedScale(
+        scale: hover ? 1.1 : 1,
+        duration: duration,
+        curve: Motion.pop,
+        child: Image.asset(
+          widget.type.artAsset,
+          package: 'health_pro_core',
+          width: 84,
+          height: 84,
+          filterQuality: FilterQuality.medium,
+          excludeFromSemantics: true,
+          errorBuilder: (_, __, ___) =>
+              SizedBox.square(dimension: 84, child: Icon(widget.type.iconData, size: 52, color: accent)),
+        ),
+      ),
+    );
+    return AnimatedBuilder(
+      animation: _lift,
+      child: picture,
+      builder: (context, child) {
+        final up = math.sin(math.pi * _lift.value);
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Transform.translate(
+              offset: Offset(0, -7 * up),
+              child: Transform.rotate(angle: -0.05 * up, child: child),
+            ),
+            const SizedBox(height: 4),
+            Transform.scale(
+              scaleX: 1 - 0.3 * up,
+              child: Container(
+                width: 54,
+                height: 8,
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.all(Radius.elliptical(27, 4)),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.16 - 0.07 * up), blurRadius: 8, spreadRadius: -1),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -2646,11 +3024,15 @@ class _CountUpState extends State<_CountUp> with SingleTickerProviderStateMixin 
   }
 }
 
-/// The kinds of service running along a band under the top like a ticker
-/// (bhutanesports.org's marquee): large capitals, solid and outlined in
-/// turn, a spark between them, sliding steadily left for ever. Hidden from
-/// screen readers (the cards under it name them all); still with Reduce
-/// motion; nothing until the kinds have loaded.
+/// The kinds of service on two ribbons crossing under the top, each tilted a
+/// little and running off the page's sides. On the navy one in front, large
+/// capitals drawn as fine outlines glide left, and a spotlight in the middle
+/// fills each name in (its spark lit orange) as it passes through. On the
+/// orange one behind, the same names, small and spaced, glide right. Every
+/// name opens its places, as its card does, even while it moves (pointing at
+/// a ribbon slows it to a stop, and the name under the pointer fills in).
+/// Hidden from screen readers (the cards under it name them all); still with
+/// Reduce motion; nothing until the kinds have loaded.
 class _ServiceMarquee extends ConsumerWidget {
   final _Layout layout;
 
@@ -2662,56 +3044,189 @@ class _ServiceMarquee extends ConsumerWidget {
     final master = ref.watch(venueTypesProvider).valueOrNull ?? const <VenueType>[];
     final kinds = [
       for (final t in findableTypes(master, venues))
-        if (t.showWhenEmpty || venues.any((v) => v.type == t.key)) t.name.toUpperCase(),
+        if (t.showWhenEmpty || venues.any((v) => v.type == t.key)) t,
     ];
     if (kinds.isEmpty) return const SizedBox.shrink();
-    // An even run, so solid and outlined still take turns where it repeats.
-    final names = kinds.length.isOdd ? [...kinds, ...kinds] : kinds;
+    void open(VenueType type) => context.push('${GymRoutes.gyms}?type=${Uri.encodeQueryComponent(type.key)}');
     final ink = _Ink.of(context);
-    final size = layout.wide ? 46.0 : (layout.medium ? 38.0 : 28.0);
-    final solid = TextStyle(fontSize: size, fontWeight: FontWeight.w800, letterSpacing: size * 0.02, color: ink.heading);
+    final size = layout.wide ? 42.0 : (layout.medium ? 34.0 : 24.0);
+    final spark = context.brand.highlight;
+
+    // The front ribbon: deep navy (white in the dark), the names on it fine
+    // outlines that fill in under the spotlight.
+    final ribbon = ink.pick(LightColors.ink, Colors.white);
+    final letters = ink.pick(Colors.white, LightColors.ink);
+    final solid = TextStyle(fontSize: size, fontWeight: FontWeight.w800, letterSpacing: size * 0.03, color: letters);
+    // Round joins, so the outline has no spikes at the points of A, M and W.
     final outlined = solid.copyWith(
       color: null,
       foreground: Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.3
-        ..color = ink.heading,
+        ..strokeWidth = math.max(1.0, size * 0.024)
+        ..strokeJoin = StrokeJoin.round
+        ..strokeCap = StrokeCap.round
+        ..color = letters.withValues(alpha: 0.45),
     );
+    // Each a name and the spark after it; outlined (filled in while pointed at), or filled in. Both the same width.
+    // The lit ones are only seen: the pointer reaches the outlined ones under them.
+    Widget name(VenueType t, {required bool lit, bool hover = false}) {
+      final label = t.name.toUpperCase();
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          lit
+              ? Text(label, maxLines: 1, style: solid)
+              : Stack(children: [
+                  Text(label, maxLines: 1, style: outlined),
+                  AnimatedOpacity(
+                    opacity: hover ? 1 : 0,
+                    duration: Motion.of(context, Motion.hover),
+                    curve: Motion.ease,
+                    child: Text(label, maxLines: 1, style: solid),
+                  ),
+                ]),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: size * 0.6),
+            child: Icon(Icons.auto_awesome_rounded, size: size * 0.5, color: lit || hover ? spark : letters.withValues(alpha: 0.3)),
+          ),
+        ],
+      );
+    }
+
+    List<Widget> names({required bool lit}) => [
+          for (final t in kinds)
+            lit
+                ? name(t, lit: true)
+                : _RibbonLink(onTap: () => open(t), builder: (hover) => name(t, lit: false, hover: hover)),
+        ];
+
+    // The ribbon behind: orange, the names small and spaced, going the other way.
+    final small = size * 0.42;
+    final tag = TextStyle(fontSize: small, fontWeight: FontWeight.w700, letterSpacing: small * 0.22, color: Colors.white);
+    final behind = [
+      for (final t in kinds)
+        _RibbonLink(
+          onTap: () => open(t),
+          builder: (hover) => Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedScale(
+                scale: hover ? 1.12 : 1,
+                duration: Motion.of(context, Motion.hover),
+                curve: Motion.ease,
+                child: Text(t.name.toUpperCase(), maxLines: 1, style: tag),
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: small * 1.2),
+                child: Icon(Icons.circle, size: small * 0.32, color: Colors.white.withValues(alpha: hover ? 1 : 0.7)),
+              ),
+            ],
+          ),
+        ),
+    ];
+
+    // Steeper on narrow screens, so the ribbons still part enough to show both.
+    final tilt = (layout.wide ? 3.5 : 6.0) * math.pi / 180;
+    final front = size * 1.85;
+    final back = small * 2.6;
     return ExcludeSemantics(
       child: Padding(
-        padding: EdgeInsets.only(top: layout.section * 0.4),
-        child: _Marquee(
-          height: size * 1.6,
-          items: [
-            // Each a name and the spark after it.
-            for (final (i, name) in names.indexed)
-              Row(
-                mainAxisSize: MainAxisSize.min,
+        padding: EdgeInsets.only(top: layout.section * 0.5, bottom: layout.section * 0.15),
+        child: LayoutBuilder(
+          builder: (context, box) {
+            final width = box.maxWidth;
+            // Wider than the page, so the tilted ends run off its sides.
+            Widget band({required double angle, required double height, required Widget child, Gradient? fill, List<BoxShadow>? shadow}) =>
+                Transform.rotate(
+                  angle: angle,
+                  child: OverflowBox(
+                    minWidth: width + height * 4,
+                    maxWidth: width + height * 4,
+                    child: Container(
+                      height: height,
+                      decoration: BoxDecoration(gradient: fill, boxShadow: shadow),
+                      child: child,
+                    ),
+                  ),
+                );
+            return SizedBox(
+              height: front + width * math.sin(tilt) * 1.1,
+              child: Stack(
+                alignment: Alignment.center,
+                clipBehavior: Clip.none,
                 children: [
-                  Text(name, maxLines: 1, style: i.isOdd ? outlined : solid),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: size * 0.55),
-                    child: Icon(Icons.auto_awesome_rounded, size: size * 0.6, color: context.brand.highlight),
+                  band(
+                    angle: tilt,
+                    height: back,
+                    fill: LinearGradient(colors: [spark, Color.lerp(spark, LightColors.orangeText, 0.35)!]),
+                    child: _Marquee(height: back, speed: size * 0.9, reverse: true, items: behind),
+                  ),
+                  band(
+                    angle: -tilt,
+                    height: front,
+                    // A faint sheen along the top edge.
+                    fill: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color.lerp(ribbon, letters, 0.08)!, ribbon],
+                    ),
+                    shadow: ink.shadow(light: 0.16, dark: 0.45, blur: 32, dy: 14),
+                    child: _Marquee(height: front, speed: size * 1.3, items: names(lit: false), lit: names(lit: true)),
                   ),
                 ],
               ),
-          ],
+            );
+          },
         ),
       ),
     );
   }
 }
 
-/// [items] in a row along a band, repeated to fill the width. On every beat
-/// of the page (_Beat) it glides one item to the left (bhutanesports.org's
-/// marquee, in the page's rhythm), then rests until the next, so it never
-/// runs on for ever. It rests while scrolled out of sight, and stands still
-/// with Reduce motion.
+/// One name on a ribbon, as a link: the hand cursor, [builder] told while
+/// it's pointed at, and [onTap] on a click or tap, moving or not.
+class _RibbonLink extends StatefulWidget {
+  final VoidCallback onTap;
+  final Widget Function(bool hover) builder;
+
+  const _RibbonLink({required this.onTap, required this.builder});
+
+  @override
+  State<_RibbonLink> createState() => _RibbonLinkState();
+}
+
+class _RibbonLinkState extends State<_RibbonLink> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          child: widget.builder(_hover),
+        ),
+      );
+}
+
+/// [items] in a row along a band, repeated to fill the width, gliding left
+/// (right if [reverse]) at an even [speed] in pixels a second. Over it may
+/// lie [lit], the same row drawn bright, seen only through a soft spotlight
+/// in the middle, so each item fills in as it passes and fades back after.
+/// Pointing at it eases it to a stop, and letting go eases it back up. It
+/// rests while scrolled out of sight, and stands still with Reduce motion.
 class _Marquee extends StatefulWidget {
   final double height;
+  final double speed;
+  final bool reverse;
   final List<Widget> items;
 
-  const _Marquee({required this.height, required this.items});
+  /// [items] lit up: the same widths, in the same order.
+  final List<Widget>? lit;
+
+  const _Marquee({required this.height, required this.speed, this.reverse = false, required this.items, this.lit});
 
   @override
   State<_Marquee> createState() => _MarqueeState();
@@ -2719,25 +3234,28 @@ class _Marquee extends StatefulWidget {
 
 class _MarqueeState extends State<_Marquee> with SingleTickerProviderStateMixin {
   final _run = GlobalKey();
-  late List<GlobalKey> _keys = [for (final _ in widget.items) GlobalKey()];
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
-  late final Animation<double> _t = CurvedAnimation(parent: _c, curve: Curves.easeInOutCubic);
+  late final Ticker _ticker;
 
-  /// Where each item starts in a run, and the run's width, once laid out.
-  List<double>? _starts;
+  /// How far the row has slid, within one run.
+  final _offset = ValueNotifier<double>(0);
+
+  /// One run's width, once laid out.
   double _width = 0;
 
-  /// The item at the left edge.
-  int _step = 0;
-  int? _beat;
+  /// Share of [_Marquee.speed] it moves at: eases to 0 while pointed at.
+  double _pace = 1;
+  bool _hover = false;
+  Duration _last = Duration.zero;
 
   /// Whether any of it is in the window.
   bool _inSight = true;
   ScrollPosition? _position;
 
-  /// How far along the row [step] is: past the last, a whole run (the next
-  /// run is the same, so going back to the start then doesn't show).
-  double _at(int step) => step >= _starts!.length ? _width : _starts![step];
+  @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker(_tick);
+  }
 
   @override
   void didChangeDependencies() {
@@ -2745,21 +3263,13 @@ class _MarqueeState extends State<_Marquee> with SingleTickerProviderStateMixin 
     _position?.removeListener(_onScroll);
     _position = Scrollable.maybeOf(context)?.position;
     _position?.addListener(_onScroll);
-    final beat = _Beat.of(context);
-    if (_beat != null && beat != _beat) _glide();
-    _beat = beat;
     WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
+    _sync();
   }
 
   @override
   void didUpdateWidget(_Marquee old) {
     super.didUpdateWidget(old);
-    if (old.items.length != widget.items.length) {
-      _keys = [for (final _ in widget.items) GlobalKey()];
-      _starts = null;
-      _step = 0;
-      _c.value = 0;
-    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
   }
 
@@ -2768,76 +3278,107 @@ class _MarqueeState extends State<_Marquee> with SingleTickerProviderStateMixin 
     if (box is! RenderBox || !box.hasSize) return;
     final top = box.localToGlobal(Offset.zero).dy;
     _inSight = top < MediaQuery.sizeOf(context).height && top + box.size.height > 0;
+    _sync();
   }
 
   void _measure() {
     if (!mounted) return;
     final run = _run.currentContext?.findRenderObject();
-    if (run is! RenderBox || !run.hasSize) return;
-    final starts = <double>[];
-    for (final key in _keys) {
-      final box = key.currentContext?.findRenderObject();
-      if (box is! RenderBox || !box.hasSize) return;
-      starts.add(box.localToGlobal(Offset.zero, ancestor: run).dx);
-    }
-    final old = _starts;
-    final same = old != null && old.length == starts.length && [for (var i = 0; i < starts.length; i++) old[i] == starts[i]].every((s) => s);
-    if (!same || run.size.width != _width) {
-      setState(() {
-        _starts = starts;
-        _width = run.size.width;
-      });
+    if (run is! RenderBox || !run.hasSize || run.size.width == _width) return;
+    setState(() => _width = run.size.width);
+    _offset.value %= _width;
+    _sync();
+  }
+
+  /// Runs the clock only while there is something to move.
+  void _sync() {
+    final go = mounted && _width > 0 && _inSight && !reduceMotion(context) && (!_hover || _pace > 0.01);
+    if (go && !_ticker.isActive) {
+      _last = Duration.zero;
+      _ticker.start();
+    } else if (!go && _ticker.isActive) {
+      _ticker.stop();
     }
   }
 
-  /// One item on.
-  void _glide() {
-    final starts = _starts;
-    if (starts == null || starts.isEmpty || !_inSight || _c.isAnimating || reduceMotion(context)) return;
-    _c.forward(from: 0).whenComplete(() {
-      if (!mounted) return;
-      setState(() {
-        _step = (_step + 1) % starts.length;
-        _c.value = 0;
-      });
-    });
+  void _tick(Duration elapsed) {
+    final dt = math.min((elapsed - _last).inMicroseconds / 1e6, 0.1);
+    _last = elapsed;
+    _pace += ((_hover ? 0.0 : 1.0) - _pace) * math.min(1.0, dt * 3.5);
+    _offset.value = (_offset.value + widget.speed * _pace * dt) % _width;
+    if (_hover && _pace <= 0.01) _sync();
+  }
+
+  void _point(bool on) {
+    _hover = on;
+    _sync();
   }
 
   @override
   void dispose() {
     _position?.removeListener(_onScroll);
-    _c.dispose();
+    _ticker.dispose();
+    _offset.dispose();
     super.dispose();
   }
 
+  /// Seen only between [from] and [to] (shares of the width), with soft edges [soft] wide.
+  static Shader _window(Rect rect, double from, double to, double soft) => LinearGradient(
+        colors: const [Color(0x00000000), Color(0xFF000000), Color(0xFF000000), Color(0x00000000)],
+        stops: [from, from + soft, to - soft, to],
+      ).createShader(rect);
+
   @override
   Widget build(BuildContext context) {
-    final first = Row(
-      key: _run,
-      mainAxisSize: MainAxisSize.min,
-      children: [for (final (i, item) in widget.items.indexed) KeyedSubtree(key: _keys[i], child: item)],
-    );
-    final run = Row(mainAxisSize: MainAxisSize.min, children: widget.items);
-    // Enough runs to cover the window however far along it is.
-    final runs = _width == 0 ? 1 : (MediaQuery.sizeOf(context).width / _width).ceil() + 1;
-    return RepaintBoundary(
+    final lit = widget.lit;
+    return MouseRegion(
+      onEnter: (_) => _point(true),
+      onExit: (_) => _point(false),
       child: SizedBox(
         height: widget.height,
-        child: ClipRect(
-          child: OverflowBox(
-            alignment: Alignment.centerLeft,
-            minWidth: 0,
-            maxWidth: double.infinity,
-            child: AnimatedBuilder(
-              animation: _t,
-              builder: (context, child) {
-                final from = _starts == null ? 0.0 : _at(_step);
-                final to = _starts == null ? 0.0 : _at(_step + 1);
-                return Transform.translate(offset: Offset(-(from + (to - from) * _t.value), 0), child: child);
-              },
-              child: Row(mainAxisSize: MainAxisSize.min, children: [first, for (var i = 1; i < runs; i++) run]),
-            ),
-          ),
+        child: LayoutBuilder(
+          builder: (context, box) {
+            // Enough runs to cover the band however far along it is (and one more going right).
+            final span = box.maxWidth.isFinite ? box.maxWidth : MediaQuery.sizeOf(context).width;
+            final runs = _width == 0 ? 1 : (span / _width).ceil() + (widget.reverse ? 2 : 1);
+            Widget slide(List<Widget> items, {Key? measure}) => ClipRect(
+                  child: OverflowBox(
+                    alignment: Alignment.centerLeft,
+                    minWidth: 0,
+                    maxWidth: double.infinity,
+                    child: ValueListenableBuilder<double>(
+                      valueListenable: _offset,
+                      builder: (context, at, child) =>
+                          Transform.translate(offset: Offset(widget.reverse ? at - _width : -at, 0), child: child),
+                      child: RepaintBoundary(
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Row(key: measure, mainAxisSize: MainAxisSize.min, children: items),
+                          for (var i = 1; i < runs; i++) Row(mainAxisSize: MainAxisSize.min, children: items),
+                        ]),
+                      ),
+                    ),
+                  ),
+                );
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                slide(widget.items, measure: _run),
+                if (lit != null)
+                  // Only seen: taps and the pointer go to [items] under it.
+                  IgnorePointer(
+                    child: ShaderMask(
+                      blendMode: BlendMode.dstIn,
+                      // The spotlight: about a name wide, soft on both sides.
+                      shaderCallback: (rect) {
+                        final half = rect.width == 0 ? 0.0 : math.min(0.45, math.max(rect.width * 0.16, widget.height * 2.6) / rect.width);
+                        return _window(rect, 0.5 - half, 0.5 + half, half * 0.55);
+                      },
+                      child: slide(lit),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );
